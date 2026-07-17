@@ -1,0 +1,2 @@
+CREATE POLICY "Users can insert own role" ON public.user_roles FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid()::text);
+CREATE POLICY "Users can update own role" ON public.user_roles FOR UPDATE TO authenticated USING (user_id = auth.uid()::text) WITH CHECK (user_id = auth.uid()::text);

@@ -1,0 +1,1 @@
+ALTER TABLE public.app_feedback ADD COLUMN IF NOT EXISTS user_email TEXT;

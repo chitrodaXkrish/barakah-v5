@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Barakah</string>
+    <string name="title_activity_main">Barakah</string>
+    <string name="package_name">com.barakah.services</string>
+    <string name="custom_url_scheme">com.barakah.services</string>
+</resources>
