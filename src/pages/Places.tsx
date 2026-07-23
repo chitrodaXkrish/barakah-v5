@@ -304,6 +304,7 @@ export const Places = () => {
       headerTitleClassName="font-bold text-lg"
       headerTitleStyle={{ color: HEADER_TEXT }}
       headerButtonClassName="text-[#2C1309] hover:bg-[#FFF5E5]"
+      pageBackgroundColor={CREAM_BG}
     >
       <div className="min-h-full" style={{ backgroundColor: CREAM_BG }}>
         <div className="px-4 py-5 space-y-5">

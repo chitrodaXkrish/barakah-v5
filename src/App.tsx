@@ -79,6 +79,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const RouteFallback = () => (
+  <div
+    className="min-h-screen max-w-md mx-auto"
+    style={{ backgroundColor: "#FFF5E5" }}
+    aria-label="Loading"
+  />
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -89,7 +97,7 @@ const App = () => (
               <CartProvider>
                 <Toaster />
                 <Sonner />
-                <Suspense fallback={<LoadingScreen />}>
+                <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/loading" element={<LoadingScreen />} />
                   <Route path="/login" element={<Register />} />

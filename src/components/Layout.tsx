@@ -18,9 +18,10 @@ interface LayoutProps {
   headerTitleStyle?: React.CSSProperties;
   headerButtonClassName?: string;
   leftAlignHeaderTitle?: boolean;
+  pageBackgroundColor?: string;
 }
 
-export const Layout = ({ children, showNavigation = true, showHeader = true, headerTitle, headerRight, onSearchClick, showSearch, headerClassName, headerTitleClassName, headerTitleStyle, headerButtonClassName, leftAlignHeaderTitle }: LayoutProps) => {
+export const Layout = ({ children, showNavigation = true, showHeader = true, headerTitle, headerRight, onSearchClick, showSearch, headerClassName, headerTitleClassName, headerTitleStyle, headerButtonClassName, leftAlignHeaderTitle, pageBackgroundColor }: LayoutProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(true);
   const location = useLocation();
@@ -41,7 +42,7 @@ export const Layout = ({ children, showNavigation = true, showHeader = true, hea
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative overflow-hidden font-arabic">
+    <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative overflow-hidden font-arabic" style={{ backgroundColor: pageBackgroundColor }}>
       {/* Background with warm brown tint */}
       <div className="fixed inset-0 pointer-events-none">
         {/* Dark brown-tinted base */}
@@ -71,11 +72,14 @@ export const Layout = ({ children, showNavigation = true, showHeader = true, hea
       
       {showHeader && <TopHeader onMenuClick={handleMenuClick} title={headerTitle} rightContent={headerRight} onSearchClick={onSearchClick} showSearch={showSearch} className={headerClassName} titleClassName={headerTitleClassName} titleStyle={headerTitleStyle} buttonClassName={headerButtonClassName} leftAlignTitle={leftAlignHeaderTitle} />}
       
-      <main className={cn(
+      <main
+        className={cn(
         "flex-1 relative z-10",
         showNavigation && "pb-24",
         isTransitioning && "animate-fade-in"
-      )}>
+        )}
+        style={{ backgroundColor: pageBackgroundColor }}
+      >
         {children}
       </main>
       

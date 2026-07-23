@@ -4,12 +4,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/integrations/supabase/client';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import { toast } from 'sonner';
 import aiAssistantLogo from '@/assets/ai-assistant-logo.png.asset.json';
 import aiSendBtn from '@/assets/ai-send-btn.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 type Thread = { id: string; title: string; updated_at: string };
+
+interface NativeSpeechRecognitionPlugin {
+  start(options?: { language?: string }): Promise<{ text: string }>;
+  stop(): Promise<void>;
+  requestPermissions(options?: { permissions?: string[] }): Promise<{ microphone?: string }>;
+}
+
+const NativeSpeechRecognition = registerPlugin<NativeSpeechRecognitionPlugin>('NativeSpeechRecognition');
 
 const CREAM_BG = '#FFF1DD';
 const BROWN = '#2C1309';
@@ -400,6 +410,93 @@ const ChatView = ({
   onNewChat: () => void;
 }) => {
   const empty = messages.length === 0;
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop?.();
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const appendTranscript = useCallback((transcript: string) => {
+    const clean = transcript.trim();
+    if (!clean) return;
+    setInput(input.trim() ? `${input.trim()} ${clean}` : clean);
+  }, [input, setInput]);
+
+  const startBrowserRecognition = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setVoiceSupported(false);
+      toast.error('Voice input is not supported on this browser.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    const startingInput = input.trim();
+
+    recognition.lang = navigator.language || 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0]?.transcript || '';
+      }
+      const clean = transcript.trim();
+      if (clean) setInput(startingInput ? `${startingInput} ${clean}` : clean);
+    };
+    recognition.onerror = (event: any) => {
+      const message = event.error === 'not-allowed'
+        ? 'Microphone permission was denied.'
+        : 'Could not transcribe audio. Please try again.';
+      toast.error(message);
+      setIsListening(false);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  }, [input, setInput]);
+
+  const handleVoiceInput = useCallback(async () => {
+    if (isListening) {
+      recognitionRef.current?.stop?.();
+      if (Capacitor.getPlatform() === 'android') {
+        await NativeSpeechRecognition.stop().catch(() => undefined);
+      }
+      setIsListening(false);
+      return;
+    }
+
+    if (Capacitor.getPlatform() === 'android') {
+      setIsListening(true);
+      try {
+        await NativeSpeechRecognition.requestPermissions({ permissions: ['microphone'] });
+        const { text } = await NativeSpeechRecognition.start({ language: navigator.language || 'en-US' });
+        appendTranscript(text);
+      } catch (error) {
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'Could not transcribe audio. Please try again.';
+        if (message !== 'Voice input stopped.') {
+          toast.error(message);
+        }
+      } finally {
+        setIsListening(false);
+      }
+      return;
+    }
+
+    startBrowserRecognition();
+  }, [appendTranscript, isListening, startBrowserRecognition]);
 
   return (
     <>
@@ -552,8 +649,17 @@ const ChatView = ({
             className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#9E948A]"
             style={{ color: BROWN }}
           />
-          <button className="opacity-80" aria-label="Voice input">
-            <Mic className="h-5 w-5" style={{ color: '#7A6B5E' }} strokeWidth={1.75} />
+          <button
+            type="button"
+            onClick={handleVoiceInput}
+            className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isListening ? 'animate-pulse' : 'opacity-80'}`}
+            style={{
+              backgroundColor: isListening ? '#F6EFE2' : 'transparent',
+            }}
+            aria-label={isListening ? 'Stop voice input' : 'Voice input'}
+            title={voiceSupported ? 'Voice input' : 'Voice input unavailable'}
+          >
+            <Mic className="h-5 w-5" style={{ color: isListening ? BROWN_BTN : '#7A6B5E' }} strokeWidth={1.75} />
           </button>
         </div>
         <button

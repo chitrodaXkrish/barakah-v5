@@ -8,6 +8,7 @@ import { useGlobalLocation } from '@/contexts/LocationContext';
 import prayerArcLogo from '@/assets/prayer-arc-logo.png.asset.json';
 import hadithIcon from '@/assets/hadith-icon-v2.png.asset.json';
 import quranIcon from '@/assets/quran-icon.png.asset.json';
+import quranIconFallback from '@/assets/qa-quran.png';
 import hajjIcon from '@/assets/hajj-icon.png.asset.json';
 import placesIcon from '@/assets/places-icon.png.asset.json';
 import zakatIcon from '@/assets/zakat-icon.png.asset.json';
@@ -45,7 +46,7 @@ const fmt12 = (h: number, m: number) => {
 
 const essentials = [
   { label: 'Hadith', img: assetUrl(hadithIcon), icon: null, path: '/hadith' },
-  { label: 'Quran', img: assetUrl(quranIcon), icon: null, path: '/quran' },
+  { label: 'Quran', img: assetUrl(quranIcon), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
   { label: 'Hajj Packages', img: assetUrl(hajjIcon), icon: null, path: '/hajj' },
   { label: 'Places', img: assetUrl(placesIcon), icon: null, path: '/places' },
   { label: 'Zakat Calc.', img: assetUrl(zakatIcon), icon: null, path: '/zakat' },
@@ -203,7 +204,16 @@ export const PrayerTimes = () => {
               }}
             >
               {e.img ? (
-                <img src={e.img} alt={e.label} className="h-11 w-auto object-contain" />
+                <img
+                  src={e.img}
+                  alt={e.label}
+                  className="h-11 w-auto object-contain"
+                  onError={(event) => {
+                    if (e.fallbackImg && event.currentTarget.src !== e.fallbackImg) {
+                      event.currentTarget.src = e.fallbackImg;
+                    }
+                  }}
+                />
               ) : (
                 <div
                   className="h-11 w-11 rounded-full flex items-center justify-center"
