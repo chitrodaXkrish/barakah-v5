@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, MapPin, ChevronDown, Sun, Sunrise, Sunset, Moon, Cloud, CloudSun, Sparkles } from 'lucide-react';
+import { Menu, Bell, MapPin, ChevronDown, Sun, Sunrise, Sunset, Moon, Cloud, CloudSun, Sparkles, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { SideMenu } from '@/components/SideMenu';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { LocationPicker } from '@/components/LocationPicker';
 import { useGlobalLocation } from '@/contexts/LocationContext';
+import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
 import prayerArcLogo from '@/assets/prayer-arc-logo.png.asset.json';
 import hadithIcon from '@/assets/hadith-icon-v2.png.asset.json';
-import quranIcon from '@/assets/quran-icon.png.asset.json';
+import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
 import quranIconFallback from '@/assets/qa-quran.png';
 import hajjIcon from '@/assets/hajj-icon.png.asset.json';
 import placesIcon from '@/assets/places-icon.png.asset.json';
@@ -16,6 +18,17 @@ import duaIcon from '@/assets/dua-icon.png.asset.json';
 import qiblaIcon from '@/assets/qibla-icon.png.asset.json';
 import prayerMarkIcon from '@/assets/prayer-mark-icon.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
+import {
+  createPrayerNotificationPreviews,
+  schedulePrayerNotifications,
+} from '@/lib/prayerNotifications';
+import {
+  formatPrayerTime12,
+  formatPrayerTime24,
+  getNextPrayer,
+  prayerMinutes,
+  type PrayerKey,
+} from '@/lib/islamicPrayerTimes';
 
 const CREAM = '#FFF5E5';
 const CREAM_CARD = '#FFF5E5';
@@ -24,29 +37,18 @@ const BROWN_ACCENT = '#B0431E';
 const HERO_GRAD = 'linear-gradient(177deg, #78351A 2.14%, #CE5728 97.86%)';
 const DAILY_BROWN = '#5C2A14';
 
-type PrayerKey = 'sunrise' | 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
-
-const PRAYERS: { key: PrayerKey; label: string; h: number; m: number; icon: any }[] = [
-  { key: 'sunrise', label: 'Sunrise', h: 5, m: 48, icon: Sun },
-  { key: 'fajr', label: 'Fajr', h: 4, m: 52, icon: CloudSun },
-  { key: 'dhuhr', label: 'Dhuhr', h: 12, m: 45, icon: Sun },
-  { key: 'asr', label: 'Asr', h: 15, m: 47, icon: Cloud },
-  { key: 'maghrib', label: 'Maghrib', h: 18, m: 38, icon: Sunset },
-  { key: 'isha', label: 'Isha', h: 19, m: 55, icon: Moon },
-];
-
-const fmt = (h: number, m: number) =>
-  `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-
-const fmt12 = (h: number, m: number) => {
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const dh = ((h + 11) % 12) + 1;
-  return `${dh}:${m.toString().padStart(2, '0')} ${ampm}`;
+const PRAYER_ICONS: Record<PrayerKey, LucideIcon> = {
+  sunrise: Sun,
+  fajr: CloudSun,
+  dhuhr: Sun,
+  asr: Cloud,
+  maghrib: Sunset,
+  isha: Moon,
 };
 
 const essentials = [
   { label: 'Hadith', img: assetUrl(hadithIcon), icon: null, path: '/hadith' },
-  { label: 'Quran', img: assetUrl(quranIcon), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
+  { label: 'Quran', img: assetUrl(qaQuranAsset), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
   { label: 'Hajj Packages', img: assetUrl(hajjIcon), icon: null, path: '/hajj' },
   { label: 'Places', img: assetUrl(placesIcon), icon: null, path: '/places' },
   { label: 'Zakat Calc.', img: assetUrl(zakatIcon), icon: null, path: '/zakat' },
@@ -84,9 +86,15 @@ const hadithBooks = [
 
 export const PrayerTimes = () => {
   const navigate = useNavigate();
-  const { location } = useGlobalLocation();
+  const { location, loading: locationLoading } = useGlobalLocation();
+  const {
+    prayers: apiPrayers,
+    loading: prayerTimesLoading,
+    error: prayerTimesError,
+  } = usePrayerTimes();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -107,10 +115,42 @@ export const PrayerTimes = () => {
   );
 
   const cur = now.getHours() * 60 + now.getMinutes();
-  const orderedDay = PRAYERS.filter((p) => p.key !== 'sunrise');
-  const next =
-    orderedDay.find((p) => p.h * 60 + p.m > cur) || orderedDay[0];
-  const cityLabel = location?.city || 'Dubai';
+  const prayers = useMemo(
+    () =>
+      apiPrayers.map((prayer) => ({
+        ...prayer,
+        icon: PRAYER_ICONS[prayer.key],
+      })),
+    [apiPrayers],
+  );
+  const orderedDay = useMemo(
+    () => prayers.filter((p) => p.key !== 'sunrise'),
+    [prayers],
+  );
+  const next = getNextPrayer(prayers, now);
+  const cityLabel = location?.city || (locationLoading ? 'Locating...' : 'Set location');
+  const notificationsEnabled =
+    localStorage.getItem('barakah_notifications_enabled') !== 'false';
+  const notificationItems = useMemo(
+    () =>
+      notificationsEnabled && orderedDay.length > 0
+        ? createPrayerNotificationPreviews(orderedDay, now)
+        : [],
+    [notificationsEnabled, orderedDay, now],
+  );
+
+  useEffect(() => {
+    if (!notificationsEnabled || orderedDay.length === 0) return;
+
+    schedulePrayerNotifications(orderedDay).catch(() => {});
+  }, [notificationsEnabled, orderedDay]);
+
+  const openNotifications = () => {
+    setIsNotificationsOpen(true);
+    if (!notificationsEnabled || orderedDay.length === 0) return;
+
+    schedulePrayerNotifications(orderedDay).catch(() => {});
+  };
 
   return (
     <div
@@ -133,14 +173,82 @@ export const PrayerTimes = () => {
         >
           Prayers
         </h1>
-        <button
-          className="w-10 h-10 rounded-full flex items-center justify-center relative"
-          style={{ background: '#F1E0C8', color: BROWN }}
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" strokeWidth={2} />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E89D2F' }} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={openNotifications}
+            className="w-10 h-10 rounded-full flex items-center justify-center relative"
+            style={{ background: '#F1E0C8', color: BROWN }}
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" strokeWidth={2} />
+            {notificationItems.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E89D2F' }} />
+            )}
+          </button>
+
+          {isNotificationsOpen && (
+            <div
+              className="absolute right-0 top-12 z-40 w-[300px] rounded-2xl border shadow-xl overflow-hidden"
+              style={{ background: '#FFF7E8', borderColor: 'rgba(232,213,196,0.9)' }}
+            >
+              <div className="flex items-center justify-between px-4 py-3" style={{ background: '#F1E0C8' }}>
+                <div>
+                  <p className="text-[15px] font-bold" style={{ color: BROWN }}>
+                    Notifications
+                  </p>
+                  <p className="text-[11px]" style={{ color: '#8B6F5C' }}>
+                    Prayer time alerts
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsNotificationsOpen(false)}
+                  className="h-8 w-8 rounded-full flex items-center justify-center"
+                  style={{ color: BROWN }}
+                  aria-label="Close notifications"
+                >
+                  <X className="h-4 w-4" strokeWidth={2} />
+                </button>
+              </div>
+
+              <div className="max-h-[330px] overflow-y-auto py-2">
+                {notificationItems.length > 0 ? (
+                  notificationItems.map((item) => (
+                    <div key={item.id} className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: 'rgba(176,67,30,0.1)', color: BROWN_ACCENT }}
+                        >
+                          <Bell className="h-4 w-4" strokeWidth={2} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold" style={{ color: BROWN }}>
+                            {item.title}
+                          </p>
+                          <p className="text-[12px] leading-snug mt-0.5" style={{ color: '#8B6F5C' }}>
+                            {item.body}
+                          </p>
+                          <p className="text-[11px] mt-1" style={{ color: BROWN_ACCENT }}>
+                            {item.timeLabel}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-[14px] font-semibold" style={{ color: BROWN }}>
+                      No new notifications
+                    </p>
+                    <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
+                      Prayer alerts will appear here when available.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Hero arc card */}
@@ -166,7 +274,13 @@ export const PrayerTimes = () => {
             className="text-[28px] mt-2"
             style={{ color: '#FFF5E5', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500 }}
           >
-            {next.label} {fmt12(next.h, next.m)}
+            {next
+              ? `${next.label} ${formatPrayerTime12(next)}`
+              : prayerTimesLoading
+                ? 'Loading prayer times'
+                : location
+                  ? 'Prayer times unavailable'
+                  : 'Set location'}
           </p>
         </div>
       </div>
@@ -251,8 +365,31 @@ export const PrayerTimes = () => {
         </div>
 
         <div className="space-y-2.5">
-          {PRAYERS.map((p) => {
-            const isActive = p.key === next.key;
+          {prayers.length === 0 && (
+            <div
+              className="rounded-2xl px-5 py-5 border text-center"
+              style={{
+                background: CREAM_CARD,
+                borderColor: 'rgba(232,213,196,0.7)',
+                color: BROWN,
+              }}
+            >
+              <p className="text-[14px] font-semibold">
+                {prayerTimesLoading
+                  ? 'Loading prayer times'
+                  : location
+                    ? 'Prayer times unavailable'
+                    : 'Set your location'}
+              </p>
+              <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
+                {location
+                  ? prayerTimesError || 'Please try refreshing or choose a nearby city.'
+                  : 'Prayer times will update once your location is available.'}
+              </p>
+            </div>
+          )}
+          {prayers.map((p) => {
+            const isActive = p.key === next?.key;
             const isSunrise = p.key === 'sunrise';
             const Icon = p.icon;
             return (
@@ -278,7 +415,7 @@ export const PrayerTimes = () => {
                 </span>
                 <div className="flex items-center gap-4">
                   <span className="text-[16px] tabular-nums" style={{ color: BROWN, fontWeight: 500 }}>
-                    {fmt(p.h, p.m)}
+                    {formatPrayerTime24(p)}
                   </span>
                   <Icon className="h-5 w-5" style={{ color: BROWN }} strokeWidth={2} />
                 </div>

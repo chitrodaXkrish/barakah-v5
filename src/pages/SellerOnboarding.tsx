@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, CameraIcon, Shield, Check, Store } from 'lucide-react';
+import { ArrowLeft, Camera, CameraIcon, Shield, Check, Store, ChevronDown, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { CALLING_CODES, COUNTRIES } from '@/lib/countries';
 
 type StepNum = 1 | 2 | 3 | 4;
 
@@ -198,7 +199,12 @@ const Step1 = ({
 }: {
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-}) => (
+}) => {
+  const [phoneCodeOpen, setPhoneCodeOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const selectedCountryCode = CALLING_CODES.find((option) => option.code === form.phone_country_code);
+
+  return (
   <div className="space-y-5">
     <div>
       <h2 className="text-3xl font-bold text-[#1a1a1a] leading-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
@@ -243,43 +249,30 @@ const Step1 = ({
     </Field>
 
     <Field label="Phone Number">
-      <div className="flex items-center gap-3 border-b border-[#D9C9A8] pb-2">
-        <select
-          value={form.phone_country_code}
-          onChange={(e) => update('phone_country_code', e.target.value)}
-          className="bg-transparent text-[#1a1a1a] text-base focus:outline-none"
-        >
-          <option value="+971">+971</option>
-          <option value="+966">+966</option>
-          <option value="+1">+1</option>
-          <option value="+44">+44</option>
-          <option value="+91">+91</option>
-          <option value="+92">+92</option>
-          <option value="+90">+90</option>
-        </select>
+      <div className="flex gap-2">
+        <PickerButton
+          label={form.phone_country_code}
+          sublabel={selectedCountryCode?.label.replace(`${selectedCountryCode.code} `, '')}
+          onClick={() => setPhoneCodeOpen(true)}
+          className="w-[106px] shrink-0 px-3"
+        />
         <RoundInput
-          placeholder="00 000 0000"
+          type="tel"
+          inputMode="tel"
+          placeholder="Write phone number"
           value={form.phone_number}
           onChange={(e) => update('phone_number', e.target.value)}
-          className="flex-1"
+          className="min-w-0 flex-1 px-4"
         />
       </div>
     </Field>
 
     <Field label="Country of Operations">
-      <select
-        value={form.country_of_operations}
-        onChange={(e) => update('country_of_operations', e.target.value)}
-        className="w-full bg-transparent text-[#1a1a1a] text-base focus:outline-none border-b border-[#D9C9A8] py-2"
-      >
-        <option>United Arab Emirates</option>
-        <option>Saudi Arabia</option>
-        <option>Pakistan</option>
-        <option>India</option>
-        <option>Turkey</option>
-        <option>United Kingdom</option>
-        <option>United States</option>
-      </select>
+      <PickerButton
+        label={form.country_of_operations || 'Select country'}
+        onClick={() => setCountryOpen(true)}
+        className="w-full px-5"
+      />
     </Field>
 
     {/* Islamic compliance */}
@@ -319,8 +312,41 @@ const Step1 = ({
         <span className="text-[#3B6FA0] underline">Terms & Conditions</span>
       </p>
     </div>
+
+    {phoneCodeOpen && (
+      <OptionSheet
+        title="Phone country code"
+        searchPlaceholder="Search country or code"
+        options={CALLING_CODES.map((option) => ({
+          value: option.code,
+          label: option.code,
+          meta: option.label.replace(`${option.code} `, ''),
+          searchText: option.label,
+        }))}
+        selectedValue={form.phone_country_code}
+        onClose={() => setPhoneCodeOpen(false)}
+        onSelect={(value) => update('phone_country_code', value)}
+      />
+    )}
+
+    {countryOpen && (
+      <OptionSheet
+        title="Country of Operations"
+        searchPlaceholder="Search country"
+        options={COUNTRIES.map((country) => ({
+          value: country.name,
+          label: country.name,
+          meta: country.callingCode,
+          searchText: `${country.name} ${country.callingCode}`,
+        }))}
+        selectedValue={form.country_of_operations}
+        onClose={() => setCountryOpen(false)}
+        onSelect={(value) => update('country_of_operations', value)}
+      />
+    )}
   </div>
-);
+  );
+};
 
 /* ---------------- Step 2 ---------------- */
 const Step2 = ({
@@ -546,6 +572,144 @@ const Field = ({
     {hint && <p className="text-xs italic text-[#7c6a4f] mt-1.5">{hint}</p>}
   </div>
 );
+
+const PickerButton = ({
+  label,
+  sublabel,
+  onClick,
+  className = '',
+}: {
+  label: string;
+  sublabel?: string;
+  onClick: () => void;
+  className?: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`h-12 rounded-full bg-white border border-[#EADFC9] text-left shadow-sm flex items-center justify-between gap-2 active:scale-[0.99] transition-transform ${className}`}
+  >
+    <span className="min-w-0">
+      <span className="block text-sm font-semibold truncate text-[#1a1a1a]">{label}</span>
+      {sublabel && (
+        <span className="block text-[10px] leading-tight truncate text-[#8B6F5E]">
+          {sublabel}
+        </span>
+      )}
+    </span>
+    <ChevronDown className="h-4 w-4 shrink-0 text-[#A35334]" strokeWidth={2} />
+  </button>
+);
+
+type PickerOption = {
+  value: string;
+  label: string;
+  meta?: string;
+  searchText: string;
+};
+
+const OptionSheet = ({
+  title,
+  searchPlaceholder,
+  options,
+  selectedValue,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  searchPlaceholder: string;
+  options: PickerOption[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  onClose: () => void;
+}) => {
+  const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) =>
+        option.searchText.toLowerCase().includes(normalizedQuery),
+      )
+    : options;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-4 pb-4">
+      <div
+        className="w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl border"
+        style={{ backgroundColor: '#FFF5E5', borderColor: '#E4C49B' }}
+      >
+        <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3" style={{ backgroundColor: '#F5E6D0' }}>
+          <div>
+            <h3 className="text-[17px] font-bold text-[#2C1309]">{title}</h3>
+            <p className="text-[12px] text-[#8B6F5E]">{options.length} options available</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+            style={{ color: '#A35334', backgroundColor: '#FFF5E5' }}
+            aria-label={`Close ${title}`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-4 pt-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A35334]" />
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-12 rounded-full bg-white border-[#EADFC9] pl-11 pr-4 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#C9A89A] focus-visible:ring-1 focus-visible:ring-[#A35334]/30 focus-visible:ring-offset-0"
+            />
+          </div>
+        </div>
+
+        <div className="max-h-[380px] overflow-y-auto px-3 py-3">
+          {filteredOptions.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-[#8B6F5E]">
+              No matching option found.
+            </div>
+          ) : (
+            filteredOptions.map((option) => {
+              const selected = option.value === selectedValue;
+              return (
+                <button
+                  type="button"
+                  key={option.value}
+                  onClick={() => {
+                    onSelect(option.value);
+                    onClose();
+                  }}
+                  className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between gap-3 transition-colors"
+                  style={{
+                    backgroundColor: selected ? '#F5EBB8' : 'transparent',
+                    color: '#2C1309',
+                  }}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold truncate">{option.label}</span>
+                    {option.meta && (
+                      <span className="block text-[12px] mt-0.5 truncate text-[#8B6F5E]">
+                        {option.meta}
+                      </span>
+                    )}
+                  </span>
+                  {selected && (
+                    <span className="h-6 w-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#A35334' }}>
+                      <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const RoundInput = (props: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) => (
   <Input

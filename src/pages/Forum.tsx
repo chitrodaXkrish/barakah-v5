@@ -733,6 +733,9 @@ export const Forum = () => {
   const [newReply, setNewReply] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [likingPosts, setLikingPosts] = useState<Set<string>>(new Set());
+  const pendingPostIdsRef = useRef(new Set<string>());
+  const pendingReplyIdsRef = useRef(new Set<string>());
+  const hasLoadedPostsRef = useRef(false);
   const [allUserNames, setAllUserNames] = useState<string[]>([]);
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [mentionSearch, setMentionSearch] = useState('');
@@ -875,7 +878,7 @@ export const Forum = () => {
 
   // Fetch posts with their replies and likes
   const fetchPosts = useCallback(async (showLoader = true) => {
-    if (showLoader) setLoading(true);
+    if (showLoader && !hasLoadedPostsRef.current) setLoading(true);
     try {
       const { data: postsData, error: postsError } = await supabase
         .from('guftagu_posts')
@@ -925,6 +928,7 @@ export const Forum = () => {
       });
 
       setPosts(postsWithData);
+      hasLoadedPostsRef.current = true;
     } catch (error) {
       console.error('Error fetching posts:', error);
       toast.error('Failed to load posts');
@@ -932,7 +936,7 @@ export const Forum = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [user?.uid]);
 
   // Pull to refresh handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -989,7 +993,11 @@ export const Forum = () => {
         { event: 'INSERT', schema: 'public', table: 'guftagu_posts' },
         (payload) => {
           const newPost = { ...payload.new as Post, replies: [], likes: [], likeCount: 0, isLiked: false };
-          setPosts((prev) => [newPost, ...prev]);
+          pendingPostIdsRef.current.delete(newPost.id);
+          setPosts((prev) => {
+            if (prev.some((post) => post.id === newPost.id)) return prev;
+            return [newPost, ...prev];
+          });
         }
       )
       .on(
@@ -1006,8 +1014,31 @@ export const Forum = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'guftagu_likes' },
-        () => {
-          fetchPosts(false);
+        (payload) => {
+          const like = ((payload.new as Like | null) || (payload.old as Like | null));
+          if (!like?.post_id) return;
+          const delta = payload.eventType === 'INSERT' ? 1 : payload.eventType === 'DELETE' ? -1 : 0;
+          if (!delta) return;
+          setPosts((prev) => prev.map((post) => {
+            if (post.id !== like.post_id) return post;
+            const userOwnsEvent = user?.uid === like.user_id;
+            if (userOwnsEvent && post.isLiked === (payload.eventType === 'INSERT')) return post;
+            return {
+              ...post,
+              isLiked: userOwnsEvent ? payload.eventType === 'INSERT' : post.isLiked,
+              likeCount: Math.max(0, (post.likeCount || 0) + delta),
+            };
+          }));
+          setSelectedPost((prev) => {
+            if (!prev || prev.id !== like.post_id) return prev;
+            const userOwnsEvent = user?.uid === like.user_id;
+            if (userOwnsEvent && prev.isLiked === (payload.eventType === 'INSERT')) return prev;
+            return {
+              ...prev,
+              isLiked: userOwnsEvent ? payload.eventType === 'INSERT' : prev.isLiked,
+              likeCount: Math.max(0, (prev.likeCount || 0) + delta),
+            };
+          });
         }
       )
       .subscribe();
@@ -1059,11 +1090,23 @@ export const Forum = () => {
 
   useEffect(() => {
     if (!selectedPost) return;
-
     const currentPost = posts.find(p => p.id === selectedPost.id);
     if (currentPost && currentPost.replies) {
-      setSelectedPost(prev => prev ? { ...prev, replies: currentPost.replies, likeCount: currentPost.likeCount, isLiked: currentPost.isLiked } : null);
+      const repliesChanged =
+        (currentPost.replies || []).length !== (selectedPost.replies || []).length ||
+        (currentPost.replies || []).some((reply, index) => reply.id !== selectedPost.replies?.[index]?.id);
+      const metaChanged =
+        currentPost.likeCount !== selectedPost.likeCount ||
+        currentPost.isLiked !== selectedPost.isLiked;
+
+      if (repliesChanged || metaChanged) {
+        setSelectedPost(prev => prev ? { ...prev, replies: currentPost.replies, likeCount: currentPost.likeCount, isLiked: currentPost.isLiked } : null);
+      }
     }
+  }, [selectedPost, posts]);
+
+  useEffect(() => {
+    if (!selectedPost) return;
 
     const repliesChannel = supabase
       .channel(`guftagu-replies-${selectedPost.id}`)
@@ -1072,8 +1115,10 @@ export const Forum = () => {
         { event: 'INSERT', schema: 'public', table: 'guftagu_replies', filter: `post_id=eq.${selectedPost.id}` },
         (payload) => {
           const newReplyData = payload.new as Reply;
+          pendingReplyIdsRef.current.delete(newReplyData.id);
           setSelectedPost((prev) => {
             if (!prev) return null;
+            if ((prev.replies || []).some((reply) => reply.id === newReplyData.id)) return prev;
             return {
               ...prev,
               replies: [...(prev.replies || []), newReplyData]
@@ -1081,7 +1126,9 @@ export const Forum = () => {
           });
           setPosts((prev) => prev.map(p => 
             p.id === selectedPost.id 
-              ? { ...p, replies: [...(p.replies || []), newReplyData] }
+              ? (p.replies || []).some((reply) => reply.id === newReplyData.id)
+                ? p
+                : { ...p, replies: [...(p.replies || []), newReplyData] }
               : p
           ));
         }
@@ -1109,21 +1156,34 @@ export const Forum = () => {
     return () => {
       supabase.removeChannel(repliesChannel);
     };
-  }, [selectedPost?.id, posts]);
+  }, [selectedPost?.id]);
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim() || !user) return;
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('guftagu_posts').insert({
+      const { data, error } = await supabase.from('guftagu_posts').insert({
         user_id: user.uid,
         user_name: currentUserName,
         content: newPostContent.trim(),
         category: newPostCategory,
-      });
+      }).select('*').single();
 
       if (error) throw error;
+
+      const createdPost = {
+        ...data,
+        replies: [],
+        likes: [],
+        likeCount: 0,
+        isLiked: false,
+      } as Post;
+      pendingPostIdsRef.current.add(createdPost.id);
+      setPosts((prev) => {
+        if (prev.some((post) => post.id === createdPost.id)) return prev;
+        return [createdPost, ...prev];
+      });
 
       setNewPostContent('');
       setNewPostCategory('general');
@@ -1214,14 +1274,27 @@ export const Forum = () => {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('guftagu_replies').insert({
+      const { data, error } = await supabase.from('guftagu_replies').insert({
         post_id: selectedPost.id,
         user_id: user.uid,
         user_name: currentUserName,
         content: newReply.trim(),
-      });
+      }).select('*').single();
 
       if (error) throw error;
+
+      const createdReply = data as Reply;
+      pendingReplyIdsRef.current.add(createdReply.id);
+      setSelectedPost((prev) => {
+        if (!prev || prev.id !== createdReply.post_id) return prev;
+        if ((prev.replies || []).some((reply) => reply.id === createdReply.id)) return prev;
+        return { ...prev, replies: [...(prev.replies || []), createdReply] };
+      });
+      setPosts((prev) => prev.map((post) => {
+        if (post.id !== createdReply.post_id) return post;
+        if ((post.replies || []).some((reply) => reply.id === createdReply.id)) return post;
+        return { ...post, replies: [...(post.replies || []), createdReply] };
+      }));
 
       setNewReply('');
       toast.success('Reply sent!');
@@ -1287,7 +1360,7 @@ export const Forum = () => {
     return CATEGORIES.find(c => c.id === category)?.label || 'General';
   };
 
-  const PostCard = ({ post, index = 0 }: { post: Post; index?: number }) => {
+  const PostCard = ({ post }: { post: Post; index?: number }) => {
     const isOwner = user?.uid === post.user_id;
     const isLiking = likingPosts.has(post.id);
     const isBookmarked = bookmarkedPosts.has(post.id);
@@ -1296,9 +1369,8 @@ export const Forum = () => {
 
     return (
       <Card 
-        className="group relative overflow-hidden border-0 animate-fade-in rounded-2xl"
+        className="group relative overflow-hidden border-0 rounded-2xl"
         style={{ 
-          animationDelay: `${index * 80}ms`,
           background: WARM_CARD,
           boxShadow: '0 1px 3px rgba(123, 63, 30, 0.06)',
         }}
@@ -1443,8 +1515,8 @@ export const Forum = () => {
   // Replies View
   if (selectedPost) {
     return (
-      <Layout>
-        <div className="min-h-screen pb-24" style={{ background: CREAM_BG }}>
+      <Layout pageBackgroundColor={CREAM_BG}>
+        <div className="min-h-screen" style={{ background: CREAM_BG }}>
           <div className="relative px-4 pt-6">
             <button
               onClick={() => setSelectedPost(null)}
@@ -1501,9 +1573,8 @@ export const Forum = () => {
                   return (
                     <div 
                       key={reply.id} 
-                      className="rounded-2xl p-4 animate-fade-in"
+                      className="rounded-2xl p-4"
                       style={{ 
-                        animationDelay: `${index * 50}ms`,
                         background: '#FFFFFF',
                         boxShadow: '0 1px 3px rgba(123, 63, 30, 0.05)',
                       }}
@@ -1629,7 +1700,7 @@ export const Forum = () => {
       { name: 'Mariam Yusuf', role: 'Member', avatar: 'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?w=200&h=200&fit=crop&crop=faces' },
     ];
     return (
-      <Layout showHeader={false}>
+      <Layout showHeader={false} pageBackgroundColor={CREAM_BG}>
         <div className="min-h-screen pb-28" style={{ background: CREAM_BG, fontFamily: "'Inter', sans-serif" }}>
           {/* Top bar */}
           <div className="flex items-center justify-between px-4 pt-4 pb-3" style={{ background: CREAM_BG }}>
@@ -1881,14 +1952,12 @@ export const Forum = () => {
       headerTitleStyle={{ color: '#2C1309' }}
       headerButtonClassName="text-[#2C1309] hover:bg-[#2C1309]/10 hover:text-[#2C1309] border-transparent hover:border-[#2C1309]/25"
       leftAlignHeaderTitle
+      pageBackgroundColor={CREAM_BG}
     >
       <div 
         ref={containerRef}
-        className="min-h-screen pb-24 overflow-auto"
+        className="min-h-screen"
         style={{ background: CREAM_BG }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
         {/* Pull to refresh indicator */}
         <div 

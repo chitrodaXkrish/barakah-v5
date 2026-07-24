@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, BookOpen, Play, Pause, Globe } from 'lucide-react';
+import { ArrowLeft, Search, BookOpen, Play, Pause } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +34,59 @@ interface SurahDetail extends Surah {
   english: string[];
   audio: Record<string, { reciter: string; url: string; originalUrl: string }>;
 }
+
+interface JuzRange {
+  juz: number;
+  start: { surah: number; ayah: number };
+  end: { surah: number; ayah: number };
+}
+
+interface ParaVerse {
+  key: string;
+  surahNo: number;
+  surahName: string;
+  ayahNo: number;
+  arabic: string;
+  english?: string;
+}
+
+interface ParaDetail {
+  paraNo: number;
+  verses: ParaVerse[];
+}
+
+const JUZ_RANGES: JuzRange[] = [
+  { juz: 1, start: { surah: 1, ayah: 1 }, end: { surah: 2, ayah: 141 } },
+  { juz: 2, start: { surah: 2, ayah: 142 }, end: { surah: 2, ayah: 252 } },
+  { juz: 3, start: { surah: 2, ayah: 253 }, end: { surah: 3, ayah: 92 } },
+  { juz: 4, start: { surah: 3, ayah: 93 }, end: { surah: 4, ayah: 23 } },
+  { juz: 5, start: { surah: 4, ayah: 24 }, end: { surah: 4, ayah: 147 } },
+  { juz: 6, start: { surah: 4, ayah: 148 }, end: { surah: 5, ayah: 81 } },
+  { juz: 7, start: { surah: 5, ayah: 82 }, end: { surah: 6, ayah: 110 } },
+  { juz: 8, start: { surah: 6, ayah: 111 }, end: { surah: 7, ayah: 87 } },
+  { juz: 9, start: { surah: 7, ayah: 88 }, end: { surah: 8, ayah: 40 } },
+  { juz: 10, start: { surah: 8, ayah: 41 }, end: { surah: 9, ayah: 92 } },
+  { juz: 11, start: { surah: 9, ayah: 93 }, end: { surah: 11, ayah: 5 } },
+  { juz: 12, start: { surah: 11, ayah: 6 }, end: { surah: 12, ayah: 52 } },
+  { juz: 13, start: { surah: 12, ayah: 53 }, end: { surah: 14, ayah: 52 } },
+  { juz: 14, start: { surah: 15, ayah: 1 }, end: { surah: 16, ayah: 128 } },
+  { juz: 15, start: { surah: 17, ayah: 1 }, end: { surah: 18, ayah: 74 } },
+  { juz: 16, start: { surah: 18, ayah: 75 }, end: { surah: 20, ayah: 135 } },
+  { juz: 17, start: { surah: 21, ayah: 1 }, end: { surah: 22, ayah: 78 } },
+  { juz: 18, start: { surah: 23, ayah: 1 }, end: { surah: 25, ayah: 20 } },
+  { juz: 19, start: { surah: 25, ayah: 21 }, end: { surah: 27, ayah: 55 } },
+  { juz: 20, start: { surah: 27, ayah: 56 }, end: { surah: 29, ayah: 45 } },
+  { juz: 21, start: { surah: 29, ayah: 46 }, end: { surah: 33, ayah: 30 } },
+  { juz: 22, start: { surah: 33, ayah: 31 }, end: { surah: 36, ayah: 27 } },
+  { juz: 23, start: { surah: 36, ayah: 28 }, end: { surah: 39, ayah: 31 } },
+  { juz: 24, start: { surah: 39, ayah: 32 }, end: { surah: 41, ayah: 46 } },
+  { juz: 25, start: { surah: 41, ayah: 47 }, end: { surah: 45, ayah: 37 } },
+  { juz: 26, start: { surah: 46, ayah: 1 }, end: { surah: 51, ayah: 30 } },
+  { juz: 27, start: { surah: 51, ayah: 31 }, end: { surah: 57, ayah: 29 } },
+  { juz: 28, start: { surah: 58, ayah: 1 }, end: { surah: 66, ayah: 12 } },
+  { juz: 29, start: { surah: 67, ayah: 1 }, end: { surah: 77, ayah: 50 } },
+  { juz: 30, start: { surah: 78, ayah: 1 }, end: { surah: 114, ayah: 6 } },
+];
 
 const RECITERS: Record<string, string> = {
   '1': 'Mishary Rashid Al Afasy',
@@ -92,7 +145,9 @@ export const Quran = () => {
   const [surahs, setSurahs] = useState<Surah[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSurah, setSelectedSurah] = useState<SurahDetail | null>(null);
+  const [selectedPara, setSelectedPara] = useState<ParaDetail | null>(null);
   const [loadingSurah, setLoadingSurah] = useState(false);
+  const [loadingPara, setLoadingPara] = useState(false);
   const [tab, setTab] = useState<'surah' | 'para'>('surah');
   const [detailTab, setDetailTab] = useState<'translation' | 'arabic'>('translation');
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,7 +155,7 @@ export const Quran = () => {
   const [selectedReciter, setSelectedReciter] = useState<string>(
     typeof window !== 'undefined' ? localStorage.getItem('selectedReciter') || '1' : '1',
   );
-  const [playingVerse, setPlayingVerse] = useState<number | null>(null);
+  const [playingVerse, setPlayingVerse] = useState<string | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
 
   // Fetch surah list
@@ -115,12 +170,64 @@ export const Quran = () => {
   const fetchSurahDetails = async (surahNo: number) => {
     setLoadingSurah(true);
     setDetailTab('translation');
+    setSelectedPara(null);
     try {
       const r = await fetch(`https://quranapi.pages.dev/api/${surahNo}.json`);
       const data = await r.json();
       setSelectedSurah({ ...data, surahNo });
     } finally {
       setLoadingSurah(false);
+    }
+  };
+
+  const fetchParaDetails = async (paraNo: number) => {
+    const range = JUZ_RANGES[paraNo - 1];
+    if (!range) return;
+
+    setLoadingPara(true);
+    setDetailTab('translation');
+    setSelectedSurah(null);
+    setSelectedPara({ paraNo, verses: [] });
+
+    try {
+      const surahNumbers = Array.from(
+        { length: range.end.surah - range.start.surah + 1 },
+        (_, index) => range.start.surah + index,
+      );
+      const details = await Promise.all(
+        surahNumbers.map(async (surahNo) => {
+          const response = await fetch(`https://quranapi.pages.dev/api/${surahNo}.json`);
+          const data = await response.json();
+          return { ...data, surahNo } as SurahDetail;
+        }),
+      );
+
+      const verses = details.flatMap((surah) => {
+        const firstAyah =
+          surah.surahNo === range.start.surah ? range.start.ayah : 1;
+        const lastAyah =
+          surah.surahNo === range.end.surah
+            ? range.end.ayah
+            : surah.arabic1.length;
+
+        return surah.arabic1
+          .slice(firstAyah - 1, lastAyah)
+          .map((arabic, index) => {
+            const ayahNo = firstAyah + index;
+            return {
+              key: `${surah.surahNo}:${ayahNo}`,
+              surahNo: surah.surahNo,
+              surahName: surah.surahName,
+              ayahNo,
+              arabic,
+              english: surah.english?.[ayahNo - 1],
+            };
+          });
+      });
+
+      setSelectedPara({ paraNo, verses });
+    } finally {
+      setLoadingPara(false);
     }
   };
 
@@ -134,24 +241,23 @@ export const Quran = () => {
     }
   };
 
-  const playVerse = (verseNo: number) => {
-    if (!selectedSurah) return;
+  const playVerse = (surahNo: number, verseNo: number, key: string) => {
     if (currentAudio) {
       currentAudio.pause();
-      if (playingVerse === verseNo) {
+      if (playingVerse === key) {
         setPlayingVerse(null);
         setCurrentAudio(null);
         return;
       }
     }
-    const audio = new Audio(verseAudio(selectedSurah.surahNo, verseNo, selectedReciter));
+    const audio = new Audio(verseAudio(surahNo, verseNo, selectedReciter));
     audio.play().catch(() => {});
     audio.onended = () => {
       setPlayingVerse(null);
       setCurrentAudio(null);
     };
     setCurrentAudio(audio);
-    setPlayingVerse(verseNo);
+    setPlayingVerse(key);
   };
 
   const filtered = useMemo(
@@ -165,7 +271,150 @@ export const Quran = () => {
     [surahs, searchQuery],
   );
 
-  /* ---------------- Detail view ---------------- */
+  /* ---------------- Para detail view ---------------- */
+  if (selectedPara) {
+    const range = JUZ_RANGES[selectedPara.paraNo - 1];
+
+    return (
+      <div className="min-h-screen max-w-md mx-auto pb-28 font-arabic" style={{ backgroundColor: CREAM_BG }}>
+        <TopBar onBack={() => setSelectedPara(null)} />
+
+        <div className="px-5 mt-2">
+          <div
+            className="rounded-[28px] px-6 pt-7 pb-10 text-center text-white shadow-sm overflow-hidden"
+            style={{ backgroundColor: OLIVE }}
+          >
+            <h2 className="text-[32px] font-bold leading-tight" style={{ fontFamily: SERIF }}>
+              Para {selectedPara.paraNo}
+            </h2>
+            <p className="text-[16px] mt-1 opacity-95">Juz {selectedPara.paraNo}</p>
+            <div className="my-3 h-px mx-auto w-2/3" style={{ backgroundColor: 'rgba(255,255,255,0.35)' }} />
+            <p className="text-[11px] tracking-[0.22em] font-medium opacity-95">
+              SURAH {range.start.surah}:{range.start.ayah} TO {range.end.surah}:{range.end.ayah}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-5 mt-6">
+          <div className="grid grid-cols-2 text-center">
+            {(['translation', 'arabic'] as const).map((t) => {
+              const active = detailTab === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setDetailTab(t)}
+                  className="pb-2 text-[15px] font-semibold relative"
+                  style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
+                >
+                  {t === 'translation' ? 'With Translation' : 'Arabic'}
+                  <span
+                    className="absolute left-0 right-0 -bottom-px h-[2px]"
+                    style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="px-5 mt-4">
+          <Select value={selectedReciter} onValueChange={handleReciterChange}>
+            <SelectTrigger
+              className="w-full rounded-full text-[13px]"
+              style={{ backgroundColor: CREAM_CARD, borderColor: BORDER, color: BROWN }}
+            >
+              <SelectValue placeholder="Reciter" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(RECITERS).map(([id, name]) => (
+                <SelectItem key={id} value={id}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="px-5 mt-5">
+          {loadingPara ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : detailTab === 'translation' ? (
+            <div className="space-y-7">
+              {selectedPara.verses.map((verse) => {
+                const isPlaying = playingVerse === verse.key;
+                return (
+                  <div key={verse.key}>
+                    <div
+                      className="rounded-full flex items-center justify-between px-2 py-2"
+                      style={{ backgroundColor: '#F1E0BC' }}
+                    >
+                      <div
+                        className="min-h-8 rounded-full flex items-center justify-center text-white text-[12px] font-semibold px-3"
+                        style={{ backgroundColor: BROWN_ACCENT }}
+                      >
+                        {verse.surahName} {verse.ayahNo}
+                      </div>
+                      <button
+                        onClick={() => playVerse(verse.surahNo, verse.ayahNo, verse.key)}
+                        aria-label={isPlaying ? 'Pause' : 'Play'}
+                        className="h-8 w-8 rounded-full flex items-center justify-center"
+                        style={{ color: BROWN_ACCENT }}
+                      >
+                        {isPlaying ? (
+                          <Pause className="h-4 w-4" strokeWidth={2} />
+                        ) : (
+                          <Play className="h-4 w-4" strokeWidth={2} />
+                        )}
+                      </button>
+                    </div>
+                    <p
+                      dir="rtl"
+                      className="text-right mt-4 text-[22px] leading-[2.4]"
+                      style={{ fontFamily: ARABIC_FONT, color: BROWN }}
+                    >
+                      {verse.arabic}
+                    </p>
+                    {verse.english && (
+                      <p className="mt-3 text-[15px] leading-relaxed" style={{ color: BROWN }}>
+                        {verse.english}
+                      </p>
+                    )}
+                    <div className="mt-5 h-px" style={{ backgroundColor: BORDER }} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              dir="rtl"
+              className="text-right leading-[2.6] text-[22px]"
+              style={{ fontFamily: ARABIC_FONT, color: BROWN }}
+            >
+              {selectedPara.verses.map((verse) => (
+                <span key={verse.key}>
+                  {verse.arabic}
+                  <span
+                    className="inline-block mx-1 align-middle text-[14px] rounded-full px-2"
+                    style={{ color: BROWN_ACCENT, border: `1px solid ${BORDER}` }}
+                  >
+                    {verse.surahNo}:{verse.ayahNo}
+                  </span>{' '}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <BottomNavigation />
+      </div>
+    );
+  }
+
+  /* ---------------- Surah detail view ---------------- */
   if (selectedSurah) {
     return (
       <div className="min-h-screen max-w-md mx-auto pb-28 font-arabic" style={{ backgroundColor: CREAM_BG }}>
@@ -249,7 +498,8 @@ export const Quran = () => {
             <div className="space-y-7">
               {selectedSurah.arabic1?.map((arabic, i) => {
                 const n = i + 1;
-                const isPlaying = playingVerse === n;
+                const playbackKey = `${selectedSurah.surahNo}:${n}`;
+                const isPlaying = playingVerse === playbackKey;
                 return (
                   <div key={n}>
                     {/* Action bar */}
@@ -265,14 +515,7 @@ export const Quran = () => {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
-                          aria-label="Translate"
-                          className="h-8 w-8 rounded-full flex items-center justify-center"
-                          style={{ color: BROWN_ACCENT }}
-                        >
-                          <Globe className="h-4 w-4" strokeWidth={2} />
-                        </button>
-                        <button
-                          onClick={() => playVerse(n)}
+                          onClick={() => playVerse(selectedSurah.surahNo, n, playbackKey)}
                           aria-label={isPlaying ? 'Pause' : 'Play'}
                           className="h-8 w-8 rounded-full flex items-center justify-center"
                           style={{ color: BROWN_ACCENT }}
@@ -448,7 +691,10 @@ export const Quran = () => {
           <ul>
             {Array.from({ length: 30 }).map((_, i) => (
               <li key={i}>
-                <button className="w-full text-left px-5 py-4 flex items-center gap-4">
+                <button
+                  onClick={() => fetchParaDetails(i + 1)}
+                  className="w-full text-left px-5 py-4 flex items-center gap-4"
+                >
                   <StarBadge n={i + 1} />
                   <div className="flex-1">
                     <div className="text-[16px] font-semibold" style={{ color: BROWN }}>

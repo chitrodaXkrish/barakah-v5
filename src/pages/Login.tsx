@@ -103,7 +103,7 @@ export const Login = () => {
               placeholder={t('login.email_placeholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="bg-white/90 border-sage/30 rounded-xl h-12 text-center placeholder:text-sage/50"
+              className="bg-white/90 border-sage/30 rounded-xl h-12 text-center text-black caret-black placeholder:text-sage/50"
               dir="ltr"
             />
 

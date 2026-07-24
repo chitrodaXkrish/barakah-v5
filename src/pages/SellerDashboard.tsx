@@ -78,7 +78,7 @@ export const SellerDashboard = () => {
     <div className="min-h-screen w-full max-w-md mx-auto" style={{ background: '#FFF1DD' }}>
       {/* Header */}
       <div className="bg-white px-4 pt-12 pb-4">
-        <button onClick={() => navigate('/marketplace')} className="flex items-center gap-2 text-[#1a1a1a] font-semibold">
+        <button onClick={() => navigate('/shop', { replace: true })} className="flex items-center gap-2 text-[#1a1a1a] font-semibold">
           <ArrowLeft className="h-5 w-5" />
           Back to Marketplace
         </button>

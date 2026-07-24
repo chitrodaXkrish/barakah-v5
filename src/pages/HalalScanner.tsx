@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { ArrowLeft, Flashlight, ScanLine, Check, Shield, Sparkles, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Flashlight, ScanLine, Check, Shield, Sparkles, ChevronLeft, ChevronRight, ExternalLink, X, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useGlobalLocation } from '@/contexts/LocationContext';
 import scannerProduct from '@/assets/scanner-product.jpg';
 import scannerAlt1 from '@/assets/scanner-alt-1.jpg';
 import scannerAlt2 from '@/assets/scanner-alt-2.jpg';
+import { supabase } from '@/integrations/supabase/client';
 
 const CREAM_BG = '#FFF5E5';
 const CARD_CREAM = '#FBE6C8';
@@ -16,6 +19,20 @@ const MUTED = '#8A6A55';
 const SERIF = "'Plus Jakarta Sans', sans-serif";
 
 type Ingredient = { name: string; ok: boolean };
+
+type HalalStatus = 'halal' | 'haram' | 'mushbooh' | 'unknown';
+
+type ScanResult = {
+  product_name: string;
+  brand: string | null;
+  status: HalalStatus;
+  confidence: number | null;
+  verdict: string | null;
+  category: string | null;
+  region: string | null;
+  ingredients: Array<{ name: string; ok: boolean; note?: string | null }>;
+  source?: string | null;
+};
 
 const PRODUCT = {
   name: 'Golden Saffron Tea Biscuits',
@@ -41,13 +58,36 @@ const ALTERNATIVES = [
 
 export const HalalScanner = () => {
   const navigate = useNavigate();
+  const { location } = useGlobalLocation();
   const [view, setView] = useState<'scan' | 'result'>('scan');
   const [scanning, setScanning] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [lastBarcode, setLastBarcode] = useState<string | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
   const scannerIdRef = useRef(`halal-scanner-${Date.now()}`);
   const mountedRef = useRef(true);
+  const handlingScanRef = useRef(false);
+
+  const captureScannerFrame = useCallback(() => {
+    const video = scannerDivRef.current?.querySelector('video') as HTMLVideoElement | null;
+    if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  }, []);
 
   const cleanupScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -63,6 +103,61 @@ export const HalalScanner = () => {
     }
     scannerRef.current = null;
   }, []);
+
+  const analyzeBarcode = useCallback(async (barcode: string) => {
+    if (!barcode || handlingScanRef.current) return;
+
+    handlingScanRef.current = true;
+    setError(null);
+    setAnalyzing(true);
+    setLastBarcode(barcode);
+    setScanResult(null);
+    const imageBase64 = captureScannerFrame();
+    await cleanupScanner();
+    setScanning(false);
+
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('scan-halal', {
+        body: {
+          barcode,
+          ...(location
+            ? { region: [location.city, location.country].filter(Boolean).join(', ') }
+            : {}),
+          ...(imageBase64
+            ? { imageBase64, imageMimeType: 'image/jpeg' }
+            : {}),
+        },
+      });
+
+      if (invokeError) throw invokeError;
+      const result = data?.result;
+      if (!result) throw new Error('No scan result returned');
+      if (result.source === 'barcode_lookup_miss') {
+        throw new Error('This barcode was scanned, but no product details were found. Please scan the ingredient label or try another barcode.');
+      }
+
+      if (!mountedRef.current) return;
+      setScanResult({
+        product_name: result.product_name || 'Unknown Product',
+        brand: result.brand ?? null,
+        status: result.status || 'unknown',
+        confidence: typeof result.confidence === 'number' ? result.confidence : null,
+        verdict: result.verdict ?? null,
+        category: result.category ?? null,
+        region: result.region ?? null,
+        ingredients: Array.isArray(result.ingredients) ? result.ingredients : [],
+        source: result.source ?? null,
+      });
+      setView('result');
+    } catch (scanError: any) {
+      if (!mountedRef.current) return;
+      setError(scanError?.message || 'Could not analyze this barcode. Please try again.');
+      setView('scan');
+    } finally {
+      handlingScanRef.current = false;
+      if (mountedRef.current) setAnalyzing(false);
+    }
+  }, [captureScannerFrame, cleanupScanner, location]);
 
   const startScanning = async () => {
     setError(null);
@@ -81,11 +176,9 @@ export const HalalScanner = () => {
       await scanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 260, height: 180 } },
-        () => {
+        (decodedText) => {
           if (!mountedRef.current) return;
-          cleanupScanner();
-          setScanning(false);
-          setView('result');
+          analyzeBarcode(decodedText);
         },
         () => {}
       );
@@ -112,11 +205,22 @@ export const HalalScanner = () => {
   }, [cleanupScanner]);
 
   const handleScanAnother = () => {
+    setScanResult(null);
+    setLastBarcode(null);
+    setError(null);
     setView('scan');
   };
 
-  // Demo: tapping "Enter barcode manually" jumps to result
-  const handleManual = () => setView('result');
+  const handleManualSubmit = () => {
+    const barcode = manualBarcode.replace(/\D/g, '').trim();
+    if (!barcode) {
+      setError('Please enter a valid barcode number.');
+      return;
+    }
+    setManualOpen(false);
+    setManualBarcode('');
+    analyzeBarcode(barcode);
+  };
 
   return (
     <div className="min-h-screen max-w-md mx-auto font-arabic" style={{ backgroundColor: CREAM_BG, color: BROWN }}>
@@ -126,12 +230,22 @@ export const HalalScanner = () => {
           scannerDivRef={scannerDivRef}
           scanning={scanning}
           error={error}
+          analyzing={analyzing}
           startScanning={startScanning}
           stopScanning={stopScanning}
-          onManual={handleManual}
+          manualOpen={manualOpen}
+          manualBarcode={manualBarcode}
+          setManualOpen={setManualOpen}
+          setManualBarcode={setManualBarcode}
+          onManualSubmit={handleManualSubmit}
         />
       ) : (
-        <ResultView onBack={() => navigate('/')} onScanAnother={handleScanAnother} />
+        <ResultView
+          onBack={() => navigate('/')}
+          onScanAnother={handleScanAnother}
+          result={scanResult}
+          barcode={lastBarcode}
+        />
       )}
 
       <style>{`
@@ -162,17 +276,27 @@ const ScanView = ({
   scannerDivRef,
   scanning,
   error,
+  analyzing,
   startScanning,
   stopScanning,
-  onManual,
+  manualOpen,
+  manualBarcode,
+  setManualOpen,
+  setManualBarcode,
+  onManualSubmit,
 }: {
   onBack: () => void;
   scannerDivRef: React.RefObject<HTMLDivElement>;
   scanning: boolean;
   error: string | null;
+  analyzing: boolean;
   startScanning: () => void;
   stopScanning: () => void;
-  onManual: () => void;
+  manualOpen: boolean;
+  manualBarcode: string;
+  setManualOpen: (open: boolean) => void;
+  setManualBarcode: (barcode: string) => void;
+  onManualSubmit: () => void;
 }) => {
   useEffect(() => {
     startScanning();
@@ -221,26 +345,33 @@ const ScanView = ({
         Point camera at any barcode or ingredient list
       </p>
       <p className="text-center text-[13px] mt-1" style={{ color: MUTED }}>
-        Processing requires a clear, steady view
+        {analyzing ? 'Analyzing barcode with Barakah AI...' : 'Processing requires a clear, steady view'}
       </p>
 
       {/* Scan button */}
       <div className="flex justify-center mt-6">
         <button
           onClick={scanning ? stopScanning : startScanning}
+          disabled={analyzing}
           className="h-14 w-14 rounded-full flex items-center justify-center shadow-md active:scale-95 transition-transform"
           style={{ backgroundColor: BROWN_BTN }}
           aria-label="Start scan"
         >
-          <Flashlight className="h-6 w-6 text-white" strokeWidth={1.75} />
+          {analyzing ? (
+            <Sparkles className="h-6 w-6 text-white animate-pulse" strokeWidth={1.75} />
+          ) : (
+            <Flashlight className="h-6 w-6 text-white" strokeWidth={1.75} />
+          )}
         </button>
       </div>
 
       <button
-        onClick={onManual}
-        className="block mx-auto mt-3 text-[14px] font-medium"
-        style={{ color: BROWN_BTN }}
+        onClick={() => setManualOpen(true)}
+        disabled={analyzing}
+        className="mx-auto mt-4 min-h-11 px-5 rounded-full text-[14px] font-semibold inline-flex items-center justify-center gap-2 border shadow-sm disabled:opacity-60"
+        style={{ color: BROWN_BTN, backgroundColor: '#FFF8EC', borderColor: '#D8B991' }}
       >
+        <Keyboard className="h-4 w-4" strokeWidth={1.9} />
         Enter barcode manually
       </button>
 
@@ -271,6 +402,84 @@ const ScanView = ({
         <span className="opacity-50">•</span>
         <button>Help Center</button>
       </div>
+
+      {manualOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-4"
+          onClick={() => setManualOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-[28px] px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-xl"
+            style={{ backgroundColor: '#FFF5E5', border: '1px solid #E4C49B' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1 w-12 rounded-full" style={{ backgroundColor: '#D8B991' }} />
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-11 w-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F1D8B7' }}>
+                  <Keyboard className="h-5 w-5" style={{ color: BROWN_BTN }} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-[18px] font-semibold" style={{ color: BROWN }}>Enter barcode number</h2>
+                  <p className="text-[12px] leading-tight mt-0.5" style={{ color: MUTED }}>Use the digits printed below the barcode.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualOpen(false)}
+                className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ color: BROWN_BTN, backgroundColor: '#F6E4CC' }}
+                aria-label="Close manual barcode entry"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <label className="block text-[12px] font-semibold mb-2 px-1" style={{ color: BROWN }}>
+              Barcode
+            </label>
+            <div
+              className="flex items-center gap-2 rounded-2xl border px-4"
+              style={{ backgroundColor: '#FFFDF7', borderColor: '#D8B991' }}
+            >
+              <Input
+                autoFocus
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={manualBarcode}
+                onChange={(event) => setManualBarcode(event.target.value.replace(/\D/g, ''))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') onManualSubmit();
+                }}
+                placeholder="8901234567890"
+                className="h-16 flex-1 border-0 bg-transparent px-0 text-[20px] font-semibold tracking-wide text-[#2C1309] caret-[#6B3520] placeholder:text-[#B9A286] focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+              {manualBarcode && (
+                <button
+                  type="button"
+                  onClick={() => setManualBarcode('')}
+                  className="h-8 w-8 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: '#F6E4CC', color: BROWN_BTN }}
+                  aria-label="Clear barcode"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="mt-2 px-1 text-[11px]" style={{ color: MUTED }}>
+              Usually 8 to 14 digits.
+            </div>
+            <Button
+              type="button"
+              onClick={onManualSubmit}
+              disabled={!manualBarcode || analyzing}
+              className="mt-5 h-14 w-full rounded-full text-white font-semibold disabled:opacity-60"
+              style={{ backgroundColor: BROWN_BTN }}
+            >
+              {analyzing ? 'Analyzing...' : 'Analyze Barcode'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -316,7 +525,44 @@ const Dashes = () => (
 
 /* ---------------- Result View ---------------- */
 
-const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnother: () => void }) => {
+const statusCopy: Record<HalalStatus, { title: string; subtitle: string; color: string }> = {
+  halal: {
+    title: 'Halal Verified',
+    subtitle: 'COMPLIANT WITH ISLAMIC STANDARDS',
+    color: '#2A8049',
+  },
+  haram: {
+    title: 'Not Halal',
+    subtitle: 'CONTAINS PROHIBITED OR HIGH-RISK INGREDIENTS',
+    color: '#B3261E',
+  },
+  mushbooh: {
+    title: 'Needs Review',
+    subtitle: 'SOME INGREDIENTS REQUIRE VERIFICATION',
+    color: '#B07A00',
+  },
+  unknown: {
+    title: 'Unknown Status',
+    subtitle: 'BARAKAH AI COULD NOT VERIFY THIS PRODUCT',
+    color: '#7C6A4F',
+  },
+};
+
+const ResultView = ({
+  onBack,
+  onScanAnother,
+  result,
+  barcode,
+}: {
+  onBack: () => void;
+  onScanAnother: () => void;
+  result: ScanResult | null;
+  barcode: string | null;
+}) => {
+  const status = result?.status || 'unknown';
+  const copy = statusCopy[status] || statusCopy.unknown;
+  const ingredients = result?.ingredients ?? [];
+
   return (
     <div className="pb-12">
       {/* Header */}
@@ -341,12 +587,17 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
           <div className="h-12 w-12 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: '#A35233' }}>
             <Check className="h-6 w-6 text-white" strokeWidth={2.5} />
           </div>
-          <div className="text-[19px] font-semibold" style={{ color: '#5C2A14', fontFamily: SERIF }}>
-            Halal Verified
+          <div className="text-[19px] font-semibold" style={{ color: copy.color, fontFamily: SERIF }}>
+            {copy.title}
           </div>
           <div className="text-[10px] tracking-[0.18em] mt-1" style={{ color: '#8B6E4A' }}>
-            COMPLIANT WITH ISLAMIC STANDARDS
+            {copy.subtitle}
           </div>
+          {typeof result?.confidence === 'number' && (
+            <div className="text-[12px] mt-2" style={{ color: MUTED }}>
+              Confidence {result.confidence}%
+            </div>
+          )}
         </div>
       </div>
 
@@ -354,7 +605,7 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
       <div className="px-5 mt-5 flex justify-center">
         <img
           src={PRODUCT.image}
-          alt={PRODUCT.name}
+          alt={result?.product_name || 'Scanned product'}
           className="w-[170px] h-[170px] rounded-2xl object-cover"
           loading="lazy"
         />
@@ -377,8 +628,13 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
         className="px-5 mt-5 text-center italic text-[28px] leading-tight"
         style={{ fontFamily: SERIF, color: BROWN }}
       >
-        {PRODUCT.name}
+        {result?.product_name || 'Unknown Product'}
       </h2>
+      {(result?.brand || barcode) && (
+        <p className="px-5 mt-2 text-center text-[13px]" style={{ color: MUTED }}>
+          {[result?.brand, barcode ? `Barcode ${barcode}` : null].filter(Boolean).join(' - ')}
+        </p>
+      )}
 
       {/* Verified by Barakah pill */}
       <div className="flex justify-center mt-3">
@@ -391,13 +647,19 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
         </div>
       </div>
 
+      {result?.verdict && (
+        <p className="px-7 mt-4 text-center text-[14px] leading-relaxed" style={{ color: BROWN }}>
+          {result.verdict}
+        </p>
+      )}
+
       {/* Detailed ingredients header */}
       <div className="px-5 mt-7 flex items-end justify-between">
         <h3 className="italic text-[22px] leading-tight" style={{ fontFamily: SERIF, color: BROWN }}>
           Detailed<br />Ingredients
         </h3>
         <div className="text-right">
-          <div className="text-[18px] font-semibold" style={{ color: BROWN }}>{PRODUCT.totalScanned}</div>
+          <div className="text-[18px] font-semibold" style={{ color: BROWN }}>{ingredients.length}</div>
           <div className="text-[10px] tracking-[0.2em]" style={{ color: MUTED }}>INGREDIENTS<br />SCANNED</div>
         </div>
       </div>
@@ -416,7 +678,7 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
                 KEY INGREDIENT
               </div>
               <div className="italic text-[15px]" style={{ fontFamily: SERIF, color: BROWN }}>
-                {PRODUCT.keyIngredient}
+                {ingredients[0]?.name || 'Barcode analysis'}
               </div>
             </div>
             <div className="h-6 w-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#A35233' }}>
@@ -426,10 +688,20 @@ const ResultView = ({ onBack, onScanAnother }: { onBack: () => void; onScanAnoth
 
           {/* List */}
           <ul className="divide-y" style={{ borderColor: 'rgba(139,90,43,0.15)' }}>
-            {PRODUCT.ingredients.map((ing) => (
+            {ingredients.length === 0 && (
+              <li className="py-3 text-[14px]" style={{ color: MUTED }}>
+                No ingredient list was returned for this barcode.
+              </li>
+            )}
+            {ingredients.map((ing) => (
               <li key={ing.name} className="flex items-center justify-between py-3">
-                <span className="text-[14px] font-medium" style={{ color: BROWN }}>{ing.name}</span>
-                <Check className="h-4 w-4" style={{ color: '#A35233' }} strokeWidth={2.5} />
+                <div className="min-w-0 pr-3">
+                  <span className="text-[14px] font-medium" style={{ color: BROWN }}>{ing.name}</span>
+                  {ing.note && (
+                    <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{ing.note}</p>
+                  )}
+                </div>
+                <Check className="h-4 w-4 flex-shrink-0" style={{ color: ing.ok ? '#A35233' : '#B3261E' }} strokeWidth={2.5} />
               </li>
             ))}
           </ul>

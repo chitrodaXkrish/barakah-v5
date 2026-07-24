@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CATEGORIES } from './ShopCategories';
+import { SideMenu } from '@/components/SideMenu';
 
 interface Product {
   id: string;
@@ -32,6 +33,7 @@ export const Shop = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -89,12 +91,17 @@ export const Shop = () => {
   const topPicks = useMemo(() => products.slice(0, 3), [products]);
 
   return (
-    <Layout showHeader={false}>
+    <Layout showHeader={false} pageBackgroundColor={CREAM}>
       <div className="min-h-screen" style={{ backgroundColor: CREAM }}>
         {/* Top bar */}
         <div className="bg-white px-4 pt-4 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button type="button" aria-label="Menu" style={{ color: BROWN_DARK }}>
+            <button
+              type="button"
+              aria-label="Menu"
+              onClick={() => setIsMenuOpen(true)}
+              style={{ color: BROWN_DARK }}
+            >
               <Menu className="h-6 w-6" />
             </button>
             <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>Marketplace</h1>
@@ -252,6 +259,7 @@ export const Shop = () => {
             )}
           </section>
         </div>
+        <SideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
       </div>
     </Layout>
   );

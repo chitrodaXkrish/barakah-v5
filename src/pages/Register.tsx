@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { User, Briefcase, Plane, ArrowLeft, Star, Chrome } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
 import loginFullBg from '@/assets/login-full-bg.png.asset.json';
-import appleLogo from '@/assets/AppleLogo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
@@ -31,9 +31,48 @@ export const Register = () => {
   const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup } = useAuth();
   const { t } = useLanguage();
 
-  const routeByRole = (role: UserRole | null | undefined) => {
-    if (role === 'seller') navigate('/seller-onboarding');
-    else if (role === 'travel_partner') navigate('/business-account');
+  const resolveCurrentAccountRole = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData.user?.id;
+    if (!userId) return null;
+
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (roleData?.role) return roleData.role as UserRole;
+
+    const { data: sellerProfile } = await supabase
+      .from('seller_profiles')
+      .select('user_id')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    return sellerProfile ? 'seller' : null;
+  };
+
+  const routeByRole = async (role: UserRole | null | undefined) => {
+    if (role === 'seller') {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      if (userId) {
+        const { data: sellerProfile } = await supabase
+          .from('seller_profiles')
+          .select('onboarding_completed')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        navigate(sellerProfile?.onboarding_completed ? '/seller-dashboard' : '/seller-onboarding');
+        return;
+      }
+
+      navigate('/seller-onboarding');
+    } else if (role === 'travel_partner') navigate('/business-account');
     else navigate('/');
   };
 
@@ -45,7 +84,8 @@ export const Register = () => {
       setLoading(false);
       return;
     }
-    if (role === null) {
+    const resolvedRole = role ?? await resolveCurrentAccountRole();
+    if (resolvedRole === null) {
       toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
       setNeedsSetup(true);
       setIsSignIn(false);
@@ -56,7 +96,7 @@ export const Register = () => {
       return;
     }
     toast.success('Welcome back! You already have an account — signing you in.');
-    routeByRole(role);
+    await routeByRole(resolvedRole);
     setLoading(false);
   };
 
@@ -68,7 +108,8 @@ export const Register = () => {
       setLoading(false);
       return;
     }
-    if (role === null) {
+    const resolvedRole = role ?? await resolveCurrentAccountRole();
+    if (resolvedRole === null) {
       toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
       setNeedsSetup(true);
       setIsSignIn(false);
@@ -79,7 +120,7 @@ export const Register = () => {
       return;
     }
     toast.success('Welcome back! You already have an account — signing you in.');
-    routeByRole(role);
+    await routeByRole(resolvedRole);
     setLoading(false);
   };
 
@@ -114,7 +155,7 @@ export const Register = () => {
         if (error) return toast.error(error.message);
         toast.success('Account setup completed!');
         setNeedsSetup(false);
-        routeByRole(role);
+        await routeByRole(role);
       } finally {
         setLoading(false);
       }
@@ -136,14 +177,17 @@ export const Register = () => {
           } else {
             toast.error(error.message);
           }
-        } else if (role === null) {
-          toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
-          setNeedsSetup(true);
-          setIsSignIn(false);
-          setView('profile');
         } else {
-          toast.success('Signed in successfully!');
-          routeByRole(role);
+          const resolvedRole = role ?? await resolveCurrentAccountRole();
+          if (resolvedRole === null) {
+            toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
+            setNeedsSetup(true);
+            setIsSignIn(false);
+            setView('profile');
+          } else {
+            toast.success('Signed in successfully!');
+            await routeByRole(resolvedRole);
+          }
         }
       } else {
         if (!fullName) {
@@ -216,26 +260,15 @@ export const Register = () => {
       </div>
 
       {/* Spacer to push card below the mosque graphic area */}
-      <div className="flex-1" style={{ maxHeight: '36vh' }} />
+      <div className="h-[38vh] shrink-0" />
 
       {/* Bottom sheet card with login flows */}
       <div
-        className="px-6 pb-8 pt-8 relative z-10 rounded-t-[28px]"
+        className="flex-1 overflow-y-auto px-6 pb-8 pt-8 relative z-10 rounded-t-[28px]"
         style={{ backgroundColor: '#FFF1DD' }}
       >
         {view === 'welcome' && (
           <div className="space-y-3">
-            {/* Apple */}
-            <Button
-              onClick={handleAppleSignIn}
-              disabled={loading}
-              className="w-full h-14 rounded-full text-white text-base font-medium hover:opacity-90"
-              style={{ backgroundColor: '#3A1E12' }}
-            >
-              <img src={assetUrl(appleLogo)} alt="Apple" className="h-5 w-5 mr-2 object-contain" />
-              Continue with Apple
-            </Button>
-
             {/* Google */}
             <Button
               onClick={handleGoogleSignIn}
@@ -267,7 +300,7 @@ export const Register = () => {
                 placeholder="Continue with Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] pl-12 pr-4 text-[15px] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] pl-12 pr-4 text-[15px] text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
                 dir="ltr"
               />
             </div>

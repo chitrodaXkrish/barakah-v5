@@ -1,6 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { ArrowLeft, Loader2, ExternalLink, Clock, Share2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -22,31 +22,78 @@ export const NewsDetail = () => {
   const navigate = useNavigate();
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshingArticle, setRefreshingArticle] = useState(false);
+  const refreshedArticleRef = useRef(false);
+
+  const loadArticle = useCallback(async () => {
+    if (!id) return null;
+
+    const { data } = await supabase
+      .from('news_articles')
+      .select('id, title, description, content, image_url, article_url, source_name, published_at, author, category')
+      .eq('id', id)
+      .maybeSingle();
+
+    return data as Article | null;
+  }, [id]);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      if (!id) return;
-      const { data } = await supabase
-        .from('news_articles')
-        .select('id, title, description, content, image_url, article_url, source_name, published_at, author, category')
-        .eq('id', id)
-        .maybeSingle();
+      const data = await loadArticle();
       if (active) {
-        setArticle(data as Article | null);
+        setArticle(data);
         setLoading(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [loadArticle]);
 
   const BROWN = '#A35233';
   const BROWN_DARK = '#7a3a22';
   const CREAM = '#FFF5E5';
-  const QUOTE_BG = '#FBEFA8';
-  const QUOTE_BORDER = '#8a7a1f';
+  const REMOVED_QUOTE =
+    'The beauty of our heritage is not that it happened, but that it lives on in the way we choose to perceive the world today.';
+  const stripRepeatedQuote = (value: string | null) =>
+    (value ?? '')
+      .replaceAll(`"${REMOVED_QUOTE}"`, '')
+      .replaceAll(`&quot;${REMOVED_QUOTE}&quot;`, '')
+      .replaceAll(REMOVED_QUOTE, '')
+      .replace(/\s*<p>\s*<\/p>\s*/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  const plainText = (value: string | null) =>
+    stripRepeatedQuote(value)
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const descriptionHtml = stripRepeatedQuote(article?.description ?? null);
+  const contentHtml = stripRepeatedQuote(article?.content ?? null);
+  const descriptionText = plainText(descriptionHtml);
+  const contentText = plainText(contentHtml);
+  const contentStartsWithDescription =
+    Boolean(descriptionText) && contentText.startsWith(descriptionText);
+  const shouldShowDescription =
+    Boolean(descriptionHtml) && !contentStartsWithDescription;
+  const hasDistinctContent = Boolean(contentHtml) && contentText !== descriptionText;
+  const bodyLength = Math.max(descriptionText.length, contentText.length);
+
+  useEffect(() => {
+    if (!article || refreshedArticleRef.current || bodyLength >= 700) return;
+
+    refreshedArticleRef.current = true;
+    setRefreshingArticle(true);
+    supabase.functions
+      .invoke('fetch-news')
+      .then(() => loadArticle())
+      .then((freshArticle) => {
+        if (freshArticle) setArticle(freshArticle);
+      })
+      .catch(() => {})
+      .finally(() => setRefreshingArticle(false));
+  }, [article, bodyLength, loadArticle]);
 
   const timeAgo = (iso: string | null) => {
     if (!iso) return '';
@@ -169,35 +216,26 @@ export const NewsDetail = () => {
               <div className="h-px" style={{ backgroundColor: '#E8D2B8' }} />
 
               {/* Body */}
-              {article.description && (
+              {shouldShowDescription && (
                 <p className="text-[15px] leading-relaxed text-neutral-700">
-                  {article.description}
+                  {descriptionHtml}
                 </p>
               )}
 
-              {article.content && (
+              {hasDistinctContent && (
                 <div
                   className="text-[15px] leading-relaxed text-neutral-700 space-y-4 [&_img]:rounded-lg [&_img]:my-3 [&_a]:underline [&_p]:my-2"
                   style={{ color: '#3a2a20' }}
-                  dangerouslySetInnerHTML={{ __html: article.content }}
+                  dangerouslySetInnerHTML={{ __html: contentHtml }}
                 />
               )}
 
-              {/* Pull quote */}
-              <blockquote
-                className="rounded-2xl px-5 py-5 mt-2"
-                style={{
-                  backgroundColor: QUOTE_BG,
-                  borderLeft: `4px solid ${QUOTE_BORDER}`,
-                }}
-              >
-                <p
-                  className="text-[17px] leading-relaxed italic text-neutral-800"
-                  style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
-                >
-                  "The beauty of our heritage is not that it happened, but that it lives on in the way we choose to perceive the world today."
-                </p>
-              </blockquote>
+              {refreshingArticle && (
+                <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: '#F5D9C4', color: BROWN_DARK }}>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Fetching more article content
+                </div>
+              )}
 
               <a
                 href={article.article_url}

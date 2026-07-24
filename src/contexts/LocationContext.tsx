@@ -25,6 +25,29 @@ const LOCATION_CACHE_KEY = 'barakah_cached_location';
 const MANUAL_LOCATION_KEY = 'barakah_manual_location';
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes for fresher data
 
+const normalizeLocation = (value: unknown): LocationData | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const raw = value as Partial<LocationData> & {
+    lat?: number | string;
+    lon?: number | string;
+    lng?: number | string;
+  };
+  const latitude = Number(raw.latitude ?? raw.lat);
+  const longitude = Number(raw.longitude ?? raw.lon ?? raw.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  return {
+    latitude,
+    longitude,
+    city: raw.city || 'Unknown',
+    country: raw.country || 'Unknown',
+    fullAddress: raw.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+    isManual: raw.isManual,
+  };
+};
+
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,15 +58,19 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       // First check for manual location
       const manual = localStorage.getItem(MANUAL_LOCATION_KEY);
       if (manual) {
-        return JSON.parse(manual);
+        const parsed = normalizeLocation(JSON.parse(manual));
+        if (parsed) return parsed;
+        localStorage.removeItem(MANUAL_LOCATION_KEY);
       }
       
       const cached = localStorage.getItem(LOCATION_CACHE_KEY);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
-          return data;
+        const parsed = normalizeLocation(data);
+        if (parsed && Date.now() - timestamp < CACHE_DURATION) {
+          return parsed;
         }
+        localStorage.removeItem(LOCATION_CACHE_KEY);
       }
     } catch {
       // Ignore cache errors
@@ -128,9 +155,13 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     // Check for manual location first
     const manualLocation = localStorage.getItem(MANUAL_LOCATION_KEY);
     if (manualLocation) {
-      setLocation(JSON.parse(manualLocation));
-      setLoading(false);
-      return;
+      const parsed = normalizeLocation(JSON.parse(manualLocation));
+      if (parsed) {
+        setLocation(parsed);
+        setLoading(false);
+        return;
+      }
+      localStorage.removeItem(MANUAL_LOCATION_KEY);
     }
 
     // Check cache

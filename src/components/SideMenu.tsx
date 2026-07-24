@@ -12,6 +12,7 @@ import {
   LogOut,
   ArrowLeft,
   Check,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -48,7 +49,7 @@ const LANG_OPTIONS: { code: Language; label: string }[] = [
 
 export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, userRole, signOut } = useAuth();
   const { location } = useGlobalLocation();
   const { language, setLanguage } = useLanguage();
 
@@ -116,7 +117,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
       <aside
         className={cn(
           'fixed top-0 left-0 h-full w-[86vw] max-w-[360px] z-50 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col',
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
         )}
         style={{
           backgroundColor: CREAM,
@@ -124,6 +125,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
           borderBottomRightRadius: 32,
           fontFamily: SERIF,
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header: avatar + back */}
         <div className="px-6 pt-7 pb-2 flex items-start justify-between">
@@ -170,11 +172,21 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-2 pb-6">
+          {userRole === 'seller' && (
+            <Section title="SELLER">
+              <Row
+                icon={<LayoutDashboard className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label="Seller Dashboard"
+                onClick={() => go('/seller-dashboard')}
+              />
+            </Section>
+          )}
+
           <Section title="ORDERS">
             <Row
               icon={<ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1.8} />}
               label="Orders"
-              onClick={() => go('/account')}
+              onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/account')}
               trailing={
                 <span
                   className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-semibold text-white"
@@ -348,6 +360,7 @@ const Row = ({
   trailing?: React.ReactNode;
 }) => (
   <button
+    type="button"
     onClick={onClick}
     className="w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-colors active:bg-[#F5E6D0]"
     style={{ color: BROWN }}

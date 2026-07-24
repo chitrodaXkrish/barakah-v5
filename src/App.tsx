@@ -8,6 +8,7 @@ import { CartProvider } from "./contexts/CartContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LocationProvider } from "./contexts/LocationContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
+import { PrayerTimesProvider } from "./contexts/PrayerTimesContext";
 
 // Eager — needed for first paint / auth flow
 import { Home } from "./pages/Home";
@@ -79,6 +80,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const OrdersRedirect = () => {
+  const { userRole } = useAuth();
+  return <Navigate to={userRole === 'seller' ? '/seller/orders' : '/account'} replace />;
+};
+
 const RouteFallback = () => (
   <div
     className="min-h-screen max-w-md mx-auto"
@@ -94,58 +100,62 @@ const App = () => (
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
             <LocationProvider>
-              <CartProvider>
-                <Toaster />
-                <Sonner />
-                <Suspense fallback={<RouteFallback />}>
-                <Routes>
-                  <Route path="/loading" element={<LoadingScreen />} />
-                  <Route path="/login" element={<Register />} />
-                  <Route path="/onboarding" element={<Onboarding />} />
-                  <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                  <Route path="/quran" element={<ProtectedRoute><Quran /></ProtectedRoute>} />
-                  <Route path="/qibla" element={<ProtectedRoute><Qibla /></ProtectedRoute>} />
-                  <Route path="/shop" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
-                  <Route path="/shop/categories" element={<ProtectedRoute><ShopCategories /></ProtectedRoute>} />
-                  <Route path="/shop/product/:id" element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
-                  <Route path="/forum" element={<ProtectedRoute><Forum /></ProtectedRoute>} />
-                  <Route path="/places" element={<ProtectedRoute><Places /></ProtectedRoute>} />
-                  <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-                  <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboard /></ProtectedRoute>} />
-                  <Route path="/seller-onboarding" element={<ProtectedRoute><SellerOnboarding /></ProtectedRoute>} />
-                  <Route path="/seller/products" element={<ProtectedRoute><SellerProducts /></ProtectedRoute>} />
-                  <Route path="/seller/products/new" element={<ProtectedRoute><SellerAddProduct /></ProtectedRoute>} />
-                  <Route path="/seller/orders" element={<ProtectedRoute><SellerOrdersPage /></ProtectedRoute>} />
-                  <Route path="/seller/orders/:id" element={<ProtectedRoute><SellerOrderDetail /></ProtectedRoute>} />
-                  <Route path="/seller/earnings" element={<ProtectedRoute><SellerEarnings /></ProtectedRoute>} />
-                  <Route path="/prayer-times" element={<ProtectedRoute><PrayerTimes /></ProtectedRoute>} />
-                  <Route path="/progress" element={<ProtectedRoute><Progress /></ProtectedRoute>} />
-                  <Route path="/monthly-streak" element={<ProtectedRoute><MonthlyStreak /></ProtectedRoute>} />
-                  <Route path="/faq" element={<ProtectedRoute><FAQ /></ProtectedRoute>} />
-                  <Route path="/zakat" element={<ProtectedRoute><Zakat /></ProtectedRoute>} />
-                  <Route path="/zakat-result" element={<ProtectedRoute><ZakatResult /></ProtectedRoute>} />
-                  <Route path="/hajj" element={<ProtectedRoute><Hajj /></ProtectedRoute>} />
-                  <Route path="/business-account" element={<ProtectedRoute><BusinessAccount /></ProtectedRoute>} />
-                  <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-                  <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                  <Route path="/shipping-address" element={<ProtectedRoute><ShippingAddresses /></ProtectedRoute>} />
-                  <Route path="/shipping-address/new" element={<ProtectedRoute><AddShippingAddress /></ProtectedRoute>} />
-                  <Route path="/shipping-address/edit/:id" element={<ProtectedRoute><AddShippingAddress /></ProtectedRoute>} />
-                  <Route path="/order-confirmation/:orderId" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
-                  <Route path="/makkah-live" element={<ProtectedRoute><MakkahLive /></ProtectedRoute>} />
-                  <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
-                  <Route path="/news/:id" element={<ProtectedRoute><NewsDetail /></ProtectedRoute>} />
-                  <Route path="/mood" element={<ProtectedRoute><Mood /></ProtectedRoute>} />
-                  <Route path="/halal-scanner" element={<ProtectedRoute><HalalScanner /></ProtectedRoute>} />
-                  <Route path="/hadith" element={<ProtectedRoute><Hadith /></ProtectedRoute>} />
-                  <Route path="/hadith/:slug" element={<ProtectedRoute><HadithBook /></ProtectedRoute>} />
-                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                  <Route path="/terms-of-service" element={<TermsOfService />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-                </Suspense>
-              </CartProvider>
+              <PrayerTimesProvider>
+                <CartProvider>
+                  <Toaster />
+                  <Sonner />
+                  <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/loading" element={<LoadingScreen />} />
+                    <Route path="/login" element={<Register />} />
+                    <Route path="/onboarding" element={<Onboarding />} />
+                    <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                    <Route path="/quran" element={<ProtectedRoute><Quran /></ProtectedRoute>} />
+                    <Route path="/qibla" element={<ProtectedRoute><Qibla /></ProtectedRoute>} />
+                    <Route path="/marketplace" element={<Navigate to="/shop" replace />} />
+                    <Route path="/shop" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
+                    <Route path="/shop/categories" element={<ProtectedRoute><ShopCategories /></ProtectedRoute>} />
+                    <Route path="/shop/product/:id" element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
+                    <Route path="/forum" element={<ProtectedRoute><Forum /></ProtectedRoute>} />
+                    <Route path="/places" element={<ProtectedRoute><Places /></ProtectedRoute>} />
+                    <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+                    <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboard /></ProtectedRoute>} />
+                    <Route path="/seller-onboarding" element={<ProtectedRoute><SellerOnboarding /></ProtectedRoute>} />
+                    <Route path="/seller/products" element={<ProtectedRoute><SellerProducts /></ProtectedRoute>} />
+                    <Route path="/seller/products/new" element={<ProtectedRoute><SellerAddProduct /></ProtectedRoute>} />
+                    <Route path="/seller/orders" element={<ProtectedRoute><SellerOrdersPage /></ProtectedRoute>} />
+                    <Route path="/seller/orders/:id" element={<ProtectedRoute><SellerOrderDetail /></ProtectedRoute>} />
+                    <Route path="/seller/earnings" element={<ProtectedRoute><SellerEarnings /></ProtectedRoute>} />
+                    <Route path="/prayer-times" element={<ProtectedRoute><PrayerTimes /></ProtectedRoute>} />
+                    <Route path="/progress" element={<ProtectedRoute><Progress /></ProtectedRoute>} />
+                    <Route path="/monthly-streak" element={<ProtectedRoute><MonthlyStreak /></ProtectedRoute>} />
+                    <Route path="/faq" element={<ProtectedRoute><FAQ /></ProtectedRoute>} />
+                    <Route path="/zakat" element={<ProtectedRoute><Zakat /></ProtectedRoute>} />
+                    <Route path="/zakat-result" element={<ProtectedRoute><ZakatResult /></ProtectedRoute>} />
+                    <Route path="/hajj" element={<ProtectedRoute><Hajj /></ProtectedRoute>} />
+                    <Route path="/business-account" element={<ProtectedRoute><BusinessAccount /></ProtectedRoute>} />
+                    <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+                    <Route path="/orders" element={<ProtectedRoute><OrdersRedirect /></ProtectedRoute>} />
+                    <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                    <Route path="/shipping-address" element={<ProtectedRoute><ShippingAddresses /></ProtectedRoute>} />
+                    <Route path="/shipping-address/new" element={<ProtectedRoute><AddShippingAddress /></ProtectedRoute>} />
+                    <Route path="/shipping-address/edit/:id" element={<ProtectedRoute><AddShippingAddress /></ProtectedRoute>} />
+                    <Route path="/order-confirmation/:orderId" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+                    <Route path="/makkah-live" element={<ProtectedRoute><MakkahLive /></ProtectedRoute>} />
+                    <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
+                    <Route path="/news/:id" element={<ProtectedRoute><NewsDetail /></ProtectedRoute>} />
+                    <Route path="/mood" element={<ProtectedRoute><Mood /></ProtectedRoute>} />
+                    <Route path="/halal-scanner" element={<ProtectedRoute><HalalScanner /></ProtectedRoute>} />
+                    <Route path="/hadith" element={<ProtectedRoute><Hadith /></ProtectedRoute>} />
+                    <Route path="/hadith/:slug" element={<ProtectedRoute><HadithBook /></ProtectedRoute>} />
+                    <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                    <Route path="/terms-of-service" element={<TermsOfService />} />
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  </Suspense>
+                </CartProvider>
+              </PrayerTimesProvider>
             </LocationProvider>
           </AuthProvider>
         </BrowserRouter>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Bell, MapPin, ChevronDown, Newspaper } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Bell, MapPin, ChevronDown, Newspaper, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,7 @@ import { SideMenu } from '@/components/SideMenu';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { LocationPicker } from '@/components/LocationPicker';
 import { FeedbackForm } from '@/components/FeedbackForm';
+import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
 import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
 import qaAiAsset from '@/assets/qa-ai-new.png.asset.json';
 import qaPlacesAsset from '@/assets/qa-places-new.png.asset.json';
@@ -16,6 +17,16 @@ import qaHajjAsset from '@/assets/qa-hajj-new.png.asset.json';
 import barakahArcLogo from '@/assets/barakah-arc-logo.png.asset.json';
 import barakahLogo from '@/assets/barakah-logo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
+import {
+  createPrayerNotificationPreviews,
+  schedulePrayerNotifications,
+} from '@/lib/prayerNotifications';
+import {
+  type AppPrayerTime,
+  formatPrayerTime12,
+  getNextPrayer,
+  prayerMinutes,
+} from '@/lib/islamicPrayerTimes';
 
 interface NewsItem {
   id: string;
@@ -40,13 +51,18 @@ const timeAgo = (iso?: string | null) => {
 export const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { location } = useGlobalLocation();
+  const { location, loading: locationLoading } = useGlobalLocation();
+  const {
+    prayers: apiPrayers,
+    loading: prayerTimesLoading,
+  } = usePrayerTimes();
   const [userName, setUserName] = useState('');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -92,23 +108,34 @@ export const Home = () => {
     .replace(' AH', '');
 
   // Next prayer
-  const prayerTimes: Array<[string, number, number]> = [
-    ['Fajr', 5, 12],
-    ['Dhuhr', 12, 30],
-    ['Asr', 15, 45],
-    ['Maghrib', 18, 38],
-    ['Isha', 19, 55],
-  ];
+  const prayerTimes = apiPrayers.filter((prayer) => prayer.key !== 'sunrise');
+  const notificationPrayers = prayerTimes;
   const cur = now.getHours() * 60 + now.getMinutes();
-  const next =
-    prayerTimes.find(([, h, m]) => h * 60 + m > cur) || prayerTimes[0];
-  const nextHour = next[1];
-  const nextMin = next[2];
-  const ampm = nextHour >= 12 ? 'pm' : 'am';
-  const displayHour = ((nextHour + 11) % 12) + 1;
-  const prayerTime = `${displayHour}:${nextMin.toString().padStart(2, '0')} ${ampm}`;
+  const next = getNextPrayer(apiPrayers, now);
+  const prayerTime = next ? formatPrayerTime12(next) : '';
 
-  const cityLabel = location?.city || 'Dubai';
+  const cityLabel = location?.city || (locationLoading ? 'Locating...' : 'Set location');
+  const prayerStatusLabel = next
+    ? next.label
+    : prayerTimesLoading
+      ? 'Loading'
+      : location
+        ? 'Unavailable'
+        : 'Set location';
+  const notificationsEnabled =
+    localStorage.getItem('barakah_notifications_enabled') !== 'false';
+  const notificationItems = notificationsEnabled
+    ? createPrayerNotificationPreviews(notificationPrayers, now)
+    : [];
+  const displayedNews: Array<Partial<NewsItem>> =
+    news.length ? news : Array.from({ length: 2 }, () => ({}));
+
+  const openNotifications = () => {
+    setIsNotificationsOpen(true);
+    if (!notificationsEnabled || notificationPrayers.length === 0) return;
+
+    schedulePrayerNotifications(notificationPrayers).catch(() => {});
+  };
 
   const quickActions = [
     { label: 'Quran', img: assetUrl(qaQuranAsset), onClick: () => navigate('/quran') },
@@ -166,11 +193,15 @@ export const Home = () => {
             className="h-7 w-auto object-contain"
           />
           <button
-            className="w-9 h-9 rounded-full flex items-center justify-center text-[#F9FAFB]"
+            onClick={openNotifications}
+            className="relative w-9 h-9 rounded-full flex items-center justify-center text-[#F9FAFB]"
             style={{ background: 'rgba(255,255,255,0.15)' }}
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" strokeWidth={2} />
+            {notificationItems.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E89D2F' }} />
+            )}
           </button>
         </div>
 
@@ -197,7 +228,7 @@ export const Home = () => {
         {/* Arc + center logo + prayer info */}
         <ArcTimeline
           hijri={hijri}
-          currentPrayer={next[0]}
+          currentPrayer={prayerStatusLabel}
           prayerTime={prayerTime}
           nowMinutes={cur}
           prayerTimes={prayerTimes}
@@ -242,6 +273,69 @@ export const Home = () => {
         </div>
       </div>
 
+      {isNotificationsOpen && (
+        <div
+          className="absolute right-5 top-16 z-50 w-[300px] max-w-[calc(100%-2.5rem)] rounded-2xl border shadow-xl overflow-hidden"
+          style={{ background: '#FFF7E8', borderColor: 'rgba(232,213,196,0.9)' }}
+        >
+          <div className="flex items-center justify-between px-4 py-3" style={{ background: '#F1E0C8' }}>
+            <div>
+              <p className="text-[15px] font-bold" style={{ color: '#2C1309' }}>
+                Notifications
+              </p>
+              <p className="text-[11px]" style={{ color: '#8B6F5C' }}>
+                Prayer time alerts
+              </p>
+            </div>
+            <button
+              onClick={() => setIsNotificationsOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center"
+              style={{ color: '#2C1309' }}
+              aria-label="Close notifications"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+
+          <div className="max-h-[330px] overflow-y-auto py-2">
+            {notificationItems.length > 0 ? (
+              notificationItems.map((item) => (
+                <div key={item.id} className="px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="mt-0.5 h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(176,67,30,0.1)', color: '#B0431E' }}
+                    >
+                      <Bell className="h-4 w-4" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold" style={{ color: '#2C1309' }}>
+                        {item.title}
+                      </p>
+                      <p className="text-[12px] leading-snug mt-0.5" style={{ color: '#8B6F5C' }}>
+                        {item.body}
+                      </p>
+                      <p className="text-[11px] mt-1" style={{ color: '#B0431E' }}>
+                        {item.timeLabel}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center">
+                <p className="text-[14px] font-semibold" style={{ color: '#2C1309' }}>
+                  No new notifications
+                </p>
+                <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
+                  Prayer alerts will appear here when available.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* CREAM SHEET — News */}
       <div
         className="relative -mt-6 rounded-t-[24px] border-2 border-b-0 px-5 pt-5 pb-40"
@@ -273,7 +367,7 @@ export const Home = () => {
         </div>
 
         <div className="space-y-2.5">
-          {(news.length ? news : Array.from({ length: 2 })).map((n: any, i) => (
+          {displayedNews.map((n, i) => (
             <button
               key={n?.id || i}
               onClick={() => n?.id && navigate(`/news/${n.id}`)}
@@ -355,7 +449,7 @@ type ArcTimelineProps = {
   currentPrayer: string;
   prayerTime: string;
   nowMinutes: number;
-  prayerTimes: Array<[string, number, number]>;
+  prayerTimes: AppPrayerTime[];
 };
 
 const ArcTimeline = ({
@@ -369,12 +463,13 @@ const ArcTimeline = ({
   const cy = 200;
   const r = 130;
   // Angles spread from 180° (left) to 0° (right) for 5 prayers
-  const dots = prayerTimes.map(([name, h, m], i) => {
-    const angleDeg = 180 - (i * 180) / (prayerTimes.length - 1);
+  const dots = prayerTimes.map((prayer, i) => {
+    const angleDeg =
+      prayerTimes.length > 1 ? 180 - (i * 180) / (prayerTimes.length - 1) : 90;
     const rad = (angleDeg * Math.PI) / 180;
     return {
-      name,
-      mins: h * 60 + m,
+      name: prayer.label,
+      mins: prayerMinutes(prayer),
       x: cx + r * Math.cos(rad),
       y: cy - r * Math.sin(rad),
     };
@@ -386,7 +481,7 @@ const ArcTimeline = ({
     if (nowMinutes >= dots[i].mins) activeIdx = i;
   }
   // If before Fajr, highlight Isha (previous day's last)
-  if (nowMinutes < dots[0].mins) activeIdx = dots.length - 1;
+  if (dots.length > 0 && nowMinutes < dots[0].mins) activeIdx = dots.length - 1;
 
   return (
     <div className="relative h-[230px] mt-4">

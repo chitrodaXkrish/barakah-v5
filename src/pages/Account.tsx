@@ -13,6 +13,15 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const CREAM = '#FFF1DD';
+const CARD = '#FFF8F3';
+const BORDER = '#E8D5C4';
+const BROWN = '#A35233';
+const BROWN_DARK = '#3A1E12';
+const MUTED = '#7C6A4F';
+const SOFT_ACCENT = '#F5E6D0';
+const DANGER = '#D63A1F';
+
 export const Account = () => {
   const { signOut, user, userRole } = useAuth();
   const navigate = useNavigate();
@@ -49,7 +58,7 @@ export const Account = () => {
 
     return (
       <div className="flex items-center justify-center mb-4">
-        <div className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium">
+        <div className="px-4 py-2 rounded-full text-sm font-semibold text-white" style={{ backgroundColor: BROWN }}>
           {roleLabels[userRole]}
         </div>
       </div>
@@ -57,19 +66,19 @@ export const Account = () => {
   };
 
   return (
-    <Layout>
-      <div className="px-4 py-6 space-y-6">
-        <h1 className="text-2xl font-bold text-primary">Account</h1>
+    <Layout pageBackgroundColor={CREAM}>
+      <div className="min-h-screen px-4 py-6 space-y-6" style={{ backgroundColor: CREAM }}>
+        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>Account</h1>
 
         {/* User Info */}
-        <Card className="p-4 rounded-2xl bg-card">
+        <Card className="p-4 rounded-2xl shadow-sm" style={{ backgroundColor: CARD, borderColor: BORDER }}>
           <div className="flex items-center space-x-3 mb-3">
-            <div className="bg-secondary p-3 rounded-full">
-              <User className="h-6 w-6 text-primary" />
+            <div className="p-3 rounded-full" style={{ backgroundColor: SOFT_ACCENT }}>
+              <User className="h-6 w-6" style={{ color: BROWN }} />
             </div>
             <div>
-              <p className="font-semibold text-foreground">{user?.email}</p>
-              <p className="text-sm text-muted-foreground">Manage your account</p>
+              <p className="font-semibold" style={{ color: BROWN_DARK }}>{user?.email}</p>
+              <p className="text-sm" style={{ color: MUTED }}>Manage your account</p>
             </div>
           </div>
           {getRoleBadge()}
@@ -80,30 +89,32 @@ export const Account = () => {
           {accountOptions.map(({ icon: Icon, label, action }) => (
             <Card 
               key={label} 
-              className="p-4 rounded-2xl cursor-pointer hover:shadow-lg transition-shadow bg-card"
+              className="p-4 rounded-2xl cursor-pointer shadow-sm transition-shadow hover:shadow-md"
+              style={{ backgroundColor: CARD, borderColor: BORDER }}
               onClick={action}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <span className="font-medium text-foreground">{label}</span>
+                  <Icon className="h-5 w-5" style={{ color: BROWN }} />
+                  <span className="font-semibold" style={{ color: BROWN_DARK }}>{label}</span>
                 </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                <ChevronRight className="h-5 w-5" style={{ color: MUTED }} />
               </div>
             </Card>
           ))}
 
           {/* Logout Button */}
           <Card 
-            className="p-4 rounded-2xl cursor-pointer hover:shadow-lg transition-shadow border-destructive/20 bg-card"
+            className="p-4 rounded-2xl cursor-pointer shadow-sm transition-shadow hover:shadow-md"
+            style={{ backgroundColor: CARD, borderColor: '#F0C8BD' }}
             onClick={signOut}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <LogOut className="h-5 w-5 text-destructive" />
-                <span className="font-medium text-destructive">Logout</span>
+                <LogOut className="h-5 w-5" style={{ color: DANGER }} />
+                <span className="font-semibold" style={{ color: DANGER }}>Logout</span>
               </div>
-              <ChevronRight className="h-5 w-5 text-destructive/50" />
+              <ChevronRight className="h-5 w-5" style={{ color: DANGER, opacity: 0.5 }} />
             </div>
           </Card>
         </div>

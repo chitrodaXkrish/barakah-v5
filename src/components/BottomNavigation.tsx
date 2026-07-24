@@ -76,7 +76,10 @@ export const BottomNavigation = () => {
   const { t } = useLanguage();
 
   return (
-    <nav className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-30 px-3 pb-3 font-arabic">
+    <nav
+      className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-30 px-3 pb-3 pt-2 font-arabic"
+      style={{ backgroundColor: '#FFF5E5' }}
+    >
       <div className="flex items-center gap-2 w-full">
         <div
           className="flex-1 min-w-0 rounded-full flex items-center justify-between h-12 px-1 overflow-hidden"
