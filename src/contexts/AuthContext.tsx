@@ -40,11 +40,13 @@ interface AuthContextType {
   user: AppUser | null;
   userRole: UserRole;
   loading: boolean;
-  signUp: (email: string, password: string, role: UserRole, fullName: string) => Promise<{ error: any; role?: UserRole }>;
+  signUp: (email: string, password: string, role: UserRole, fullName: string) => Promise<{ error: any; role?: UserRole; needsEmailVerification?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: UserRole }>;
   signInWithGoogle: () => Promise<{ error: any; role?: UserRole }>;
   signInWithApple: () => Promise<{ error: any; role?: UserRole }>;
   completeAccountSetup: (role: Exclude<UserRole, null>, fullName: string) => Promise<{ error: any; role?: UserRole }>;
+  verifySignupOtp: (email: string, token: string, password: string, role: Exclude<UserRole, null>, fullName: string) => Promise<{ error: any; role?: UserRole }>;
+  resendSignupOtp: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -153,29 +155,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const invokeAuthEmailOtp = async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke('auth-email-otp', {
+      body: payload,
+    });
+
+    if (error) {
+      const response = (error as any).context;
+      if (response?.json) {
+        try {
+          const body = await response.json();
+          if (body?.error) return { data: null, error: { message: body.error } };
+        } catch {}
+      }
+      if (String(error.message || '').toLowerCase().includes('failed to send')) {
+        return {
+          data: null,
+          error: {
+            message: 'Verification service is not reachable. Please deploy the auth-email-otp Edge Function and try again.',
+          },
+        };
+      }
+      return { data: null, error };
+    }
+    if (data?.error) return { data: null, error: { message: data.error } };
+    return { data, error: null };
+  };
+
   const signUp = async (email: string, password: string, role: UserRole, fullName: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      if (!role) return { error: { message: 'Please select a profile type' }, role: undefined };
+      if (!fullName.trim()) return { error: { message: 'Please enter your full name' }, role: undefined };
+      if (password.length < 6) return { error: { message: 'Password must be at least 6 characters' }, role: undefined };
+
+      const { error } = await invokeAuthEmailOtp({
+        action: 'request',
         email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/` },
       });
-      if (error) return { error, role: undefined };
-      const newUser = data.user;
-      if (!newUser) return { error: { message: 'User creation failed' }, role: undefined };
-
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({ user_id: newUser.id, role });
-      if (roleError && roleError.code !== '23505') return { error: roleError, role: undefined };
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ user_id: newUser.id, full_name: fullName }, { onConflict: 'user_id' });
-      if (profileError) return { error: profileError, role: undefined };
 
       setUserRole(role);
-      return { error: null, role };
+      return { error, role, needsEmailVerification: true };
     } catch (error: any) {
       return { error: { message: error.message || 'Sign up failed' }, role: undefined };
     }
@@ -290,6 +309,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const verifySignupOtp = async (email: string, token: string, password: string, role: Exclude<UserRole, null>, fullName: string) => {
+    try {
+      const { error: otpError } = await invokeAuthEmailOtp({
+        action: 'complete',
+        email,
+        code: token,
+        password,
+        role,
+        fullName,
+      });
+      if (otpError) return { error: otpError, role: undefined };
+
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) return { error: signInError, role: undefined };
+      const verifiedUser = data.user;
+      if (!verifiedUser) return { error: { message: 'Account created, but sign in failed' }, role: undefined };
+
+      const resolvedRole = await getUserRoleFromDatabase(verifiedUser.id);
+      setUserRole(resolvedRole);
+      return { error: null, role: resolvedRole };
+    } catch (error: any) {
+      return { error: { message: error.message || 'Verification failed' }, role: undefined };
+    }
+  };
+
+  const resendSignupOtp = async (email: string) => {
+    try {
+      const { error } = await invokeAuthEmailOtp({
+        action: 'request',
+        email,
+      });
+      return { error };
+    } catch (error: any) {
+      return { error: { message: error.message || 'Could not resend verification code' } };
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUserRole(null);
@@ -306,6 +362,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signInWithGoogle: handleGoogleSignIn,
       signInWithApple: handleAppleSignIn,
       completeAccountSetup,
+      verifySignupOtp,
+      resendSignupOtp,
       signOut: handleSignOut 
     }}>
       {children}

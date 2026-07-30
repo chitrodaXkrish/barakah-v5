@@ -17,6 +17,35 @@ interface Article {
   category: string | null;
 }
 
+/** Convert plain text to HTML paragraphs by splitting on sentence boundaries */
+function textToParagraphs(text: string): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const sentences = clean
+    .split(/(?<=[.!?])\s+(?=[A-Z"])/)
+    .reduce<string[]>((acc, sentence) => {
+      const last = acc[acc.length - 1] ?? '';
+      if (!last || last.length > 420) acc.push(sentence);
+      else acc[acc.length - 1] = `${last} ${sentence}`;
+      return acc;
+    }, []);
+  return sentences.map((chunk) => `<p>${escapeHtml(chunk)}</p>`).join('');
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
+    .replace(/'/g, '&#39;');
+}
+
+function isHtmlContent(value: string | null): boolean {
+  if (!value) return false;
+  return /<[a-z][\s\S]*>/i.test(value);
+}
+
 export const NewsDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -27,13 +56,11 @@ export const NewsDetail = () => {
 
   const loadArticle = useCallback(async () => {
     if (!id) return null;
-
     const { data } = await supabase
       .from('news_articles')
       .select('id, title, description, content, image_url, article_url, source_name, published_at, author, category')
       .eq('id', id)
       .maybeSingle();
-
     return data as Article | null;
   }, [id]);
 
@@ -46,9 +73,7 @@ export const NewsDetail = () => {
         setLoading(false);
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [loadArticle]);
 
   const BROWN = '#A35233';
@@ -56,33 +81,61 @@ export const NewsDetail = () => {
   const CREAM = '#FFF5E5';
   const REMOVED_QUOTE =
     'The beauty of our heritage is not that it happened, but that it lives on in the way we choose to perceive the world today.';
-  const stripRepeatedQuote = (value: string | null) =>
+
+  const cleanContent = (value: string | null): string =>
     (value ?? '')
-      .replaceAll(`"${REMOVED_QUOTE}"`, '')
-      .replaceAll(`&quot;${REMOVED_QUOTE}&quot;`, '')
-      .replaceAll(REMOVED_QUOTE, '')
+      .replace(new RegExp(`[\\u201C\\u201D"]${REMOVED_QUOTE}[\\u201C\\u201D"]`, 'g'), '')
+      .replace(new RegExp(`"${REMOVED_QUOTE}"`, 'g'), '')
+      .replace(new RegExp(REMOVED_QUOTE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
       .replace(/\s*<p>\s*<\/p>\s*/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
-  const plainText = (value: string | null) =>
-    stripRepeatedQuote(value)
+
+  const plainText = (value: string | null): string =>
+    cleanContent(value)
       .replace(/<[^>]+>/g, '')
       .replace(/\s+/g, ' ')
       .trim();
-  const descriptionHtml = stripRepeatedQuote(article?.description ?? null);
-  const contentHtml = stripRepeatedQuote(article?.content ?? null);
-  const descriptionText = plainText(descriptionHtml);
-  const contentText = plainText(contentHtml);
-  const contentStartsWithDescription =
-    Boolean(descriptionText) && contentText.startsWith(descriptionText);
-  const shouldShowDescription =
-    Boolean(descriptionHtml) && !contentStartsWithDescription;
-  const hasDistinctContent = Boolean(contentHtml) && contentText !== descriptionText;
+
+  const rawDescription = cleanContent(article?.description ?? null);
+  const rawContent = cleanContent(article?.content ?? null);
+
+  const cleanTruncation = (text: string) => {
+    return text.replace(/\s*(?:\.\.\.|…)?\s*\[\+\d+\s+(?:chars|words)\]\s*$/i, '').trim();
+  };
+
+  const displayDesc = cleanTruncation(rawDescription);
+  const displayCont = cleanTruncation(rawContent);
+
+  let displayHtml = '';
+  const descIsHtml = isHtmlContent(displayDesc);
+  const contIsHtml = isHtmlContent(displayCont);
+
+  const descText = descIsHtml ? displayDesc.replace(/<[^>]+>/g, '') : displayDesc;
+  const contText = contIsHtml ? displayCont.replace(/<[^>]+>/g, '') : displayCont;
+
+  if (descText.length > 0 && contText.length > 0) {
+    if (contText.toLowerCase().includes(descText.toLowerCase())) {
+      displayHtml = contIsHtml ? displayCont : textToParagraphs(displayCont);
+    } else if (descText.toLowerCase().includes(contText.toLowerCase())) {
+      displayHtml = descIsHtml ? displayDesc : textToParagraphs(displayDesc);
+    } else {
+      const formattedDesc = descIsHtml ? displayDesc : `<p><strong>${escapeHtml(displayDesc)}</strong></p>`;
+      const formattedCont = contIsHtml ? displayCont : textToParagraphs(displayCont);
+      displayHtml = `${formattedDesc}${formattedCont}`;
+    }
+  } else if (contText.length > 0) {
+    displayHtml = contIsHtml ? displayCont : textToParagraphs(displayCont);
+  } else if (descText.length > 0) {
+    displayHtml = descIsHtml ? displayDesc : textToParagraphs(displayDesc);
+  }
+
+  const descriptionText = plainText(displayDesc);
+  const contentText = plainText(displayCont);
   const bodyLength = Math.max(descriptionText.length, contentText.length);
 
   useEffect(() => {
     if (!article || refreshedArticleRef.current || bodyLength >= 700) return;
-
     refreshedArticleRef.current = true;
     setRefreshingArticle(true);
     supabase.functions
@@ -95,7 +148,7 @@ export const NewsDetail = () => {
       .finally(() => setRefreshingArticle(false));
   }, [article, bodyLength, loadArticle]);
 
-  const timeAgo = (iso: string | null) => {
+  const timeAgo = (iso: string | null): string => {
     if (!iso) return '';
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
@@ -110,9 +163,8 @@ export const NewsDetail = () => {
   const handleShare = async () => {
     if (!article) return;
     if (navigator.share) {
-      try {
-        await navigator.share({ title: article.title, url: article.article_url });
-      } catch {/* ignore */}
+      try { await navigator.share({ title: article.title, url: article.article_url }); }
+      catch { /* ignore */ }
     } else {
       navigator.clipboard?.writeText(article.article_url);
     }
@@ -120,7 +172,7 @@ export const NewsDetail = () => {
 
   const shortTitle = article?.title
     ? article.title.length > 22
-      ? article.title.slice(0, 22).trim() + '…'
+      ? article.title.slice(0, 22).trim() + '\u2026'
       : article.title
     : '';
 
@@ -215,19 +267,17 @@ export const NewsDetail = () => {
 
               <div className="h-px" style={{ backgroundColor: '#E8D2B8' }} />
 
-              {/* Body */}
-              {shouldShowDescription && (
-                <p className="text-[15px] leading-relaxed text-neutral-700">
-                  {descriptionHtml}
-                </p>
-              )}
-
-              {hasDistinctContent && (
+              {/* Body content — renders best available content as formatted HTML */}
+              {displayHtml ? (
                 <div
                   className="text-[15px] leading-relaxed text-neutral-700 space-y-4 [&_img]:rounded-lg [&_img]:my-3 [&_a]:underline [&_p]:my-2"
                   style={{ color: '#3a2a20' }}
-                  dangerouslySetInnerHTML={{ __html: contentHtml }}
+                  dangerouslySetInnerHTML={{ __html: displayHtml }}
                 />
+              ) : (
+                <p className="text-[15px] leading-relaxed text-neutral-500 italic">
+                  No content available for this article.
+                </p>
               )}
 
               {refreshingArticle && (

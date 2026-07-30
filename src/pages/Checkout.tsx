@@ -40,6 +40,8 @@ export const Checkout = () => {
   const subtotal = getTotalPrice();
   const shipping = subtotal > 0 ? 15 : 0;
   const total = subtotal + shipping;
+  const sellerIds = Array.from(new Set(items.map((item) => item.seller_id).filter(Boolean)));
+  const orderSellerId = sellerIds.length === 1 ? sellerIds[0] : null;
 
   if (items.length === 0) {
     navigate('/cart');
@@ -56,7 +58,7 @@ export const Checkout = () => {
     try {
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .insert({ user_id: user.uid, total_amount: total, status: 'pending' })
+        .insert({ user_id: user.uid, seller_id: orderSellerId, total_amount: total, status: 'pending' })
         .select()
         .single();
       if (orderError) throw orderError;

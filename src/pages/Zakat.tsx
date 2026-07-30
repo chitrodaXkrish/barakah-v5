@@ -10,18 +10,19 @@ const BROWN = '#A35233';
 const BROWN_DEEP = '#78351A';
 const ORANGE = '#CE5728';
 
-type CurrencyCode = 'GBP' | 'USD' | 'EUR';
+type CurrencyCode = 'GBP' | 'USD' | 'EUR' | 'MYR';
 
 const CURRENCIES: { code: CurrencyCode; label: string; symbol: string; flag: string; country: string; nisab: number }[] = [
   { code: 'GBP', label: 'GBP (£)', symbol: '£', flag: '🇬🇧', country: 'UK', nisab: 3842.15 },
   { code: 'USD', label: 'USD ($)', symbol: '$', flag: '🇺🇸', country: 'US', nisab: 4850.0 },
   { code: 'EUR', label: 'EUR (€)', symbol: '€', flag: '🇪🇺', country: 'EU', nisab: 4490.5 },
+  { code: 'MYR', label: 'MYR (RM)', symbol: 'RM ', flag: 'MY', country: 'MY', nisab: 45506.45 },
 ];
 
 const fmt = (n: number, symbol: string) =>
   `${symbol}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const GOLD_PRICE_PER_GRAM: Record<CurrencyCode, number> = { GBP: 62.5, USD: 79.0, EUR: 73.0 };
+const GOLD_PRICE_PER_GRAM: Record<CurrencyCode, number> = { GBP: 62.5, USD: 79.0, EUR: 73.0, MYR: 535.37 };
 
 type GoldMode = 'GRAMS' | 'VALUE';
 

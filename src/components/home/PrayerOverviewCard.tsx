@@ -17,11 +17,11 @@ export const PrayerOverviewCard = ({
   const { t } = useLanguage();
 
   const PRAYER_NAMES = [
-    { key: 'fajr', label: t('prayer.fajr') },
-    { key: 'dhuhr', label: t('prayer.dhuhr') },
-    { key: 'asr', label: t('prayer.asr') },
-    { key: 'maghrib', label: t('prayer.maghrib') },
-    { key: 'isha', label: t('prayer.isha') },
+    { key: 'fajr', label: t('prayer.fajr').toLocaleUpperCase() },
+    { key: 'dhuhr', label: t('prayer.dhuhr').toLocaleUpperCase() },
+    { key: 'asr', label: t('prayer.asr').toLocaleUpperCase() },
+    { key: 'maghrib', label: t('prayer.maghrib').toLocaleUpperCase() },
+    { key: 'isha', label: t('prayer.isha').toLocaleUpperCase() },
   ];
 
   const normalizePrayerName = (label: string) => {
@@ -38,7 +38,7 @@ export const PrayerOverviewCard = ({
 
   const getDisplayPrayerName = () => {
     const prayer = PRAYER_NAMES.find(p => p.key === activePrayer);
-    return prayer ? prayer.label : t('prayer.upcoming');
+    return prayer ? prayer.label : t('prayer.upcoming').toLocaleUpperCase();
   };
 
   const activePrayerIndex = PRAYER_NAMES.findIndex(p => p.key === activePrayer);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, MapPin, ChevronDown, Sun, Sunrise, Sunset, Moon, Cloud, CloudSun, Sparkles, X } from 'lucide-react';
+import { Menu, Bell, MapPin, ChevronDown, Sun, Sunrise, Sunset, Moon, Cloud, CloudSun, Sparkles, X, BookOpen, Flame, Trophy, Calendar as CalendarIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SideMenu } from '@/components/SideMenu';
 import { BottomNavigation } from '@/components/BottomNavigation';
@@ -19,6 +19,7 @@ import qiblaIcon from '@/assets/qibla-icon.png.asset.json';
 import prayerMarkIcon from '@/assets/prayer-mark-icon.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 import {
+  cancelPrayerNotifications,
   createPrayerNotificationPreviews,
   schedulePrayerNotifications,
 } from '@/lib/prayerNotifications';
@@ -29,13 +30,34 @@ import {
   prayerMinutes,
   type PrayerKey,
 } from '@/lib/islamicPrayerTimes';
+import { formatHijriDate, formatStandardDate } from '@/lib/dateUtils';
 
 const CREAM = '#FFF5E5';
 const CREAM_CARD = '#FFF5E5';
 const BROWN = '#2C1309';
 const BROWN_ACCENT = '#B0431E';
+const OLIVE = '#7E8A3E';
 const HERO_GRAD = 'linear-gradient(177deg, #78351A 2.14%, #CE5728 97.86%)';
 const DAILY_BROWN = '#5C2A14';
+const QURAN_READING_STATS_KEY = 'barakah_quran_reading_stats';
+
+interface QuranReadingStats {
+  currentStreak: number;
+  longestStreak: number;
+  lastReadDate: string;
+  totalReadDays: number;
+}
+
+const loadQuranReadingStats = (): QuranReadingStats => {
+  const empty = { currentStreak: 0, longestStreak: 0, lastReadDate: '', totalReadDays: 0 };
+  if (typeof window === 'undefined') return empty;
+  try {
+    const raw = localStorage.getItem(QURAN_READING_STATS_KEY);
+    return raw ? { ...empty, ...JSON.parse(raw) } : empty;
+  } catch {
+    return empty;
+  }
+};
 
 const PRAYER_ICONS: Record<PrayerKey, LucideIcon> = {
   sunrise: Sun,
@@ -95,24 +117,44 @@ export const PrayerTimes = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
+  );
+  const [quranStats, setQuranStats] = useState<QuranReadingStats>(() => loadQuranReadingStats());
   const [now, setNow] = useState(new Date());
+
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  const hijri = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-u-ca-islamic', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-        .format(now)
-        .replace(' AH', ''),
-    [now]
-  );
+  useEffect(() => {
+    const syncNotificationSetting = () => {
+      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
+    };
+
+    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+    window.addEventListener('storage', syncNotificationSetting);
+
+    return () => {
+      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+      window.removeEventListener('storage', syncNotificationSetting);
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshQuranStats = () => setQuranStats(loadQuranReadingStats());
+    window.addEventListener('barakah-quran-reading-updated', refreshQuranStats);
+    window.addEventListener('storage', refreshQuranStats);
+    return () => {
+      window.removeEventListener('barakah-quran-reading-updated', refreshQuranStats);
+      window.removeEventListener('storage', refreshQuranStats);
+    };
+  }, []);
+
+  const hijri = useMemo(() => formatHijriDate(now), [now]);
+  const standardDate = useMemo(() => formatStandardDate(now), [now]);
 
   const cur = now.getHours() * 60 + now.getMinutes();
   const prayers = useMemo(
@@ -129,8 +171,6 @@ export const PrayerTimes = () => {
   );
   const next = getNextPrayer(prayers, now);
   const cityLabel = location?.city || (locationLoading ? 'Locating...' : 'Set location');
-  const notificationsEnabled =
-    localStorage.getItem('barakah_notifications_enabled') !== 'false';
   const notificationItems = useMemo(
     () =>
       notificationsEnabled && orderedDay.length > 0
@@ -140,7 +180,12 @@ export const PrayerTimes = () => {
   );
 
   useEffect(() => {
-    if (!notificationsEnabled || orderedDay.length === 0) return;
+    if (!notificationsEnabled) {
+      cancelPrayerNotifications().catch(() => {});
+      return;
+    }
+
+    if (orderedDay.length === 0) return;
 
     schedulePrayerNotifications(orderedDay).catch(() => {});
   }, [notificationsEnabled, orderedDay]);
@@ -270,6 +315,9 @@ export const PrayerTimes = () => {
           <p className="text-[14px]" style={{ color: '#FFE8CA', opacity: 0.9 }}>
             {hijri}
           </p>
+          <p className="text-[11px] mt-1" style={{ color: '#FFE8CA', opacity: 0.72 }}>
+            {standardDate}
+          </p>
           <p
             className="text-[28px] mt-2"
             style={{ color: '#FFF5E5', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500 }}
@@ -342,6 +390,73 @@ export const PrayerTimes = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Quran Reading Progress */}
+      <div className="px-5 pt-5">
+        <button
+          onClick={() => navigate('/quran')}
+          className="w-full rounded-2xl border px-5 py-4 text-left transition-transform active:scale-[0.99]"
+          style={{
+            background: CREAM_CARD,
+            borderColor: 'rgba(232,213,196,0.86)',
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="h-11 w-11 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(176,67,30,0.12)', color: BROWN_ACCENT }}
+              >
+                <BookOpen className="h-5 w-5" strokeWidth={2} />
+              </div>
+              <div>
+                <p className="text-[16px] font-bold" style={{ color: BROWN }}>
+                  Quran Reading
+                </p>
+                <p className="text-[12px] mt-0.5" style={{ color: '#8B6F5C' }}>
+                  {quranStats.lastReadDate ? `Last read ${quranStats.lastReadDate}` : 'Start your first reading'}
+                </p>
+              </div>
+            </div>
+            <span
+              className="rounded-full px-3 py-1 text-[12px] font-bold"
+              style={{ background: '#F1E0C8', color: BROWN_ACCENT }}
+            >
+              Continue
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="rounded-xl px-3 py-3" style={{ background: '#FFF9EF' }}>
+              <Flame className="h-4 w-4 mb-2" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
+              <div className="text-[20px] font-bold leading-none" style={{ color: BROWN }}>
+                {quranStats.currentStreak}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider mt-1" style={{ color: '#8B6F5C' }}>
+                Day Streak
+              </div>
+            </div>
+            <div className="rounded-xl px-3 py-3" style={{ background: '#FFF9EF' }}>
+              <Trophy className="h-4 w-4 mb-2" style={{ color: OLIVE }} strokeWidth={2} />
+              <div className="text-[20px] font-bold leading-none" style={{ color: BROWN }}>
+                {quranStats.longestStreak}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider mt-1" style={{ color: '#8B6F5C' }}>
+                Best
+              </div>
+            </div>
+            <div className="rounded-xl px-3 py-3" style={{ background: '#FFF9EF' }}>
+              <CalendarIcon className="h-4 w-4 mb-2" style={{ color: BROWN }} strokeWidth={2} />
+              <div className="text-[20px] font-bold leading-none" style={{ color: BROWN }}>
+                {quranStats.totalReadDays}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider mt-1" style={{ color: '#8B6F5C' }}>
+                Read Days
+              </div>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* Daily Prayer Times */}

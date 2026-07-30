@@ -21,9 +21,16 @@ export interface PrayerNotificationPreview {
 
 const CHANNEL_ID = 'prayer-times';
 const NOTIFICATION_GROUP = 'barakah-prayer-times';
+const MAX_PRAYER_NOTIFICATION_SLOTS = 6;
 
 const notificationId = (index: number, isReminder: boolean) =>
   7000 + index * 2 + (isReminder ? 0 : 1);
+
+const notificationIdsForSlots = (slotCount: number) =>
+  Array.from({ length: slotCount }).flatMap((_, index) => [
+    { id: notificationId(index, true) },
+    { id: notificationId(index, false) },
+  ]);
 
 const subtractMinutes = (h: number, m: number, minutes: number) => {
   const total = (h * 60 + m - minutes + 24 * 60) % (24 * 60);
@@ -58,6 +65,13 @@ const formatPreviewTime = (date: Date, now: Date) => {
   if (isTomorrow) return `Tomorrow, ${time}`;
   return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 };
+
+const dailyScheduleFrom = (at: Date, allowWhileIdle = false) => ({
+  at,
+  repeats: true,
+  every: 'day' as const,
+  ...(allowWhileIdle ? { allowWhileIdle: true } : {}),
+});
 
 export const createPrayerNotificationPreviews = (
   prayers: PrayerNotificationTime[],
@@ -112,16 +126,18 @@ export const schedulePrayerNotifications = async (
     vibration: true,
   });
 
-  const ids = prayers.flatMap((_, index) => [
-    { id: notificationId(index, true) },
-    { id: notificationId(index, false) },
-  ]);
+  await LocalNotifications.cancel({
+    notifications: notificationIdsForSlots(
+      Math.max(prayers.length, MAX_PRAYER_NOTIFICATION_SLOTS),
+    ),
+  });
 
-  await LocalNotifications.cancel({ notifications: ids });
-
+  const now = new Date();
   const notifications: LocalNotificationSchema[] = prayers.flatMap(
     (prayer, index) => {
       const reminder = subtractMinutes(prayer.h, prayer.m, 5);
+      const reminderAt = nextDateForTime(reminder.h, reminder.m, now);
+      const prayerAt = nextDateForTime(prayer.h, prayer.m, now);
 
       return [
         {
@@ -131,10 +147,7 @@ export const schedulePrayerNotifications = async (
           channelId: CHANNEL_ID,
           group: NOTIFICATION_GROUP,
           autoCancel: true,
-          schedule: {
-            on: { hour: reminder.h, minute: reminder.m },
-            repeats: true,
-          },
+          schedule: dailyScheduleFrom(reminderAt),
         },
         {
           id: notificationId(index, false),
@@ -143,16 +156,22 @@ export const schedulePrayerNotifications = async (
           channelId: CHANNEL_ID,
           group: NOTIFICATION_GROUP,
           autoCancel: true,
-          schedule: {
-            on: { hour: prayer.h, minute: prayer.m },
-            repeats: true,
-            allowWhileIdle: true,
-          },
+          schedule: dailyScheduleFrom(prayerAt, true),
         },
       ];
     },
   );
 
   await LocalNotifications.schedule({ notifications });
+  return true;
+};
+
+export const cancelPrayerNotifications = async () => {
+  if (!Capacitor.isNativePlatform()) return false;
+
+  await LocalNotifications.cancel({
+    notifications: notificationIdsForSlots(MAX_PRAYER_NOTIFICATION_SLOTS),
+  });
+
   return true;
 };

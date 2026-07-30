@@ -42,7 +42,63 @@ function decode(s: string): string {
 
 function stripHtml(s: string | null): string | null {
   if (!s) return null;
-  return s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return s
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeText(s: string): string {
+  return decode(s)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function textToParagraphHtml(text: string): string | null {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  const chunks = clean
+    .split(/(?<=[.!?])\s+(?=[A-Z"'])/)
+    .reduce<string[]>((acc, sentence) => {
+      const last = acc[acc.length - 1] ?? "";
+      if (!last || last.length > 420) acc.push(sentence);
+      else acc[acc.length - 1] = `${last} ${sentence}`;
+      return acc;
+    }, [])
+    .slice(0, 6);
+  return chunks.map((chunk) => `<p>${escapeHtml(chunk)}</p>`).join("");
+}
+
+async function fetchArticleExcerpt(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "BarakahNewsBot/1.0 (+https://barakah.app)" },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const body = html.match(/<article[\s\S]*?<\/article>/i)?.[0] || html.match(/<main[\s\S]*?<\/main>/i)?.[0] || html;
+    const paragraphs = [...body.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((m) => normalizeText(m[1]))
+      .filter((p) => p.length > 45 && !/^(advertisement|subscribe|follow us|read more)$/i.test(p));
+    const text = paragraphs.join(" ").slice(0, 2200);
+    return textToParagraphHtml(text);
+  } catch {
+    return null;
+  }
 }
 
 function extractImage(itemXml: string): string | null {
@@ -101,10 +157,7 @@ function parseRss(xml: string): ParsedItem[] {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   try {
     const { data: sources, error: srcErr } = await supabase
@@ -127,15 +180,19 @@ Deno.serve(async (req) => {
         }
         const xml = await res.text();
         const items = parseRss(xml);
-        const rows = items.map((it) => ({
-          ...it,
-          source_name: src.name,
-          category: src.category,
-        }));
+        const rows = [];
+        for (const it of items) {
+          const rssText = `${it.description ?? ""} ${stripHtml(it.content) ?? ""}`.trim();
+          const enrichedContent = rssText.length < 700 ? await fetchArticleExcerpt(it.article_url) : it.content;
+          rows.push({
+            ...it,
+            content: enrichedContent || it.content || (it.description ? textToParagraphHtml(it.description) : null),
+            source_name: src.name,
+            category: src.category,
+          });
+        }
         if (rows.length) {
-          const { error } = await supabase
-            .from("news_articles")
-            .upsert(rows, { onConflict: "guid", ignoreDuplicates: true });
+          const { error } = await supabase.from("news_articles").upsert(rows, { onConflict: "guid" });
           if (error) {
             results[src.name] = `DB: ${error.message}`;
             continue;
@@ -148,14 +205,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, totalProcessed: totalInserted, results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: true, totalProcessed: totalInserted, results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
-    return new Response(
-      JSON.stringify({ success: false, error: (e as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: false, error: (e as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

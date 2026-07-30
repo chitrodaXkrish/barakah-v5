@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, MapPin, ChevronDown, Newspaper, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +27,7 @@ import {
   getNextPrayer,
   prayerMinutes,
 } from '@/lib/islamicPrayerTimes';
+import { formatHijriDate, formatStandardDate } from '@/lib/dateUtils';
 
 interface NewsItem {
   id: string;
@@ -39,6 +40,8 @@ interface NewsItem {
 
 const FALLBACK_IMG =
   'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=200&h=200&fit=crop';
+
+// Date formatting utilities moved to src/lib/dateUtils.ts
 
 const timeAgo = (iso?: string | null) => {
   if (!iso) return '';
@@ -63,11 +66,28 @@ export const Home = () => {
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
+  );
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const syncNotificationSetting = () => {
+      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
+    };
+
+    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+    window.addEventListener('storage', syncNotificationSetting);
+
+    return () => {
+      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+      window.removeEventListener('storage', syncNotificationSetting);
+    };
   }, []);
 
   useEffect(() => {
@@ -98,14 +118,8 @@ export const Home = () => {
     })();
   }, []);
 
-  // Islamic (Hijri) date
-  const hijri = new Intl.DateTimeFormat('en-u-ca-islamic', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-    .format(now)
-    .replace(' AH', '');
+  const hijri = useMemo(() => formatHijriDate(now), [now]);
+  const standardDate = useMemo(() => formatStandardDate(now), [now]);
 
   // Next prayer
   const prayerTimes = apiPrayers.filter((prayer) => prayer.key !== 'sunrise');
@@ -122,8 +136,6 @@ export const Home = () => {
       : location
         ? 'Unavailable'
         : 'Set location';
-  const notificationsEnabled =
-    localStorage.getItem('barakah_notifications_enabled') !== 'false';
   const notificationItems = notificationsEnabled
     ? createPrayerNotificationPreviews(notificationPrayers, now)
     : [];
@@ -228,6 +240,7 @@ export const Home = () => {
         {/* Arc + center logo + prayer info */}
         <ArcTimeline
           hijri={hijri}
+          standardDate={standardDate}
           currentPrayer={prayerStatusLabel}
           prayerTime={prayerTime}
           nowMinutes={cur}
@@ -446,6 +459,7 @@ export const Home = () => {
 
 type ArcTimelineProps = {
   hijri: string;
+  standardDate: string;
   currentPrayer: string;
   prayerTime: string;
   nowMinutes: number;
@@ -454,6 +468,7 @@ type ArcTimelineProps = {
 
 const ArcTimeline = ({
   hijri,
+  standardDate,
   currentPrayer,
   prayerTime,
   nowMinutes,
@@ -499,6 +514,12 @@ const ArcTimeline = ({
           style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 300 }}
         >
           {hijri}
+        </p>
+        <p
+          className="text-[11px] mt-1 tracking-tight"
+          style={{ color: 'rgba(255,255,255,0.72)', fontWeight: 300 }}
+        >
+          {standardDate}
         </p>
         <p
           className="text-white text-[30px] mt-2 tracking-tight leading-none"

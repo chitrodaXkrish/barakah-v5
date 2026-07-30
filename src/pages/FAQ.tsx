@@ -5,6 +5,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 
+const CREAM = '#FFF5E5';
+const CARD = '#FFF8F3';
+const BORDER = '#E8D5C4';
+const BROWN = '#A35233';
+const BROWN_DARK = '#3A1E12';
+const MUTED = '#7C6A4F';
+const SOFT_ACCENT = '#F5E6D0';
+
 const faqs = [
   {
     id: 1,
@@ -45,41 +53,60 @@ export const FAQ = () => {
   };
 
   return (
-    <Layout>
-      <div className="px-4 py-6 space-y-6">
-        <h1 className="text-2xl font-bold text-primary">FAQ's</h1>
+    <Layout pageBackgroundColor={CREAM}>
+      <div className="min-h-screen px-4 py-6 space-y-6" style={{ backgroundColor: CREAM }}>
+        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>FAQ's</h1>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
+            style={{ color: MUTED }}
+          />
           <Input 
             placeholder="Search" 
-            className="pl-10 bg-card border-border rounded-full"
+            className="pl-10 rounded-full shadow-sm focus-visible:ring-1 focus-visible:ring-offset-0"
+            style={{
+              backgroundColor: CARD,
+              borderColor: BORDER,
+              color: BROWN_DARK,
+              ['--tw-placeholder-opacity' as string]: '1',
+            }}
           />
         </div>
 
         {/* FAQ Items */}
         <div className="space-y-3">
           {faqs.map((faq) => (
-            <Card key={faq.id} className="rounded-2xl overflow-hidden bg-card">
+            <Card
+              key={faq.id}
+              className="rounded-2xl overflow-hidden shadow-sm backdrop-blur-none"
+              style={{ backgroundColor: CARD, borderColor: BORDER }}
+            >
               <Collapsible 
                 open={openItems.includes(faq.id)}
                 onOpenChange={() => toggleItem(faq.id)}
               >
-                <CollapsibleTrigger className="w-full p-4 text-left">
+                <CollapsibleTrigger
+                  className="w-full p-4 text-left transition-colors"
+                  style={{
+                    backgroundColor: openItems.includes(faq.id) ? SOFT_ACCENT : CARD,
+                  }}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium" style={{ color: BROWN_DARK }}>
                       {faq.id}. {faq.question}
                     </span>
                     <Plus 
-                      className={`h-5 w-5 text-primary transition-transform ${
+                      className={`h-5 w-5 transition-transform ${
                         openItems.includes(faq.id) ? 'rotate-45' : ''
-                      }`} 
+                      }`}
+                      style={{ color: BROWN }}
                     />
                   </div>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="px-4 pb-4">
-                  <p className="text-sm text-muted-foreground">
+                <CollapsibleContent className="px-4 pb-4 pt-3">
+                  <p className="text-sm leading-relaxed" style={{ color: MUTED }}>
                     {faq.answer}
                   </p>
                 </CollapsibleContent>

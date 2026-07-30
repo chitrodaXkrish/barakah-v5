@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   MessageCircle, Plus, Send, ArrowLeft, Loader2, Trash2, Heart, RefreshCw, 
-  Sparkles, Users, TrendingUp, Hash, AtSign, Search, X, Flag, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight
+  Sparkles, Users, TrendingUp, AtSign, Search, X, Flag, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -131,54 +131,6 @@ const WARM_CARD = '#FFFFFF';
 const SOFT_BORDER = 'rgba(123, 63, 30, 0.12)';
 const OLIVE = '#7C7E2D';
 const OLIVE_DARK = '#656823';
-
-// Mock posts from Ayesha Khan to populate the feed
-const AYESHA_AVATAR = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop&crop=faces';
-const MOCK_POSTS: Post[] = [
-  {
-    id: 'mock-1',
-    user_id: 'mock-ayesha',
-    user_name: 'Ayesha Khan',
-    avatar_url: AYESHA_AVATAR,
-    community: 'Quran Meaning',
-    content:
-      'This The whole secret of existence lies in the pursuit of meaning, purpose, and connection. It is a delicate dance between self-discovery....vcbbfvvvvvv',
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    likeCount: 24,
-    isLiked: true,
-    replies: Array(8).fill(null).map((_, i) => ({ id: `mr-1-${i}`, post_id: 'mock-1', user_id: '', user_name: '', content: '', created_at: '' })),
-    likes: [],
-  },
-  {
-    id: 'mock-2',
-    user_id: 'mock-ayesha',
-    user_name: 'Ayesha Khan',
-    avatar_url: AYESHA_AVATAR,
-    community: 'Quran Meaning',
-    image_url: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=800&h=500&fit=crop',
-    content:
-      'This The whole secret of existence lies in the pursuit of meaning, purpose, and connection. It is a delicate dance between self-discovery....vcbbfvvvvvv',
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    likeCount: 24,
-    isLiked: false,
-    replies: Array(8).fill(null).map((_, i) => ({ id: `mr-2-${i}`, post_id: 'mock-2', user_id: '', user_name: '', content: '', created_at: '' })),
-    likes: [],
-  },
-  {
-    id: 'mock-3',
-    user_id: 'mock-ayesha',
-    user_name: 'Ayesha Khan',
-    avatar_url: AYESHA_AVATAR,
-    community: 'Quran Meaning',
-    content:
-      'This The whole secret of existence lies in the pursuit of meaning, purpose, and connection. It is a delicate dance between self-discovery....vcbbfvvvvvv',
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    likeCount: 24,
-    isLiked: false,
-    replies: Array(8).fill(null).map((_, i) => ({ id: `mr-3-${i}`, post_id: 'mock-3', user_id: '', user_name: '', content: '', created_at: '' })),
-    likes: [],
-  },
-];
 
 // Mock communities for the Explore tab
 interface Community {
@@ -726,7 +678,6 @@ export const Forum = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
-  const [newPostCategory, setNewPostCategory] = useState('general');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -916,7 +867,9 @@ export const Forum = () => {
         likesByPost[like.post_id].push(like);
       });
 
-      const postsWithData = (postsData || []).map((post) => {
+      const postsWithData = (postsData || [])
+        .filter((post) => post.user_name !== 'Ayesha Khan')
+        .map((post) => {
         const postLikes = likesByPost[post.id] || [];
         return {
           ...post,
@@ -1167,7 +1120,6 @@ export const Forum = () => {
         user_id: user.uid,
         user_name: currentUserName,
         content: newPostContent.trim(),
-        category: newPostCategory,
       }).select('*').single();
 
       if (error) throw error;
@@ -1186,7 +1138,6 @@ export const Forum = () => {
       });
 
       setNewPostContent('');
-      setNewPostCategory('general');
       setIsCreateDialogOpen(false);
       toast.success('Post shared!');
     } catch (error) {
@@ -1212,7 +1163,6 @@ export const Forum = () => {
   };
 
   const handleToggleLike = async (postId: string, isCurrentlyLiked: boolean) => {
-    if (postId.startsWith('mock-')) return;
     if (!user) {
       toast.error('Please sign in to like posts');
       return;
@@ -1347,19 +1297,6 @@ export const Forum = () => {
     }
   };
 
-  const getCategoryBadgeColor = (category?: string) => {
-    switch (category) {
-      case 'general': return 'bg-amber-100 text-amber-800';
-      case 'dua': return 'bg-amber-100 text-amber-800';
-      case 'knowledge': return 'bg-sky-100 text-sky-700';
-      default: return 'bg-amber-100 text-amber-800';
-    }
-  };
-
-  const getCategoryLabel = (category?: string) => {
-    return CATEGORIES.find(c => c.id === category)?.label || 'General';
-  };
-
   const PostCard = ({ post }: { post: Post; index?: number }) => {
     const isOwner = user?.uid === post.user_id;
     const isLiking = likingPosts.has(post.id);
@@ -1392,7 +1329,7 @@ export const Forum = () => {
               </button>
             </div>
           )}
-          {/* Header: Avatar + Name + Category + Time */}
+          {/* Header: Avatar + Name + Time */}
           <div className="flex items-start gap-3 mb-3">
             {post.avatar_url ? (
               <img
@@ -1411,11 +1348,6 @@ export const Forum = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-sm" style={{ color: BROWN_DARK }}>{post.user_name}</span>
-                {!post.community && (
-                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide", getCategoryBadgeColor(post.category))}>
-                    {getCategoryLabel(post.category)}
-                  </span>
-                )}
               </div>
               <p className="text-xs mt-0.5" style={{ color: '#9C8569' }}>{formatTimeAgo(post.created_at)}</p>
             </div>
@@ -1538,9 +1470,6 @@ export const Forum = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold" style={{ color: BROWN_DARK }}>{selectedPost.user_name}</span>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium uppercase", getCategoryBadgeColor(selectedPost.category))}>
-                        {getCategoryLabel(selectedPost.category)}
-                      </span>
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: '#9C8569' }}>{formatTimeAgo(selectedPost.created_at)}</p>
                   </div>
@@ -1692,7 +1621,7 @@ export const Forum = () => {
       ...(isAdmin ? [{ id: 'settings' as const, label: 'Settings' }] : []),
     ];
     const MOCK_MEMBERS = [
-      { name: 'Ayesha Khan', role: 'Admin', avatar: AYESHA_AVATAR },
+      { name: currentUserName, role: isAdmin ? 'Admin' : 'Member', avatar: null },
       { name: 'Fatima Noor', role: 'Moderator', avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=200&h=200&fit=crop&crop=faces' },
       { name: 'Zayd Rahman', role: 'Member', avatar: 'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?w=200&h=200&fit=crop&crop=faces' },
       { name: 'Hafsa Iqbal', role: 'Member', avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=200&h=200&fit=crop&crop=faces' },
@@ -1800,11 +1729,11 @@ export const Forum = () => {
                   style={{ background: '#FFFFFF', border: `1.5px solid ${BROWN}` }}
                 >
                   <div className="flex items-start gap-3 px-4 pt-4">
-                    <div className="w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ background: '#EAD9BE' }}>
-                      <img src={AYESHA_AVATAR} alt="" className="w-full h-full object-cover" />
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#EAD9BE' }}>
+                      <User className="h-4 w-4" style={{ color: '#A88B66' }} />
                     </div>
                     <span className="text-sm pt-1" style={{ color: '#5C4632' }}>
-                      This The whole secret of existence lies in the pursuit of meaning, purpose, and connection...
+                      Write your post here
                     </span>
                   </div>
                   <div
@@ -1823,10 +1752,10 @@ export const Forum = () => {
                   </div>
                 </button>
 
-                <div className="space-y-3">
-                  {MOCK_POSTS.map((post, index) => (
-                    <PostCard key={post.id} post={post} index={index} />
-                  ))}
+                <div className="text-center py-12 rounded-2xl" style={{ background: '#FFFFFF' }}>
+                  <MessageCircle className="h-8 w-8 mx-auto mb-3" style={{ color: '#C4A98A' }} />
+                  <p className="font-medium text-sm" style={{ color: BROWN_DARK }}>No community posts yet</p>
+                  <p className="text-xs mt-1" style={{ color: '#9C8569' }}>Start the first conversation.</p>
                 </div>
               </>
             )}
@@ -1839,7 +1768,13 @@ export const Forum = () => {
                     className="flex items-center gap-3 p-3 rounded-2xl"
                     style={{ background: '#FFFFFF', boxShadow: '0 1px 3px rgba(123, 63, 30, 0.05)' }}
                   >
-                    <img src={m.avatar} alt={m.name} className="w-11 h-11 rounded-full object-cover shrink-0" />
+                    {m.avatar ? (
+                      <img src={m.avatar} alt={m.name} className="w-11 h-11 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: '#EAD9BE' }}>
+                        <User className="h-4 w-4" style={{ color: '#A88B66' }} />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold truncate" style={{ color: BROWN_DARK }}>{m.name}</p>
                       <p className="text-xs mt-0.5" style={{ color: '#9C8569' }}>{m.role}</p>
@@ -2143,7 +2078,7 @@ export const Forum = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {[...filteredPosts, ...MOCK_POSTS].map((post, index) => (
+                  {filteredPosts.map((post, index) => (
                     <PostCard key={post.id} post={post} index={index} />
                   ))}
                 </div>
@@ -2167,20 +2102,6 @@ export const Forum = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 mt-2">
-              <div className="flex items-center gap-2">
-                <Hash className="h-4 w-4" style={{ color: BROWN_LIGHT }} />
-                <Select value={newPostCategory} onValueChange={setNewPostCategory}>
-                  <SelectTrigger className="w-[180px] text-sm" style={{ background: '#FFFFFF', borderColor: SOFT_BORDER, color: BROWN_DARK }}>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent style={{ background: '#FFFFFF' }}>
-                    {CATEGORIES.filter(c => c.id !== 'all').map(({ id, label }) => (
-                      <SelectItem key={id} value={id}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: '#EAD9BE' }}

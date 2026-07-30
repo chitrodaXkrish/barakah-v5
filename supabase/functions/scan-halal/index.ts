@@ -9,13 +9,23 @@ const corsHeaders = {
 
 interface ScanRequest {
   barcode?: string;
-  imageBase64?: string; // data URL or raw base64
+  imageBase64?: string;
   imageMimeType?: string;
   session_id?: string;
   region?: string;
 }
 
-const SYSTEM_PROMPT = `You are Barakah AI's halal product analyzer. Given a product barcode number and/or a photo of a product, identify the product and evaluate its halal status based on ingredients and Islamic dietary rulings.
+interface ProductLookup {
+  source: string;
+  product_name: string;
+  brand: string | null;
+  category: string | null;
+  region: string | null;
+  ingredients_text: string | null;
+  ingredients: string[];
+}
+
+const SYSTEM_PROMPT = `You are Barakah AI's halal product analyzer. Evaluate halal status using ONLY the verified product facts supplied by the barcode lookup and/or the uploaded image.
 
 Return STRICT JSON only (no prose, no markdown fences) matching this schema:
 {
@@ -23,20 +33,103 @@ Return STRICT JSON only (no prose, no markdown fences) matching this schema:
   "brand": string | null,
   "status": "halal" | "haram" | "mushbooh" | "unknown",
   "confidence": integer (0-100),
-  "verdict": string,           // short human explanation
-  "category": string | null,   // e.g. "biscuit", "beverage"
-  "region": string | null,     // country/region of origin if known
+  "verdict": string,
+  "category": string | null,
+  "region": string | null,
   "ingredients": [ { "name": string, "ok": boolean, "note": string | null } ],
-  "ingredients_hash": string | null // stable hash of ingredient list, or null
+  "ingredients_hash": string | null
 }
 
-If the product cannot be identified, set status="unknown" with confidence <= 20 and product_name best-guess or "Unknown Product". Never invent ingredients — if unsure, leave the array empty.`;
+Rules:
+- Do not identify a barcode from memory.
+- If product facts are supplied, keep product_name and brand aligned with those facts.
+- Never invent ingredients. If no ingredient list is supplied or readable, leave ingredients empty.
+- If product facts and image are insufficient, set status="unknown" with confidence <= 20 and product_name "Unknown Product".`;
 
-async function callGemini(apiKey: string, body: ScanRequest) {
+async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
+  const normalized = barcode?.replace(/\D/g, "");
+  if (!normalized) return null;
+
+  const fields = [
+    "product_name",
+    "product_name_en",
+    "generic_name",
+    "brands",
+    "categories",
+    "countries",
+    "ingredients_text",
+    "ingredients_text_en",
+    "ingredients",
+  ].join(",");
+
+  const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${normalized}.json?fields=${fields}`, {
+    headers: {
+      "User-Agent": "BarakahApp/1.0 halal-scanner",
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  if (data?.status !== 1 || !data?.product) return null;
+
+  const product = data.product;
+  const ingredientNames = Array.isArray(product.ingredients)
+    ? product.ingredients
+        .map((ingredient: any) => ingredient?.text || ingredient?.id)
+        .filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)
+    : [];
+
+  return {
+    source: "openfoodfacts",
+    product_name: product.product_name_en || product.product_name || product.generic_name || "Unknown Product",
+    brand: product.brands || null,
+    category: product.categories || null,
+    region: product.countries || null,
+    ingredients_text: product.ingredients_text_en || product.ingredients_text || null,
+    ingredients: ingredientNames,
+  };
+}
+
+const unknownBarcodeResult = (body: ScanRequest) => ({
+  product_name: "Unknown Product",
+  brand: null,
+  status: "unknown",
+  confidence: 10,
+  verdict: body.barcode
+    ? `Barcode ${body.barcode} was scanned, but no reliable product match was found.`
+    : "No reliable product match was found.",
+  category: null,
+  region: body.region ?? null,
+  ingredients: [],
+  ingredients_hash: null,
+  source: "barcode_lookup_miss",
+});
+
+async function callGemini(apiKey: string, body: ScanRequest, productFacts: ProductLookup | null) {
   const userParts: any[] = [];
   const parts: string[] = [];
+
   if (body.barcode) parts.push(`Barcode: ${body.barcode}`);
   if (body.region) parts.push(`User region hint: ${body.region}`);
+
+  if (productFacts) {
+    parts.push(
+      [
+        "Verified barcode lookup facts:",
+        `Source: ${productFacts.source}`,
+        `Product name: ${productFacts.product_name}`,
+        `Brand: ${productFacts.brand ?? "Unknown"}`,
+        `Category: ${productFacts.category ?? "Unknown"}`,
+        `Region/Countries: ${productFacts.region ?? "Unknown"}`,
+        `Ingredients text: ${productFacts.ingredients_text ?? "Not available"}`,
+        `Parsed ingredients: ${productFacts.ingredients.join(", ") || "Not available"}`,
+      ].join("\n"),
+    );
+  } else {
+    parts.push("No verified barcode lookup facts were found.");
+  }
+
   parts.push("Analyze this product for halal compliance and return the JSON.");
   userParts.push({ type: "text", text: parts.join("\n") });
 
@@ -47,7 +140,7 @@ async function callGemini(apiKey: string, body: ScanRequest) {
     userParts.push({ type: "image_url", image_url: { url } });
   }
 
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -63,12 +156,14 @@ async function callGemini(apiKey: string, body: ScanRequest) {
     }),
   });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`AI gateway ${resp.status}: ${text}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`AI gateway ${response.status}: ${text}`);
   }
-  const data = await resp.json();
+
+  const data = await response.json();
   const content: string = data?.choices?.[0]?.message?.content ?? "{}";
+
   try {
     return JSON.parse(content);
   } catch {
@@ -92,9 +187,21 @@ serve(async (req) => {
       });
     }
 
-    const parsed = await callGemini(LOVABLE_API_KEY, body);
+    const productFacts = await lookupBarcode(body.barcode);
+    const parsed =
+      productFacts || body.imageBase64
+        ? await callGemini(LOVABLE_API_KEY, body, productFacts)
+        : unknownBarcodeResult(body);
 
-    // Resolve user id from JWT if present
+    if (productFacts) {
+      parsed.product_name = productFacts.product_name;
+      parsed.brand = productFacts.brand;
+      parsed.category = parsed.category ?? productFacts.category;
+      parsed.region = parsed.region ?? productFacts.region ?? body.region ?? null;
+      parsed.source = productFacts.source;
+      parsed.lookup = productFacts;
+    }
+
     let userId: string | null = null;
     const authHeader = req.headers.get("Authorization");
     if (authHeader?.startsWith("Bearer ")) {
@@ -102,13 +209,12 @@ serve(async (req) => {
         const jwt = authHeader.slice(7);
         const payload = JSON.parse(atob(jwt.split(".")[1]));
         userId = payload.sub ?? null;
-      } catch { /* ignore */ }
+      } catch {
+        // Ignore malformed auth headers.
+      }
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const row = {
       user_id: userId,
@@ -126,11 +232,7 @@ serve(async (req) => {
       session_id: body.session_id ?? null,
     };
 
-    const { data, error } = await supabase
-      .from("scan_history")
-      .insert(row)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("scan_history").insert(row).select().single();
 
     if (error) {
       console.error("scan_history insert error:", error);
@@ -145,9 +247,9 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("scan-halal error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

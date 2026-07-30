@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, BookOpen, Play, Pause } from 'lucide-react';
+import { ArrowLeft, Search, BookOpen, Play, Pause, Bookmark, BookmarkCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +53,22 @@ interface ParaVerse {
 interface ParaDetail {
   paraNo: number;
   verses: ParaVerse[];
+}
+
+interface QuranBookmark {
+  mode: 'surah' | 'para';
+  surahNo?: number;
+  paraNo?: number;
+  ayahNo: number;
+  title: string;
+  savedAt: string;
+}
+
+interface QuranReadingStats {
+  currentStreak: number;
+  longestStreak: number;
+  lastReadDate: string;
+  totalReadDays: number;
 }
 
 const JUZ_RANGES: JuzRange[] = [
@@ -109,6 +125,73 @@ const verseAudio = (surahNo: number, verseNo: number, reciterId: string) =>
     verseNo,
   ).padStart(3, '0')}.mp3`;
 
+const QURAN_BOOKMARK_KEY = 'barakah_quran_bookmark';
+const QURAN_READING_STATS_KEY = 'barakah_quran_reading_stats';
+
+const todayKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+const previousDateKey = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() - 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const loadQuranBookmark = (): QuranBookmark | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(QURAN_BOOKMARK_KEY);
+    return raw ? JSON.parse(raw) as QuranBookmark : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveQuranReadingDay = () => {
+  if (typeof window === 'undefined') return;
+  const today = todayKey();
+  let stats: QuranReadingStats = {
+    currentStreak: 0,
+    longestStreak: 0,
+    lastReadDate: '',
+    totalReadDays: 0,
+  };
+
+  try {
+    const raw = localStorage.getItem(QURAN_READING_STATS_KEY);
+    if (raw) stats = { ...stats, ...JSON.parse(raw) };
+  } catch {}
+
+  if (stats.lastReadDate === today) return;
+
+  const currentStreak = stats.lastReadDate === previousDateKey(today) ? stats.currentStreak + 1 : 1;
+  const nextStats: QuranReadingStats = {
+    currentStreak,
+    longestStreak: Math.max(stats.longestStreak || 0, currentStreak),
+    lastReadDate: today,
+    totalReadDays: (stats.totalReadDays || 0) + 1,
+  };
+
+  localStorage.setItem(QURAN_READING_STATS_KEY, JSON.stringify(nextStats));
+  window.dispatchEvent(new Event('barakah-quran-reading-updated'));
+};
+
+const normalizeSurahName = (name?: string) => {
+  if (!name) return '';
+  const corrections: Record<string, string> = {
+    'Al-Fatiah': 'Al-Fatiha',
+    'Al-Fatihah': 'Al-Fatiha',
+    'Al-Faatiha': 'Al-Fatiha',
+  };
+  return corrections[name] || name;
+};
+
+const surahVerseId = (surahNo: number, ayahNo: number) => `quran-surah-${surahNo}-${ayahNo}`;
+const paraVerseId = (paraNo: number, surahNo: number, ayahNo: number) => `quran-para-${paraNo}-${surahNo}-${ayahNo}`;
+
 /* ---------------- Reusable bits ---------------- */
 
 const StarBadge = ({ n }: { n: number }) => (
@@ -157,6 +240,7 @@ export const Quran = () => {
   );
   const [playingVerse, setPlayingVerse] = useState<string | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const [bookmark, setBookmark] = useState<QuranBookmark | null>(() => loadQuranBookmark());
 
   // Fetch surah list
   useEffect(() => {
@@ -167,6 +251,28 @@ export const Quran = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    return () => {
+      currentAudio?.pause();
+    };
+  }, [currentAudio]);
+
+  useEffect(() => {
+    if (!bookmark) return;
+    const id =
+      bookmark.mode === 'para' && selectedPara && bookmark.paraNo === selectedPara.paraNo && bookmark.surahNo
+        ? paraVerseId(selectedPara.paraNo, bookmark.surahNo, bookmark.ayahNo)
+        : bookmark.mode === 'surah' && selectedSurah && bookmark.surahNo === selectedSurah.surahNo
+          ? surahVerseId(selectedSurah.surahNo, bookmark.ayahNo)
+          : null;
+
+    if (!id) return;
+    const timeout = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [bookmark, selectedPara, selectedSurah]);
+
   const fetchSurahDetails = async (surahNo: number) => {
     setLoadingSurah(true);
     setDetailTab('translation');
@@ -175,6 +281,7 @@ export const Quran = () => {
       const r = await fetch(`https://quranapi.pages.dev/api/${surahNo}.json`);
       const data = await r.json();
       setSelectedSurah({ ...data, surahNo });
+      saveQuranReadingDay();
     } finally {
       setLoadingSurah(false);
     }
@@ -226,9 +333,49 @@ export const Quran = () => {
       });
 
       setSelectedPara({ paraNo, verses });
+      saveQuranReadingDay();
     } finally {
       setLoadingPara(false);
     }
+  };
+
+  const saveBookmark = (nextBookmark: QuranBookmark) => {
+    localStorage.setItem(QURAN_BOOKMARK_KEY, JSON.stringify(nextBookmark));
+    setBookmark(nextBookmark);
+    saveQuranReadingDay();
+  };
+
+  const bookmarkSurahVerse = (surah: SurahDetail, ayahNo: number) => {
+    saveBookmark({
+      mode: 'surah',
+      surahNo: surah.surahNo,
+      ayahNo,
+      title: normalizeSurahName(surah.surahName),
+      savedAt: new Date().toISOString(),
+    });
+  };
+
+  const bookmarkParaVerse = (para: ParaDetail, verse: ParaVerse) => {
+    saveBookmark({
+      mode: 'para',
+      paraNo: para.paraNo,
+      surahNo: verse.surahNo,
+      ayahNo: verse.ayahNo,
+      title: `Para ${para.paraNo} - ${normalizeSurahName(verse.surahName)} ${verse.ayahNo}`,
+      savedAt: new Date().toISOString(),
+    });
+  };
+
+  const resumeBookmark = () => {
+    if (!bookmark) {
+      fetchSurahDetails(1);
+      return;
+    }
+    if (bookmark.mode === 'para' && bookmark.paraNo) {
+      fetchParaDetails(bookmark.paraNo);
+      return;
+    }
+    if (bookmark.surahNo) fetchSurahDetails(bookmark.surahNo);
   };
 
   const handleReciterChange = (id: string) => {
@@ -251,6 +398,7 @@ export const Quran = () => {
       }
     }
     const audio = new Audio(verseAudio(surahNo, verseNo, selectedReciter));
+    audio.loop = true;
     audio.play().catch(() => {});
     audio.onended = () => {
       setPlayingVerse(null);
@@ -258,6 +406,7 @@ export const Quran = () => {
     };
     setCurrentAudio(audio);
     setPlayingVerse(key);
+    saveQuranReadingDay();
   };
 
   const filtered = useMemo(
@@ -347,7 +496,7 @@ export const Quran = () => {
               {selectedPara.verses.map((verse) => {
                 const isPlaying = playingVerse === verse.key;
                 return (
-                  <div key={verse.key}>
+                  <div key={verse.key} id={paraVerseId(selectedPara.paraNo, verse.surahNo, verse.ayahNo)}>
                     <div
                       className="rounded-full flex items-center justify-between px-2 py-2"
                       style={{ backgroundColor: '#F1E0BC' }}
@@ -356,20 +505,34 @@ export const Quran = () => {
                         className="min-h-8 rounded-full flex items-center justify-center text-white text-[12px] font-semibold px-3"
                         style={{ backgroundColor: BROWN_ACCENT }}
                       >
-                        {verse.surahName} {verse.ayahNo}
+                        {normalizeSurahName(verse.surahName)} {verse.ayahNo}
                       </div>
-                      <button
-                        onClick={() => playVerse(verse.surahNo, verse.ayahNo, verse.key)}
-                        aria-label={isPlaying ? 'Pause' : 'Play'}
-                        className="h-8 w-8 rounded-full flex items-center justify-center"
-                        style={{ color: BROWN_ACCENT }}
-                      >
-                        {isPlaying ? (
-                          <Pause className="h-4 w-4" strokeWidth={2} />
-                        ) : (
-                          <Play className="h-4 w-4" strokeWidth={2} />
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => bookmarkParaVerse(selectedPara, verse)}
+                          aria-label="Bookmark verse"
+                          className="h-8 w-8 rounded-full flex items-center justify-center"
+                          style={{ color: BROWN_ACCENT }}
+                        >
+                          {bookmark?.mode === 'para' && bookmark.paraNo === selectedPara.paraNo && bookmark.surahNo === verse.surahNo && bookmark.ayahNo === verse.ayahNo ? (
+                            <BookmarkCheck className="h-4 w-4" strokeWidth={2} />
+                          ) : (
+                            <Bookmark className="h-4 w-4" strokeWidth={2} />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => playVerse(verse.surahNo, verse.ayahNo, verse.key)}
+                          aria-label={isPlaying ? 'Pause' : 'Play'}
+                          className="h-8 w-8 rounded-full flex items-center justify-center"
+                          style={{ color: BROWN_ACCENT }}
+                        >
+                          {isPlaying ? (
+                            <Pause className="h-4 w-4" strokeWidth={2} />
+                          ) : (
+                            <Play className="h-4 w-4" strokeWidth={2} />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <p
                       dir="rtl"
@@ -427,7 +590,7 @@ export const Quran = () => {
             style={{ backgroundColor: OLIVE }}
           >
             <h2 className="text-[32px] font-bold leading-tight" style={{ fontFamily: SERIF }}>
-              {selectedSurah.surahName}
+              {normalizeSurahName(selectedSurah.surahName)}
             </h2>
             <p className="text-[16px] mt-1 opacity-95">{selectedSurah.surahNameTranslation}</p>
             <div className="my-3 h-px mx-auto w-2/3" style={{ backgroundColor: 'rgba(255,255,255,0.35)' }} />
@@ -501,7 +664,7 @@ export const Quran = () => {
                 const playbackKey = `${selectedSurah.surahNo}:${n}`;
                 const isPlaying = playingVerse === playbackKey;
                 return (
-                  <div key={n}>
+                  <div key={n} id={surahVerseId(selectedSurah.surahNo, n)}>
                     {/* Action bar */}
                     <div
                       className="rounded-full flex items-center justify-between px-2 py-2"
@@ -514,6 +677,18 @@ export const Quran = () => {
                         {n}
                       </div>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => bookmarkSurahVerse(selectedSurah, n)}
+                          aria-label="Bookmark verse"
+                          className="h-8 w-8 rounded-full flex items-center justify-center"
+                          style={{ color: BROWN_ACCENT }}
+                        >
+                          {bookmark?.mode === 'surah' && bookmark.surahNo === selectedSurah.surahNo && bookmark.ayahNo === n ? (
+                            <BookmarkCheck className="h-4 w-4" strokeWidth={2} />
+                          ) : (
+                            <Bookmark className="h-4 w-4" strokeWidth={2} />
+                          )}
+                        </button>
                         <button
                           onClick={() => playVerse(selectedSurah.surahNo, n, playbackKey)}
                           aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -594,7 +769,8 @@ export const Quran = () => {
 
       {/* Last Read */}
       <div className="px-5 mt-2">
-        <div
+        <button
+          onClick={resumeBookmark}
           className="rounded-2xl px-5 py-5 text-white shadow-sm"
           style={{ backgroundColor: OLIVE }}
         >
@@ -603,10 +779,15 @@ export const Quran = () => {
             Last Read
           </div>
           <div className="mt-3 text-[22px] font-bold leading-tight" style={{ fontFamily: SERIF }}>
-            Al-Fatiah
+            {bookmark?.title || 'Al-Fatiha'}
           </div>
-          <div className="text-[13px] opacity-90 mt-1">Ayah No: 1</div>
-        </div>
+          <div className="text-[13px] opacity-90 mt-1">
+            {bookmark ? `Ayah No: ${bookmark.ayahNo}` : 'Ayah No: 1'}
+          </div>
+          <div className="mt-4 inline-flex rounded-full px-4 py-2 text-[13px] font-semibold" style={{ backgroundColor: '#FFF5E5', color: BROWN_ACCENT }}>
+            Continue Reading
+          </div>
+        </button>
       </div>
 
       {/* Search input (toggleable) */}
@@ -666,7 +847,7 @@ export const Quran = () => {
                     <StarBadge n={num} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[16px] font-semibold" style={{ color: BROWN }}>
-                        {s.surahName}
+                        {normalizeSurahName(s.surahName)}
                       </div>
                       <div className="text-[11px] tracking-[0.18em] font-medium mt-0.5" style={{ color: MUTED }}>
                         {s.revelationPlace?.toUpperCase()} • {s.totalAyah} VERSES

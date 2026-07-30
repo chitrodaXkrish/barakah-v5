@@ -18,11 +18,11 @@ const OLIVE = '#7E8A3E';
 const MUTED = '#8B6B55';
 
 const PRAYER_META: Record<string, { label: string; time: string; icon: any }> = {
-  fajr:    { label: 'Fajr',    time: '04:32 AM', icon: Sunrise },
-  dhuhr:   { label: 'Dhuhr',   time: '12:14 PM', icon: Sun },
-  asr:     { label: 'Asr',     time: '03:48 PM', icon: CloudSun },
-  maghrib: { label: 'Maghrib', time: '06:54 PM', icon: Sunset },
-  isha:    { label: 'Isha',    time: '08:12 PM', icon: Moon },
+  fajr:    { label: 'FAJR',    time: '04:32 AM', icon: Sunrise },
+  dhuhr:   { label: 'DHUHR',   time: '12:14 PM', icon: Sun },
+  asr:     { label: 'ASR',     time: '03:48 PM', icon: CloudSun },
+  maghrib: { label: 'MAGHRIB', time: '06:54 PM', icon: Sunset },
+  isha:    { label: 'ISHA',    time: '08:12 PM', icon: Moon },
 };
 const PRAYER_ORDER: Array<keyof typeof PRAYER_META> = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { ArrowLeft, Flashlight, ScanLine, Check, Shield, Sparkles, ChevronLeft, ChevronRight, ExternalLink, X, Keyboard } from 'lucide-react';
+import { ArrowLeft, Flashlight, ScanLine, Check, Shield, Sparkles, ChevronLeft, ChevronRight, ExternalLink, X, Keyboard, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGlobalLocation } from '@/contexts/LocationContext';
@@ -525,27 +525,42 @@ const Dashes = () => (
 
 /* ---------------- Result View ---------------- */
 
-const statusCopy: Record<HalalStatus, { title: string; subtitle: string; color: string }> = {
+const statusCopy: Record<HalalStatus, { label: string; title: string; subtitle: string; color: string; bg: string }> = {
   halal: {
+    label: 'HALAL',
     title: 'Halal Verified',
     subtitle: 'COMPLIANT WITH ISLAMIC STANDARDS',
     color: '#2A8049',
+    bg: '#E5F4EA',
   },
   haram: {
-    title: 'Not Halal',
+    label: 'HARAM',
+    title: 'Haram Detected',
     subtitle: 'CONTAINS PROHIBITED OR HIGH-RISK INGREDIENTS',
     color: '#B3261E',
+    bg: '#FCE8E6',
   },
   mushbooh: {
+    label: 'MUSHBOOH',
     title: 'Needs Review',
     subtitle: 'SOME INGREDIENTS REQUIRE VERIFICATION',
     color: '#B07A00',
+    bg: '#FFF2CC',
   },
   unknown: {
+    label: 'UNKNOWN',
     title: 'Unknown Status',
     subtitle: 'BARAKAH AI COULD NOT VERIFY THIS PRODUCT',
     color: '#7C6A4F',
+    bg: '#EFE4D6',
   },
+};
+
+const StatusIcon = ({ status }: { status: HalalStatus }) => {
+  if (status === 'halal') return <Check className="h-6 w-6 text-white" strokeWidth={2.5} />;
+  if (status === 'haram') return <X className="h-6 w-6 text-white" strokeWidth={2.5} />;
+  if (status === 'mushbooh') return <AlertTriangle className="h-6 w-6 text-white" strokeWidth={2.3} />;
+  return <HelpCircle className="h-6 w-6 text-white" strokeWidth={2.3} />;
 };
 
 const ResultView = ({
@@ -584,10 +599,16 @@ const ResultView = ({
           className="rounded-2xl px-6 py-5 flex flex-col items-center text-center"
           style={{ backgroundColor: '#F5E6D0' }}
         >
-          <div className="h-12 w-12 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: '#A35233' }}>
-            <Check className="h-6 w-6 text-white" strokeWidth={2.5} />
+          <div className="h-12 w-12 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: copy.color }}>
+            <StatusIcon status={status} />
           </div>
-          <div className="text-[19px] font-semibold" style={{ color: copy.color, fontFamily: SERIF }}>
+          <div
+            className="px-5 py-2 rounded-full text-[18px] font-extrabold tracking-[0.18em]"
+            style={{ color: copy.color, backgroundColor: copy.bg }}
+          >
+            {copy.label}
+          </div>
+          <div className="text-[19px] font-semibold mt-3" style={{ color: copy.color, fontFamily: SERIF }}>
             {copy.title}
           </div>
           <div className="text-[10px] tracking-[0.18em] mt-1" style={{ color: '#8B6E4A' }}>
@@ -600,17 +621,6 @@ const ResultView = ({
           )}
         </div>
       </div>
-
-      {/* Product image */}
-      <div className="px-5 mt-5 flex justify-center">
-        <img
-          src={PRODUCT.image}
-          alt={result?.product_name || 'Scanned product'}
-          className="w-[170px] h-[170px] rounded-2xl object-cover"
-          loading="lazy"
-        />
-      </div>
-
       {/* Scan another */}
       <div className="px-5 mt-5">
         <button

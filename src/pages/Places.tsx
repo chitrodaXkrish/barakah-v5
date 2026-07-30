@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +54,7 @@ export const Places = () => {
   const [citySearch, setCitySearch] = useState('');
   const [searchingCity, setSearchingCity] = useState(false);
   const [restaurantFilter, setRestaurantFilter] = useState<'Nearest' | 'Open Now' | 'Top Rated' | 'Turkish'>('Nearest');
+  const searchRunRef = useRef(0);
 
   // Calculate distance between two points
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -130,20 +131,29 @@ export const Places = () => {
         [out:json][timeout:25];
         (
           node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lon});
+          node["amenity"="place_of_worship"]["denomination"="sunni"](around:${radius},${lat},${lon});
+          node["amenity"="place_of_worship"]["denomination"="shia"](around:${radius},${lat},${lon});
           node["building"="mosque"](around:${radius},${lat},${lon});
           way["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lon});
+          way["amenity"="place_of_worship"]["denomination"="sunni"](around:${radius},${lat},${lon});
+          way["amenity"="place_of_worship"]["denomination"="shia"](around:${radius},${lat},${lon});
           way["building"="mosque"](around:${radius},${lat},${lon});
+          relation["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lon});
+          relation["building"="mosque"](around:${radius},${lat},${lon});
         );
         out center;
       `;
     } else {
-      // Simplified query for halal restaurants - search by cuisine and diet tags
       return `
         [out:json][timeout:25];
         (
-          node["diet:halal"="yes"](around:${radius},${lat},${lon});
-          node["cuisine"~"halal|indian|pakistani|middle_eastern|arabic|turkish|kebab|afghan"](around:${radius},${lat},${lon});
-          way["diet:halal"="yes"](around:${radius},${lat},${lon});
+          node["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
+          way["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
+          relation["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
+          node["amenity"~"restaurant|fast_food|cafe"]["halal"="yes"](around:${radius},${lat},${lon});
+          way["amenity"~"restaurant|fast_food|cafe"]["halal"="yes"](around:${radius},${lat},${lon});
+          node["amenity"~"restaurant|fast_food|cafe"]["cuisine"~"halal|indian|pakistani|middle_eastern|arabic|turkish|kebab|afghan|persian|lebanese|moroccan",i](around:${radius},${lat},${lon});
+          way["amenity"~"restaurant|fast_food|cafe"]["cuisine"~"halal|indian|pakistani|middle_eastern|arabic|turkish|kebab|afghan|persian|lebanese|moroccan",i](around:${radius},${lat},${lon});
         );
         out center;
       `;
@@ -151,13 +161,14 @@ export const Places = () => {
   };
 
   // Fetch with retry across multiple servers
-  const fetchWithRetry = async (query: string): Promise<any> => {
+  const fetchWithRetry = async (query: string, signal?: AbortSignal): Promise<any> => {
     let lastError: Error | null = null;
     
     for (const server of OVERPASS_SERVERS) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000);
+        signal?.addEventListener('abort', () => controller.abort(), { once: true });
         
         const response = await fetch(server, {
           method: 'POST',
@@ -184,22 +195,31 @@ export const Places = () => {
   };
 
   // Find nearby places using Overpass API
-  const findNearbyPlaces = async (lat: number, lon: number, type: PlaceType) => {
+  const findNearbyPlaces = useCallback(async (lat: number, lon: number, type: PlaceType, signal?: AbortSignal) => {
+    const searchRun = ++searchRunRef.current;
     setLoading(true);
     try {
-      const radius = 5000; // 5km radius
-      const overpassQuery = buildOverpassQuery(lat, lon, radius, type);
-
-      const data = await fetchWithRetry(overpassQuery);
-      
       const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
+      const radii = [5000, 15000, 30000];
+      let data: any = null;
+      let usedRadius = radii[0];
+
+      for (const radius of radii) {
+        usedRadius = radius;
+        const overpassQuery = buildOverpassQuery(lat, lon, radius, type);
+        data = await fetchWithRetry(overpassQuery, signal);
+        if (signal?.aborted) return;
+        if (data.elements?.length > 0) break;
+      }
       
       if (!data.elements || data.elements.length === 0) {
+        if (searchRun !== searchRunRef.current) return;
         setPlaces([]);
-        toast.info(`No ${typeLabel} found within 5km. Try changing your location.`);
+        toast.info(`No ${typeLabel} found within 30km. Try changing your location.`);
         return;
       }
       
+      const seen = new Set<string>();
       const placesList: Place[] = data.elements
         .map((element: any) => {
           const elLat = element.lat || element.center?.lat;
@@ -208,44 +228,58 @@ export const Places = () => {
           if (!elLat || !elLon) return null;
           
           const distance = calculateDistance(lat, lon, elLat, elLon);
+          const dedupeKey = `${Math.round(elLat * 100000)}:${Math.round(elLon * 100000)}:${element.tags?.name || element.id}`;
+          if (seen.has(dedupeKey)) return null;
+          seen.add(dedupeKey);
           
           const defaultName = type === 'mosque' ? 'Mosque' : 'Halal Restaurant';
+          const address = [
+            element.tags?.['addr:housenumber'],
+            element.tags?.['addr:street'],
+            element.tags?.['addr:city'],
+          ].filter(Boolean).join(', ');
           
           return {
-            id: element.id.toString(),
+            id: `${element.type}-${element.id}`,
             name: element.tags?.name || element.tags?.['name:en'] || element.tags?.['name:ar'] || defaultName,
             lat: elLat,
             lon: elLon,
             distance,
-            address: element.tags?.['addr:full'] || element.tags?.['addr:street'] || element.tags?.['addr:city'] || 'Address not available',
+            address: element.tags?.['addr:full'] || address || 'Address not available',
             type,
           };
         })
         .filter((place: Place | null): place is Place => place !== null)
         .sort((a: Place, b: Place) => (a.distance || 0) - (b.distance || 0));
 
+      if (searchRun !== searchRunRef.current) return;
       setPlaces(placesList);
       
       if (placesList.length > 0) {
-        toast.success(`Found ${placesList.length} ${typeLabel} within 5km`);
+        toast.success(`Found ${placesList.length} ${typeLabel} within ${Math.round(usedRadius / 1000)}km`);
       } else {
-        toast.info(`No ${typeLabel} found within 5km.`);
+        toast.info(`No ${typeLabel} found within 30km.`);
       }
     } catch (error) {
+      if (signal?.aborted || searchRun !== searchRunRef.current) return;
       console.error('Error finding places:', error);
       const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
       toast.error(`Failed to find nearby ${typeLabel}. Please try again.`);
     } finally {
-      setLoading(false);
+      if (searchRun === searchRunRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   // Fetch places when location is available or place type changes
   useEffect(() => {
     if (userLocation && !locationLoading) {
-      findNearbyPlaces(userLocation.latitude, userLocation.longitude, placeType);
+      const controller = new AbortController();
+      findNearbyPlaces(userLocation.latitude, userLocation.longitude, placeType, controller.signal);
+      return () => controller.abort();
     }
-  }, [userLocation, locationLoading, placeType]);
+  }, [userLocation?.latitude, userLocation?.longitude, locationLoading, placeType, findNearbyPlaces]);
 
   // Filter places based on search query
   const filteredPlaces = places.filter(place =>

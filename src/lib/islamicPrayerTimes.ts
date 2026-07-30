@@ -25,12 +25,12 @@ interface AlAdhanPrayerTimeResponse {
 }
 
 const PRAYER_LABELS: Record<PrayerKey, string> = {
-  sunrise: 'Sunrise',
-  fajr: 'Fajr',
-  dhuhr: 'Dhuhr',
-  asr: 'Asr',
-  maghrib: 'Maghrib',
-  isha: 'Isha',
+  sunrise: 'SUNRISE',
+  fajr: 'FAJR',
+  dhuhr: 'DHUHR',
+  asr: 'ASR',
+  maghrib: 'MAGHRIB',
+  isha: 'ISHA',
 };
 
 const parsePrayerTime = (value?: string) => {

@@ -24,6 +24,7 @@ const ShopCategories = lazy(() => import("./pages/ShopCategories").then(m => ({ 
 const ProductDetail = lazy(() => import("./pages/ProductDetail").then(m => ({ default: m.ProductDetail })));
 const Places = lazy(() => import("./pages/Places").then(m => ({ default: m.Places })));
 const Account = lazy(() => import("./pages/Account").then(m => ({ default: m.Account })));
+const ChangePassword = lazy(() => import("./pages/ChangePassword").then(m => ({ default: m.ChangePassword })));
 const PrayerTimes = lazy(() => import("./pages/PrayerTimes").then(m => ({ default: m.PrayerTimes })));
 const Progress = lazy(() => import("./pages/Progress").then(m => ({ default: m.Progress })));
 const MonthlyStreak = lazy(() => import("./pages/MonthlyStreak").then(m => ({ default: m.MonthlyStreak })));
@@ -119,6 +120,7 @@ const App = () => (
                     <Route path="/forum" element={<ProtectedRoute><Forum /></ProtectedRoute>} />
                     <Route path="/places" element={<ProtectedRoute><Places /></ProtectedRoute>} />
                     <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+                    <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
                     <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboard /></ProtectedRoute>} />
                     <Route path="/seller-onboarding" element={<ProtectedRoute><SellerOnboarding /></ProtectedRoute>} />
                     <Route path="/seller/products" element={<ProtectedRoute><SellerProducts /></ProtectedRoute>} />

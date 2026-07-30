@@ -8,10 +8,18 @@ import {
   LogOut,
   ChevronRight,
   User,
-  Store
+  Store,
+  Edit3,
+  Save,
+  X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const CREAM = '#FFF1DD';
 const CARD = '#FFF8F3';
@@ -25,6 +33,45 @@ const DANGER = '#D63A1F';
 export const Account = () => {
   const { signOut, user, userRole } = useAuth();
   const navigate = useNavigate();
+  const fallbackName = useMemo(
+    () => user?.displayName || user?.email?.split('@')[0] || '',
+    [user?.displayName, user?.email],
+  );
+  const [fullName, setFullName] = useState(fallbackName);
+  const [profileName, setProfileName] = useState(fallbackName);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    let active = true;
+    const loadProfile = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.uid)
+        .maybeSingle();
+
+      if (!active) return;
+
+      if (error) {
+        setProfileName(fallbackName);
+        setFullName(fallbackName);
+        return;
+      }
+
+      const nextName = data?.full_name || fallbackName;
+      setProfileName(nextName);
+      setFullName(nextName);
+    };
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [fallbackName, user?.uid]);
 
   const getAccountOptions = () => {
     const baseOptions = [
@@ -46,6 +93,47 @@ export const Account = () => {
   };
 
   const accountOptions = getAccountOptions();
+
+  const handleSaveProfile = async () => {
+    if (!user?.uid) return;
+
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    setSavingProfile(true);
+
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { full_name: trimmedName },
+    });
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(
+        { user_id: user.uid, full_name: trimmedName },
+        { onConflict: 'user_id' },
+      );
+
+    setSavingProfile(false);
+
+    const error = authError || profileError;
+    if (error) {
+      toast.error(error.message || 'Could not update profile');
+      return;
+    }
+
+    setProfileName(trimmedName);
+    setFullName(trimmedName);
+    setIsEditingProfile(false);
+    toast.success('Profile updated');
+  };
+
+  const handleCancelEdit = () => {
+    setFullName(profileName);
+    setIsEditingProfile(false);
+  };
 
   const getRoleBadge = () => {
     if (!userRole) return null;
@@ -72,15 +160,71 @@ export const Account = () => {
 
         {/* User Info */}
         <Card className="p-4 rounded-2xl shadow-sm" style={{ backgroundColor: CARD, borderColor: BORDER }}>
-          <div className="flex items-center space-x-3 mb-3">
+          <div className="flex items-start space-x-3 mb-3">
             <div className="p-3 rounded-full" style={{ backgroundColor: SOFT_ACCENT }}>
               <User className="h-6 w-6" style={{ color: BROWN }} />
             </div>
-            <div>
-              <p className="font-semibold" style={{ color: BROWN_DARK }}>{user?.email}</p>
-              <p className="text-sm" style={{ color: MUTED }}>Manage your account</p>
+            <div className="flex-1 min-w-0">
+              {isEditingProfile ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold" style={{ color: BROWN_DARK }} htmlFor="profile-name">
+                    Full name
+                  </label>
+                  <Input
+                    id="profile-name"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    style={{ backgroundColor: '#FFFFFF', borderColor: BORDER }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <p className="font-semibold truncate" style={{ color: BROWN_DARK }}>
+                    {profileName || user?.email}
+                  </p>
+                  <p className="text-sm truncate" style={{ color: MUTED }}>
+                    {user?.email}
+                  </p>
+                </>
+              )}
             </div>
+            {!isEditingProfile && (
+              <button
+                type="button"
+                onClick={() => setIsEditingProfile(true)}
+                className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: SOFT_ACCENT, color: BROWN }}
+                aria-label="Edit profile"
+              >
+                <Edit3 className="h-4 w-4" />
+              </button>
+            )}
           </div>
+          {isEditingProfile && (
+            <div className="flex gap-2 mb-4">
+              <Button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+                className="flex-1 rounded-full gap-2"
+                style={{ backgroundColor: BROWN }}
+              >
+                <Save className="h-4 w-4" />
+                {savingProfile ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={savingProfile}
+                className="rounded-full gap-2"
+                style={{ borderColor: BORDER, color: BROWN_DARK }}
+              >
+                <X className="h-4 w-4" />
+                Cancel
+              </Button>
+            </div>
+          )}
           {getRoleBadge()}
         </Card>
 

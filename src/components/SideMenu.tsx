@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Check,
   LayoutDashboard,
+  User,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -20,7 +21,9 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import { useLanguage, type Language } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cancelPrayerNotifications } from '@/lib/prayerNotifications';
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -57,10 +60,64 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
     return localStorage.getItem('barakah_notifications_enabled') !== 'false';
   });
   const [langOpen, setLangOpen] = useState(false);
+  const [orderCount, setOrderCount] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('barakah_notifications_enabled', notifications ? 'true' : 'false');
+    window.dispatchEvent(
+      new CustomEvent('barakah-notification-setting-changed', {
+        detail: { enabled: notifications },
+      }),
+    );
+
+    if (!notifications) {
+      cancelPrayerNotifications().catch(() => undefined);
+    }
   }, [notifications]);
+
+  useEffect(() => {
+    if (!isOpen || !user?.uid) {
+      setOrderCount(0);
+      return;
+    }
+
+    const activeStatuses = new Set(['new', 'pending', 'paid', 'processing', 'shipped']);
+    const field = userRole === 'seller' ? 'seller_id' : 'user_id';
+
+    const fetchOrderCount = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, status')
+        .eq(field, user.uid);
+
+      if (error) {
+        setOrderCount(0);
+        return;
+      }
+
+      setOrderCount((data || []).filter((order) => activeStatuses.has(order.status)).length);
+    };
+
+    fetchOrderCount();
+
+    const channel = supabase
+      .channel(`side-menu-orders-${field}-${user.uid}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `${field}=eq.${user.uid}`,
+        },
+        fetchOrderCount,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, user?.uid, userRole]);
 
   const go = (path: string) => {
     navigate(path);
@@ -172,6 +229,14 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-2 pb-6">
+          <Section title="PROFILE">
+            <Row
+              icon={<User className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+              label="View/Edit Profile"
+              onClick={() => go('/account')}
+            />
+          </Section>
+
           {userRole === 'seller' && (
             <Section title="SELLER">
               <Row
@@ -188,12 +253,14 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
               label="Orders"
               onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/account')}
               trailing={
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-semibold text-white"
-                  style={{ background: BADGE_BROWN }}
-                >
-                  2
-                </span>
+                orderCount > 0 ? (
+                  <span
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-semibold text-white"
+                    style={{ background: BADGE_BROWN }}
+                  >
+                    {orderCount > 9 ? '9+' : orderCount}
+                  </span>
+                ) : null
               }
             />
           </Section>

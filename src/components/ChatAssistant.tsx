@@ -150,11 +150,30 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
     })();
   }, [activeThreadId]);
 
-  const startNewChat = useCallback(() => {
-    setActiveThreadId(null);
+  const startNewChat = useCallback(async () => {
+    if (!user?.uid) {
+      setActiveThreadId(null);
+      setMessages([]);
+      setShowThreads(false);
+      return;
+    }
+
+    const { data: created, error } = await supabase
+      .from('chat_threads')
+      .insert({ user_id: user.uid, title: 'New chat' })
+      .select('id, title, updated_at')
+      .single();
+
+    if (error || !created) {
+      toast.error('Could not start a new chat.');
+      return;
+    }
+
+    setThreads(prev => [created as Thread, ...prev]);
+    setActiveThreadId(created.id);
     setMessages([]);
     setShowThreads(false);
-  }, []);
+  }, [user?.uid]);
 
   const openThread = useCallback((id: string) => {
     setActiveThreadId(id);
@@ -183,6 +202,10 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
 
     // Ensure a thread exists
     let threadId = activeThreadId;
+    const shouldRenameThread =
+      Boolean(threadId) &&
+      messages.length === 0 &&
+      threads.find((thread) => thread.id === threadId)?.title === 'New chat';
     if (!threadId) {
       const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
       const { data: created, error } = await supabase
@@ -198,6 +221,18 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
       threadId = created.id;
       setActiveThreadId(threadId);
       setThreads(prev => [created as Thread, ...prev]);
+    }
+
+    if (threadId && shouldRenameThread) {
+      const nextTitle = text.length > 60 ? text.slice(0, 60) + '...' : text;
+      const updatedAt = new Date().toISOString();
+      await supabase
+        .from('chat_threads')
+        .update({ title: nextTitle, updated_at: updatedAt })
+        .eq('id', threadId);
+      setThreads(prev => prev.map((thread) => (
+        thread.id === threadId ? { ...thread, title: nextTitle, updated_at: updatedAt } : thread
+      )));
     }
 
     // Persist user message
@@ -253,7 +288,7 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
     } catch {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, user?.uid, activeThreadId]);
+  }, [input, isLoading, messages, user?.uid, activeThreadId, threads]);
 
   if (!open) return null;
 

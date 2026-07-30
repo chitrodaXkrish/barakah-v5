@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { toast } from 'sonner';
 
 interface LocationData {
@@ -7,6 +7,8 @@ interface LocationData {
   city: string;
   country: string;
   fullAddress: string;
+  accuracy?: number;
+  updatedAt?: number;
   isManual?: boolean;
 }
 
@@ -23,7 +25,13 @@ const LocationContext = createContext<LocationContextType | undefined>(undefined
 
 const LOCATION_CACHE_KEY = 'barakah_cached_location';
 const MANUAL_LOCATION_KEY = 'barakah_manual_location';
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes for fresher data
+const CACHE_DURATION = 10 * 60 * 1000;
+const LOCATION_CHANGE_THRESHOLD_KM = 0.15;
+const WATCH_POSITION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 20000,
+  maximumAge: 30000,
+};
 
 const normalizeLocation = (value: unknown): LocationData | null => {
   if (!value || typeof value !== 'object') return null;
@@ -44,24 +52,57 @@ const normalizeLocation = (value: unknown): LocationData | null => {
     city: raw.city || 'Unknown',
     country: raw.country || 'Unknown',
     fullAddress: raw.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+    accuracy: typeof raw.accuracy === 'number' ? raw.accuracy : undefined,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : undefined,
     isManual: raw.isManual,
   };
+};
+
+const parseStoredLocation = (key: string): LocationData | null => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? normalizeLocation(JSON.parse(stored)) : null;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+};
+
+const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 };
 
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const locationRef = useRef<LocationData | null>(null);
+
+  useEffect(() => {
+    locationRef.current = location;
+  }, [location]);
+
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  }, []);
 
   const getCachedLocation = (): LocationData | null => {
     try {
       // First check for manual location
-      const manual = localStorage.getItem(MANUAL_LOCATION_KEY);
-      if (manual) {
-        const parsed = normalizeLocation(JSON.parse(manual));
-        if (parsed) return parsed;
-        localStorage.removeItem(MANUAL_LOCATION_KEY);
-      }
+      const manual = parseStoredLocation(MANUAL_LOCATION_KEY);
+      if (manual) return manual;
       
       const cached = localStorage.getItem(LOCATION_CACHE_KEY);
       if (cached) {
@@ -92,6 +133,70 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       // Ignore cache errors
     }
   };
+
+  const buildLocationData = useCallback(async (
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    isManual = false
+  ): Promise<LocationData> => {
+    const geoData = await reverseGeocode(latitude, longitude);
+
+    return {
+      latitude,
+      longitude,
+      city: geoData.city || 'Unknown',
+      country: geoData.country || 'Unknown',
+      fullAddress: geoData.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      accuracy,
+      updatedAt: Date.now(),
+      isManual,
+    };
+  }, []);
+
+  const shouldUpdateLocation = (current: LocationData | null, next: LocationData) => {
+    if (!current || current.isManual) return true;
+
+    const movedKm = calculateDistanceKm(
+      current.latitude,
+      current.longitude,
+      next.latitude,
+      next.longitude
+    );
+    const currentAccuracy = current.accuracy ?? Number.POSITIVE_INFINITY;
+    const nextAccuracy = next.accuracy ?? Number.POSITIVE_INFINITY;
+
+    return movedKm >= LOCATION_CHANGE_THRESHOLD_KM || nextAccuracy + 25 < currentAccuracy;
+  };
+
+  const applyPosition = useCallback(async (position: GeolocationPosition, source: 'initial' | 'watch') => {
+    const { latitude, longitude, accuracy } = position.coords;
+    const locationData = await buildLocationData(latitude, longitude, accuracy, false);
+
+    if (source === 'initial' || shouldUpdateLocation(locationRef.current, locationData)) {
+      setLocation(locationData);
+      cacheLocation(locationData);
+    }
+
+    setError(null);
+    setLoading(false);
+  }, [buildLocationData]);
+
+  const startTracking = useCallback(() => {
+    if (!navigator.geolocation || watchIdRef.current !== null) return;
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        applyPosition(position, 'watch').catch(() => {
+          // Keep the last known location if a background refresh fails.
+        });
+      },
+      () => {
+        // watchPosition can fail intermittently; the visible error is handled by refresh.
+      },
+      WATCH_POSITION_OPTIONS
+    );
+  }, [applyPosition]);
 
   const reverseGeocode = async (latitude: number, longitude: number): Promise<Partial<LocationData>> => {
     try {
@@ -125,17 +230,9 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const setManualLocation = async (lat: number, lon: number) => {
+    stopTracking();
     setLoading(true);
-    const geoData = await reverseGeocode(lat, lon);
-    
-    const locationData: LocationData = {
-      latitude: lat,
-      longitude: lon,
-      city: geoData.city || 'Unknown',
-      country: geoData.country || 'Unknown',
-      fullAddress: geoData.fullAddress || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
-      isManual: true
-    };
+    const locationData = await buildLocationData(lat, lon, undefined, true);
 
     setLocation(locationData);
     cacheLocation(locationData);
@@ -145,6 +242,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
   const clearManualLocation = () => {
     localStorage.removeItem(MANUAL_LOCATION_KEY);
+    setLocation(null);
     fetchLocation();
   };
 
@@ -153,15 +251,12 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     // Check for manual location first
-    const manualLocation = localStorage.getItem(MANUAL_LOCATION_KEY);
+    const manualLocation = parseStoredLocation(MANUAL_LOCATION_KEY);
     if (manualLocation) {
-      const parsed = normalizeLocation(JSON.parse(manualLocation));
-      if (parsed) {
-        setLocation(parsed);
-        setLoading(false);
-        return;
-      }
-      localStorage.removeItem(MANUAL_LOCATION_KEY);
+      stopTracking();
+      setLocation(manualLocation);
+      setLoading(false);
+      return;
     }
 
     // Check cache
@@ -169,6 +264,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     if (cached && !cached.isManual) {
       setLocation(cached);
       setLoading(false);
+      startTracking();
       return;
     }
 
@@ -178,34 +274,14 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Use highest accuracy settings
-    const options: PositionOptions = {
-      enableHighAccuracy: true,
-      timeout: 20000,
-      maximumAge: 0 // Always get fresh location
-    };
-
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        
-        console.log(`Location accuracy: ${accuracy} meters`);
-
-        const geoData = await reverseGeocode(latitude, longitude);
-        
-        const locationData: LocationData = {
-          latitude,
-          longitude,
-          city: geoData.city || 'Unknown',
-          country: geoData.country || 'Unknown',
-          fullAddress: geoData.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          isManual: false
-        };
-
-        setLocation(locationData);
-        cacheLocation(locationData);
-        setError(null);
-        setLoading(false);
+      (position) => {
+        applyPosition(position, 'initial')
+          .then(startTracking)
+          .catch(() => {
+            setError('Location found, but details could not be loaded. Please try again.');
+            setLoading(false);
+          });
       },
       (err) => {
         let errorMessage = 'Unable to get your location';
@@ -229,15 +305,17 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         const cached = getCachedLocation();
         if (cached) {
           setLocation(cached);
+          startTracking();
         }
       },
-      options
+      WATCH_POSITION_OPTIONS
     );
-  }, []);
+  }, [applyPosition, startTracking, stopTracking]);
 
   useEffect(() => {
     fetchLocation();
-  }, [fetchLocation]);
+    return stopTracking;
+  }, [fetchLocation, stopTracking]);
 
   return (
     <LocationContext.Provider value={{
