@@ -498,14 +498,14 @@ const ChatView = ({
   const handleVoiceInput = useCallback(async () => {
     if (isListening) {
       recognitionRef.current?.stop?.();
-      if (Capacitor.getPlatform() === 'android') {
+      if (Capacitor.isNativePlatform()) {
         await NativeSpeechRecognition.stop().catch(() => undefined);
       }
       setIsListening(false);
       return;
     }
 
-    if (Capacitor.getPlatform() === 'android') {
+    if (Capacitor.isNativePlatform()) {
       setIsListening(true);
       try {
         await NativeSpeechRecognition.requestPermissions({ permissions: ['microphone'] });
