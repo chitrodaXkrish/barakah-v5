@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2, ExternalLink, Clock, Share2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { isIOSNative, openExternalUrl } from '@/lib/externalUrl';
 
 interface Article {
   id: string;
@@ -347,6 +348,12 @@ export const NewsDetail = () => {
                 href={article.article_url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(event) => {
+                  if (isIOSNative()) {
+                    event.preventDefault();
+                    void openExternalUrl(article.article_url);
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold pt-2"
                 style={{ color: BROWN }}
               >

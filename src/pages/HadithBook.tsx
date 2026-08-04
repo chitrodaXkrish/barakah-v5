@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Search, Loader2, ExternalLink } from 'lucide-react';
 import { HADITH_BOOKS } from './Hadith';
 import { supabase } from '@/integrations/supabase/client';
+import { isIOSNative, openExternalUrl } from '@/lib/externalUrl';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#2C1309';
@@ -240,6 +241,12 @@ export const HadithBook = () => {
                           href={sunnahUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(event) => {
+                            if (isIOSNative()) {
+                              event.preventDefault();
+                              void openExternalUrl(sunnahUrl);
+                            }
+                          }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px]"
                           style={{ background: HERO_GRAD, color: '#FFF5E5', fontWeight: 600 }}
                         >

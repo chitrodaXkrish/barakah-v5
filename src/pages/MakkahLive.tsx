@@ -1,10 +1,11 @@
 import { Layout } from '@/components/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExternalLink, Radio } from 'lucide-react';
+import { openExternalUrl } from '@/lib/externalUrl';
 
 export const MakkahLive = () => {
   const handleStreamClick = () => {
-    window.open('https://www.youtube.com/@AlQuran4KOfficial/streams', '_blank');
+    void openExternalUrl('https://www.youtube.com/@AlQuran4KOfficial/streams');
   };
 
   return (

@@ -12,6 +12,8 @@ import { Browser } from '@capacitor/browser';
 const NATIVE_REDIRECT_URL = 'com.barakah.services://auth/callback';
 
 const isNative = () => Capacitor.isNativePlatform();
+const isNativeAuthCallback = (url?: string | null) =>
+  Boolean(url?.startsWith('com.barakah.services://auth/'));
 
 // Parse tokens from a Supabase OAuth callback URL (hash or query).
 const parseAuthUrl = (url: string) => {
@@ -120,9 +122,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // establish the Supabase session from the returned tokens.
     let removeListener: (() => void) | undefined;
     if (isNative()) {
-      CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
+      const handleNativeAuthCallback = async (url?: string | null) => {
         try {
-          if (!url || !url.startsWith('com.barakah.services://')) return;
+          if (!isNativeAuthCallback(url)) return;
           const { access_token, refresh_token, error } = parseAuthUrl(url);
           if (error) {
             console.error('OAuth callback error:', error);
@@ -134,7 +136,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
           try { await Browser.close(); } catch {}
         }
-      }).then((handle) => { removeListener = () => handle.remove(); });
+      };
+
+      CapacitorApp.addListener('appUrlOpen', ({ url }) => handleNativeAuthCallback(url))
+        .then((handle) => { removeListener = () => handle.remove(); });
+      CapacitorApp.getLaunchUrl()
+        .then(({ url }) => handleNativeAuthCallback(url))
+        .catch(() => undefined);
     }
 
     return () => {

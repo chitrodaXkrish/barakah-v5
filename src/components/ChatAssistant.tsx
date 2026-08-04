@@ -508,7 +508,6 @@ const ChatView = ({
     if (Capacitor.isNativePlatform()) {
       setIsListening(true);
       try {
-        await NativeSpeechRecognition.requestPermissions({ permissions: ['microphone'] });
         const { text } = await NativeSpeechRecognition.start({ language: navigator.language || 'en-US' });
         appendTranscript(text);
       } catch (error) {

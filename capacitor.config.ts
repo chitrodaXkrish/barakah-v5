@@ -9,6 +9,9 @@ const config: CapacitorConfig = {
   // iOS: registered from this value.
   ios: {
     scheme: 'com.barakah.services',
+    // Preserve native safe-area insets for the WebView. The web UI consumes
+    // them with CSS env(safe-area-inset-*), where needed.
+    contentInset: 'automatic',
   },
 };
 

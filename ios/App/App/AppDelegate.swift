@@ -7,7 +7,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Capacitor owns WebView, deep-link and notification event delivery.
+        // Keeping this delegate minimal lets OAuth callbacks work on a cold
+        // launch as well as when the app is already in the foreground.
         return true
     }
 

@@ -11,8 +11,10 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
     private var activeCall: CAPPluginCall?
+    private var isAudioTapInstalled = false
     
     @objc func start(_ call: CAPPluginCall) {
+        cleanupRecognition()
         let language = call.getString("language") ?? "en-US"
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
         speechRecognizer?.delegate = self
@@ -53,11 +55,6 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
     }
     
     private func startRecording(_ call: CAPPluginCall) {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            recognitionRequest?.endAudio()
-        }
-        
         activeCall = call
         
         let audioSession = AVAudioSession.sharedInstance()
@@ -91,18 +88,13 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
             }
             
             if error != nil || isFinal {
-                self.audioEngine.stop()
-                inputNode.removeTap(onBus: 0)
-                
-                self.recognitionRequest = nil
-                self.recognitionTask = nil
-                
                 if let error = error {
                     // Ignore the user cancellation error
                     if (error as NSError).code != 207 {
                         self.rejectActiveCall("Could not transcribe audio: \(error.localizedDescription)")
                     }
                 }
+                self.cleanupRecognition()
             }
         })
         
@@ -110,6 +102,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer: AVAudioPCMBuffer, when: AVAudioTime) in
             self.recognitionRequest?.append(buffer)
         }
+        isAudioTapInstalled = true
         
         audioEngine.prepare()
         
@@ -121,11 +114,10 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
     }
     
     @objc func stop(_ call: CAPPluginCall) {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            recognitionRequest?.endAudio()
+        if activeCall != nil {
             rejectActiveCall("Voice input stopped.")
         }
+        cleanupRecognition()
         call.resolve()
     }
     
@@ -134,6 +126,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
             call.resolve(data)
             activeCall = nil
         }
+        cleanupRecognition()
     }
     
     private func rejectActiveCall(_ message: String) {
@@ -141,5 +134,21 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
             call.reject(message)
             activeCall = nil
         }
+        cleanupRecognition()
+    }
+
+    private func cleanupRecognition() {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if isAudioTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            isAudioTapInstalled = false
+        }
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

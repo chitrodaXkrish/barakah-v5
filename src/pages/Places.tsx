@@ -11,6 +11,7 @@ import L from 'leaflet';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import restaurantImg from '@/assets/place-restaurant.jpg';
 import mosqueImg from '@/assets/place-mosque.jpg';
+import { openExternalUrl } from '@/lib/externalUrl';
 
 // Theme tokens matching Guftagu redesign
 const CREAM_BG = '#FFF5E5';
@@ -552,7 +553,7 @@ export const Places = () => {
   // Open directions in Google Maps
   const openDirections = (place: Place) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lon}`;
-    window.open(url, '_blank');
+    void openExternalUrl(url);
   };
 
   // Refresh places search
