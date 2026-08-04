@@ -17,6 +17,61 @@ interface Article {
   category: string | null;
 }
 
+interface CachedNewsArticle {
+  guid?: string;
+  id?: string;
+  title: string;
+  description: string | null;
+  content?: string | null;
+  image_url: string | null;
+  article_url: string;
+  source_name: string;
+  published_at: string | null;
+  author?: string | null;
+  category: string | null;
+}
+
+const NEWS_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-news`;
+const NEWS_FUNCTION_HEADERS = {
+  'Content-Type': 'application/json',
+  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+};
+const FETCHED_ARTICLE_CACHE_KEY = 'barakah:fetched-news-articles:v1';
+
+function readCachedArticle(id: string): Article | null {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(FETCHED_ARTICLE_CACHE_KEY) || '{}') as Record<string, CachedNewsArticle>;
+    const article = cached[id];
+    if (!article) return null;
+    return {
+      id,
+      title: article.title,
+      description: article.description,
+      content: article.content ?? article.description,
+      image_url: article.image_url,
+      article_url: article.article_url,
+      source_name: article.source_name,
+      published_at: article.published_at,
+      author: article.author ?? null,
+      category: article.category,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchNewsFromEdge(): Promise<void> {
+  const response = await fetch(NEWS_FUNCTION_URL, {
+    method: 'POST',
+    headers: NEWS_FUNCTION_HEADERS,
+    body: '{}',
+  });
+  if (!response.ok) {
+    throw new Error(`Could not fetch news (${response.status})`);
+  }
+}
+
 /** Convert plain text to HTML paragraphs by splitting on sentence boundaries */
 function textToParagraphs(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -35,9 +90,9 @@ function textToParagraphs(text: string): string {
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
 
@@ -56,6 +111,8 @@ export const NewsDetail = () => {
 
   const loadArticle = useCallback(async () => {
     if (!id) return null;
+    const cachedArticle = readCachedArticle(id);
+    if (cachedArticle) return cachedArticle;
     const { data } = await supabase
       .from('news_articles')
       .select('id, title, description, content, image_url, article_url, source_name, published_at, author, category')
@@ -138,8 +195,7 @@ export const NewsDetail = () => {
     if (!article || refreshedArticleRef.current || bodyLength >= 700) return;
     refreshedArticleRef.current = true;
     setRefreshingArticle(true);
-    supabase.functions
-      .invoke('fetch-news')
+    fetchNewsFromEdge()
       .then(() => loadArticle())
       .then((freshArticle) => {
         if (freshArticle) setArticle(freshArticle);

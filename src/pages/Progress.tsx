@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, CheckCheck, Loader2, Sunrise, Sun, CloudSun, Sunset, Moon, X, Flame, Trophy, Calendar as CalendarIcon } from 'lucide-react';
+import { ArrowLeft, BookOpen, Check, CheckCheck, Loader2, Sunrise, Sun, CloudSun, Sunset, Moon, X, Flame, Trophy, Calendar as CalendarIcon } from 'lucide-react';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { useSalahTracker } from '@/hooks/useSalahTracker';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,7 +39,7 @@ function timeToMinutes(t: string) {
 export const Progress = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { loading, prayerStatus, streak, togglePrayer, progressPercentage, weeklyData } = useSalahTracker();
+  const { loading, prayerStatus, streak, togglePrayer, quranReadCompleted, toggleQuranRead, progressPercentage, weeklyData } = useSalahTracker();
   const [showMonth, setShowMonth] = useState(false);
 
   const completedMap = useMemo(() => {
@@ -63,13 +63,14 @@ export const Progress = () => {
       const isToday = i === todayIdx;
       const isFuture = i > todayIdx;
       const completed = entry?.completed ?? 0;
-      return { label, isToday, isFuture, completed, total: 5 };
+      const total = entry?.total ?? 6;
+      return { label, isToday, isFuture, completed, total };
     });
   }, [weeklyData]);
 
   const weekPercent = useMemo(() => {
     const done = weekCells.filter(c => !c.isFuture).reduce((s, c) => s + c.completed, 0);
-    const total = weekCells.filter(c => !c.isFuture).length * 5;
+    const total = weekCells.filter(c => !c.isFuture).reduce((s, c) => s + c.total, 0);
     return total ? Math.round((done / total) * 100) : 0;
   }, [weekCells]);
 
@@ -81,16 +82,14 @@ export const Progress = () => {
     return PRAYER_ORDER.find(k => !completedMap[k]) ?? null;
   }, [completedMap, nowMin]);
 
-  const hijri = useMemo(() => {
-    try {
-      const fmt = new Intl.DateTimeFormat('en-TN-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' });
-      return fmt.format(new Date()).replace(' AH', '') + ' AH';
-    } catch { return '14 Shawwal 1445 AH'; }
-  }, []);
-
   const handleToggle = (key: keyof typeof PRAYER_META) => {
     if (!user) { toast.error('Please log in to track prayers'); return; }
     togglePrayer(key as any);
+  };
+
+  const handleToggleQuranRead = () => {
+    if (!user) { toast.error('Please log in to track Quran reading'); return; }
+    toggleQuranRead();
   };
 
   if (loading) {
@@ -134,8 +133,8 @@ export const Progress = () => {
           </div>
           <div className="grid grid-cols-7 gap-1.5">
             {weekCells.map((c, i) => {
-              const full = c.completed === 5;
-              const partial = c.completed > 0 && c.completed < 5;
+              const full = c.completed === c.total;
+              const partial = c.completed > 0 && c.completed < c.total;
               const missed = !c.isFuture && !c.isToday && c.completed === 0;
               const isToday = c.isToday;
 
@@ -153,7 +152,7 @@ export const Progress = () => {
                     className="h-11 w-11 rounded-full flex items-center justify-center text-white text-[12px] font-bold"
                     style={{ background: BROWN_ACCENT }}
                   >
-                    {c.completed}/5
+                    {c.completed}/{c.total}
                   </div>
                 );
               } else if (full) {
@@ -180,7 +179,7 @@ export const Progress = () => {
                     className="h-11 w-11 rounded-full flex items-center justify-center text-[11px] font-semibold"
                     style={{ border: `1.5px solid ${PEACH}`, color: BROWN }}
                   >
-                    {c.completed}/5
+                    {c.completed}/{c.total}
                   </div>
                 );
               }
@@ -221,11 +220,10 @@ export const Progress = () => {
         </button>
 
         {/* Today header */}
-        <div className="flex items-end justify-between pt-2">
+        <div className="pt-2">
           <h2 className="text-[28px] font-bold leading-none" style={{ color: BROWN, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Today
           </h2>
-          <span className="text-[14px]" style={{ color: BROWN }}>{hijri}</span>
         </div>
 
         {/* Prayer rows */}
@@ -298,6 +296,46 @@ export const Progress = () => {
               </div>
             );
           })}
+          <div
+            className="rounded-2xl px-4 py-3.5 flex items-center gap-4"
+            style={quranReadCompleted ? { background: PEACH_SOFT } : { background: 'transparent' }}
+          >
+            <div
+              className="h-12 w-12 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: quranReadCompleted ? '#E9CFA8' : '#E7DFD3', color: BROWN }}
+            >
+              <BookOpen className="h-5 w-5" strokeWidth={2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-[18px] font-bold leading-tight"
+                style={{ color: BROWN }}
+              >
+                READ QURAN
+              </div>
+              <div className="text-[13px] mt-0.5" style={{ color: MUTED }}>
+                Daily reading · {quranReadCompleted ? 'Completed' : 'Not marked'}
+              </div>
+            </div>
+            {quranReadCompleted ? (
+              <button
+                onClick={handleToggleQuranRead}
+                className="h-10 w-10 rounded-full flex items-center justify-center"
+                style={{ background: OLIVE }}
+                aria-label="Unmark Quran reading"
+              >
+                <CheckCheck className="h-5 w-5 text-white" strokeWidth={2.5} />
+              </button>
+            ) : (
+              <button
+                onClick={handleToggleQuranRead}
+                className="rounded-full px-5 py-2.5 text-[14px] font-medium"
+                style={{ border: `1px solid ${MUTED}`, color: MUTED, background: 'transparent' }}
+              >
+                Mark Done
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Streak summary */}
@@ -358,7 +396,7 @@ const MonthGrid = ({ completedMap, weeklyData }: { completedMap: Record<string, 
     cells.push({ day: d, ds, isToday: d === now.getDate() });
   }
 
-  const completedSet = new Set(weeklyData.filter(w => w.completed === 5).map(w => w.date));
+  const completedSet = new Set(weeklyData.filter(w => w.completed === w.total).map(w => w.date));
 
   return (
     <div className="px-5 pb-6">

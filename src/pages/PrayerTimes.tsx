@@ -170,7 +170,7 @@ export const PrayerTimes = () => {
     [prayers],
   );
   const next = getNextPrayer(prayers, now);
-  const cityLabel = location?.city || (locationLoading ? 'Locating...' : 'Set location');
+  const cityLabel = location ? location.area || location.city : (locationLoading ? 'Locating...' : 'Set location');
   const notificationItems = useMemo(
     () =>
       notificationsEnabled && orderedDay.length > 0

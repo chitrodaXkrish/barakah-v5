@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   MessageCircle, Plus, Send, ArrowLeft, Loader2, Trash2, Heart, RefreshCw, 
-  Sparkles, Users, TrendingUp, AtSign, Search, X, Flag, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight
+  Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -232,6 +232,20 @@ const CommunityHeroCard = ({
   </div>
 );
 
+const renderCommunityIcon = (community: Community) => {
+  const Icon = community.id.includes('halal')
+    ? Check
+    : community.id.includes('heritage')
+      ? Globe
+      : community.id.includes('youth')
+        ? Users
+        : community.id.includes('journey')
+          ? Compass
+          : BookOpen;
+
+  return <Icon className="h-5 w-5" style={{ color: BROWN }} />;
+};
+
 const CommunityRow = ({
   community,
   joined,
@@ -258,9 +272,9 @@ const CommunityRow = ({
     ) : (
       <div
         className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-        style={{ background: '#F1E2C6', border: '1.5px dashed #C4A98A' }}
+        style={{ background: '#F1E2C6', border: '1.5px solid #E8D5C4' }}
       >
-        <BookOpen className="h-5 w-5" style={{ color: '#A88B66' }} />
+        {renderCommunityIcon(community)}
       </div>
     )}
     <div className="flex-1 min-w-0">
@@ -678,6 +692,7 @@ export const Forum = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
+  const [newPostImage, setNewPostImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -692,7 +707,7 @@ export const Forum = () => {
   const [mentionSearch, setMentionSearch] = useState('');
   const [mentionTarget, setMentionTarget] = useState<'post' | 'reply'>('post');
   const [profileName, setProfileName] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'explore' | 'communities'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'explore' | 'communities' | 'bookmarks'>('feed');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
@@ -726,6 +741,16 @@ export const Forum = () => {
   // Persist joined communities per user in localStorage
   const joinedStorageKey = `guftagu_joined_${user?.uid || 'guest'}`;
   const createdStorageKey = `guftagu_created_${user?.uid || 'guest'}`;
+  const bookmarksStorageKey = `guftagu_bookmarks_${user?.uid || 'guest'}`;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(bookmarksStorageKey);
+      setBookmarkedPosts(raw ? new Set(JSON.parse(raw)) : new Set());
+    } catch {
+      setBookmarkedPosts(new Set());
+    }
+  }, [bookmarksStorageKey]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(joinedStorageKey);
@@ -826,6 +851,7 @@ export const Forum = () => {
     const matchesSearch = !searchQuery || post.content.toLowerCase().includes(searchQuery.toLowerCase()) || post.user_name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+  const bookmarkedFilteredPosts = filteredPosts.filter((post) => bookmarkedPosts.has(post.id));
 
   // Fetch posts with their replies and likes
   const fetchPosts = useCallback(async (showLoader = true) => {
@@ -1037,6 +1063,24 @@ export const Forum = () => {
     setShowMentionSuggestions(false);
   };
 
+  const handlePostImageChange = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB');
+      return;
+    }
+    try {
+      const url = await readFileAsDataUrl(file);
+      setNewPostImage(url);
+    } catch {
+      toast.error('Could not attach image');
+    }
+  };
+
   const filteredSuggestions = allUserNames
     .filter(name => name.toLowerCase().includes(mentionSearch) && name !== currentUserName)
     .slice(0, 5);
@@ -1112,7 +1156,7 @@ export const Forum = () => {
   }, [selectedPost?.id]);
 
   const handleCreatePost = async () => {
-    if (!newPostContent.trim() || !user) return;
+    if ((!newPostContent.trim() && !newPostImage) || !user) return;
 
     setSubmitting(true);
     try {
@@ -1120,7 +1164,8 @@ export const Forum = () => {
         user_id: user.uid,
         user_name: currentUserName,
         content: newPostContent.trim(),
-      }).select('*').single();
+        image_url: newPostImage,
+      } as any).select('*').single();
 
       if (error) throw error;
 
@@ -1138,6 +1183,7 @@ export const Forum = () => {
       });
 
       setNewPostContent('');
+      setNewPostImage(null);
       setIsCreateDialogOpen(false);
       toast.success('Post shared!');
     } catch (error) {
@@ -1172,16 +1218,24 @@ export const Forum = () => {
 
     setLikingPosts(prev => new Set(prev).add(postId));
 
+    const optimisticLiked = !isCurrentlyLiked;
+    const optimisticDelta = isCurrentlyLiked ? -1 : 1;
+
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
         return {
           ...p,
-          isLiked: !isCurrentlyLiked,
-          likeCount: isCurrentlyLiked ? (p.likeCount || 1) - 1 : (p.likeCount || 0) + 1
+          isLiked: optimisticLiked,
+          likeCount: Math.max(0, (p.likeCount || 0) + optimisticDelta)
         };
       }
       return p;
     }));
+    setSelectedPost(prev => prev?.id === postId ? {
+      ...prev,
+      isLiked: optimisticLiked,
+      likeCount: Math.max(0, (prev.likeCount || 0) + optimisticDelta),
+    } : prev);
 
     try {
       if (isCurrentlyLiked) {
@@ -1204,11 +1258,16 @@ export const Forum = () => {
           return {
             ...p,
             isLiked: isCurrentlyLiked,
-            likeCount: isCurrentlyLiked ? (p.likeCount || 0) + 1 : (p.likeCount || 1) - 1
+            likeCount: Math.max(0, (p.likeCount || 0) - optimisticDelta)
           };
         }
         return p;
       }));
+      setSelectedPost(prev => prev?.id === postId ? {
+        ...prev,
+        isLiked: isCurrentlyLiked,
+        likeCount: Math.max(0, (prev.likeCount || 0) - optimisticDelta),
+      } : prev);
       toast.error('Failed to update like');
     } finally {
       setLikingPosts(prev => {
@@ -1277,6 +1336,9 @@ export const Forum = () => {
         next.add(postId);
         toast.success('Saved to bookmarks');
       }
+      try {
+        localStorage.setItem(bookmarksStorageKey, JSON.stringify(Array.from(next)));
+      } catch {}
       return next;
     });
   };
@@ -1427,8 +1489,13 @@ export const Forum = () => {
                 onClick={() => handleToggleBookmark(post.id)}
                 className="transition-colors"
                 style={{ color: isBookmarked ? BROWN : '#9C8569' }}
+                aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark post'}
               >
-                <Flag className={cn("h-4 w-4", isBookmarked && "fill-current")} />
+                {isBookmarked ? (
+                  <BookmarkCheck className="h-5 w-5" strokeWidth={2.4} />
+                ) : (
+                  <Bookmark className="h-5 w-5" strokeWidth={2.4} />
+                )}
               </button>
               <button
                 onClick={() => handleShare(post)}
@@ -1474,13 +1541,24 @@ export const Forum = () => {
                     <p className="text-xs mt-0.5" style={{ color: '#9C8569' }}>{formatTimeAgo(selectedPost.created_at)}</p>
                   </div>
                 </div>
+                {selectedPost.image_url && (
+                  <div className="w-full rounded-xl overflow-hidden mb-4" style={{ aspectRatio: '16 / 10' }}>
+                    <img src={selectedPost.image_url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ color: '#3D2A1E' }}>{renderContentWithMentions(selectedPost.content)}</p>
                 
                 <div className="flex items-center gap-5 mt-5 pt-4" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
-                  <div className="flex items-center gap-1.5" style={{ color: selectedPost.isLiked ? '#D9534F' : '#9C8569' }}>
+                  <button
+                    onClick={() => handleToggleLike(selectedPost.id, selectedPost.isLiked || false)}
+                    disabled={likingPosts.has(selectedPost.id)}
+                    className="flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                    style={{ color: selectedPost.isLiked ? '#D9534F' : '#9C8569' }}
+                    aria-label={selectedPost.isLiked ? 'Unlike post' : 'Like post'}
+                  >
                     <Heart className={cn("h-4 w-4", selectedPost.isLiked && "fill-current")} />
                     <span className="text-sm">{selectedPost.likeCount || 0}</span>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-1.5" style={{ color: '#9C8569' }}>
                     <MessageCircle className="h-4 w-4" />
                     <span className="text-sm">{selectedPost.replies?.length || 0}</span>
@@ -1929,11 +2007,12 @@ export const Forum = () => {
           )}
 
           {/* Tabs */}
-          <div className="flex items-center mb-4 gap-6">
+          <div className="flex items-center mb-4 gap-6 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
             {([
               { id: 'feed', label: 'My feed' },
               { id: 'explore', label: 'Explore' },
               { id: 'communities', label: 'My Communities' },
+              { id: 'bookmarks', label: 'Bookmarks' },
             ] as const).map((tab) => (
               <button
                 key={tab.id}
@@ -1960,7 +2039,21 @@ export const Forum = () => {
             ))}
           </div>
 
-          {activeTab === 'communities' ? (
+          {activeTab === 'bookmarks' ? (
+            bookmarkedFilteredPosts.length === 0 ? (
+              <div className="text-center py-16 rounded-2xl" style={{ background: '#FFFFFF' }}>
+                <Bookmark className="h-9 w-9 mx-auto mb-3" style={{ color: '#C4A98A' }} />
+                <p className="font-medium text-sm" style={{ color: BROWN_DARK }}>No bookmarked posts yet</p>
+                <p className="text-xs mt-1" style={{ color: '#9C8569' }}>Saved posts will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {bookmarkedFilteredPosts.map((post, index) => (
+                  <PostCard key={post.id} post={post} index={index} />
+                ))}
+              </div>
+            )
+          ) : activeTab === 'communities' ? (
             <MyCommunitiesView
               joined={joinedCommunities}
               communities={COMMUNITIES}
@@ -2088,7 +2181,16 @@ export const Forum = () => {
         </div>
 
         {/* Create Post Dialog - triggered from inline composer above */}
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog
+          open={isCreateDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (!open) {
+              setNewPostImage(null);
+              setShowMentionSuggestions(false);
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-md border-0"
             style={{ background: '#FFF8EA' }}
           >
@@ -2136,13 +2238,45 @@ export const Forum = () => {
                   )}
                 </div>
               </div>
+              {newPostImage && (
+                <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '16 / 10', background: '#EAD9BE' }}>
+                  <img src={newPostImage} alt="Attached post image" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setNewPostImage(null)}
+                    className="absolute right-2 top-2 h-8 w-8 rounded-full flex items-center justify-center"
+                    style={{ background: 'rgba(44,19,9,0.75)', color: '#FFFFFF' }}
+                    aria-label="Remove attached image"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center justify-between">
-                <span className="text-xs tabular-nums" style={{ color: '#9C8569' }}>
-                  {newPostContent.length}/500
-                </span>
+                <div className="flex items-center gap-3">
+                  <label
+                    className="h-9 w-9 rounded-full flex items-center justify-center cursor-pointer"
+                    style={{ background: '#EFE3CE', color: BROWN }}
+                    aria-label="Attach image"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        handlePostImageChange(e.target.files?.[0]);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                  <span className="text-xs tabular-nums" style={{ color: '#9C8569' }}>
+                    {newPostContent.length}/500
+                  </span>
+                </div>
                 <Button
                   onClick={handleCreatePost}
-                  disabled={!newPostContent.trim() || submitting}
+                  disabled={(!newPostContent.trim() && !newPostImage) || submitting}
                   className="rounded-full px-6 border-0 text-white"
                   style={{ background: BROWN }}
                 >

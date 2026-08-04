@@ -45,8 +45,6 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: any; role?: UserRole }>;
   signInWithApple: () => Promise<{ error: any; role?: UserRole }>;
   completeAccountSetup: (role: Exclude<UserRole, null>, fullName: string) => Promise<{ error: any; role?: UserRole }>;
-  verifySignupOtp: (email: string, token: string, password: string, role: Exclude<UserRole, null>, fullName: string) => Promise<{ error: any; role?: UserRole }>;
-  resendSignupOtp: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -155,46 +153,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const invokeAuthEmailOtp = async (payload: Record<string, unknown>) => {
-    const { data, error } = await supabase.functions.invoke('auth-email-otp', {
-      body: payload,
-    });
-
-    if (error) {
-      const response = (error as any).context;
-      if (response?.json) {
-        try {
-          const body = await response.json();
-          if (body?.error) return { data: null, error: { message: body.error } };
-        } catch {}
-      }
-      if (String(error.message || '').toLowerCase().includes('failed to send')) {
-        return {
-          data: null,
-          error: {
-            message: 'Verification service is not reachable. Please deploy the auth-email-otp Edge Function and try again.',
-          },
-        };
-      }
-      return { data: null, error };
-    }
-    if (data?.error) return { data: null, error: { message: data.error } };
-    return { data, error: null };
-  };
-
   const signUp = async (email: string, password: string, role: UserRole, fullName: string) => {
     try {
       if (!role) return { error: { message: 'Please select a profile type' }, role: undefined };
       if (!fullName.trim()) return { error: { message: 'Please enter your full name' }, role: undefined };
       if (password.length < 6) return { error: { message: 'Password must be at least 6 characters' }, role: undefined };
 
-      const { error } = await invokeAuthEmailOtp({
-        action: 'request',
+      const { data, error } = await supabase.auth.signUp({
         email,
+        password,
+        options: {
+          data: {
+            role,
+            full_name: fullName.trim(),
+          },
+        },
       });
 
+      if (error) return { error, role: undefined };
+
+      if (!data.session) {
+        return { error: null, role, needsEmailVerification: true };
+      }
+
       setUserRole(role);
-      return { error, role, needsEmailVerification: true };
+      return { error: null, role };
     } catch (error: any) {
       return { error: { message: error.message || 'Sign up failed' }, role: undefined };
     }
@@ -278,71 +261,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const completeAccountSetup = async (role: Exclude<UserRole, null>, fullName: string) => {
     try {
       if (!user) return { error: { message: 'You must be signed in to complete setup.' }, role: undefined };
+      if (!fullName.trim()) return { error: { message: 'Please enter your full name' }, role: undefined };
 
-      // Ensure role row exists
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({ user_id: user.id, role });
-
-      // If role already exists, ignore the unique error
-      if (roleError && roleError.code !== '23505') {
-        return { error: roleError, role: undefined };
-      }
-
-      // Upsert profile (profiles.user_id is unique)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            user_id: user.id,
-            full_name: fullName,
-          },
-          { onConflict: 'user_id' }
-        );
-
-      if (profileError) return { error: profileError, role: undefined };
-
-      setUserRole(role);
-      return { error: null, role };
-    } catch (error: any) {
-      return { error: { message: error.message || 'Account setup failed' }, role: undefined };
-    }
-  };
-
-  const verifySignupOtp = async (email: string, token: string, password: string, role: Exclude<UserRole, null>, fullName: string) => {
-    try {
-      const { error: otpError } = await invokeAuthEmailOtp({
-        action: 'complete',
-        email,
-        code: token,
-        password,
-        role,
-        fullName,
+      const { data, error } = await supabase.rpc('complete_account_setup', {
+        _role: role,
+        _full_name: fullName.trim(),
       });
-      if (otpError) return { error: otpError, role: undefined };
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) return { error: signInError, role: undefined };
-      const verifiedUser = data.user;
-      if (!verifiedUser) return { error: { message: 'Account created, but sign in failed' }, role: undefined };
+      if (error) return { error, role: undefined };
 
-      const resolvedRole = await getUserRoleFromDatabase(verifiedUser.id);
+      const resolvedRole = (data as UserRole) || role;
       setUserRole(resolvedRole);
       return { error: null, role: resolvedRole };
     } catch (error: any) {
-      return { error: { message: error.message || 'Verification failed' }, role: undefined };
-    }
-  };
-
-  const resendSignupOtp = async (email: string) => {
-    try {
-      const { error } = await invokeAuthEmailOtp({
-        action: 'request',
-        email,
-      });
-      return { error };
-    } catch (error: any) {
-      return { error: { message: error.message || 'Could not resend verification code' } };
+      return { error: { message: error.message || 'Account setup failed' }, role: undefined };
     }
   };
 
@@ -362,8 +294,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signInWithGoogle: handleGoogleSignIn,
       signInWithApple: handleAppleSignIn,
       completeAccountSetup,
-      verifySignupOtp,
-      resendSignupOtp,
       signOut: handleSignOut 
     }}>
       {children}

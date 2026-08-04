@@ -49,7 +49,12 @@ export const HADITH_BOOKS: { category: string; books: HadithBook[] }[] = [
   {
     category: 'Essential Short Collections',
     books: [
-      { name: "Al-Arba'in An-Nawawiyyah", slug: 'nawawi40', edition: 'eng-nawawi40' },
+      {
+        name: "Al-Arba'in An-Nawawiyyah",
+        slug: 'nawawi40',
+        altUrl:
+          'https://raw.githubusercontent.com/AhmedBaset/hadith-json/main/db/by_book/forties/nawawi40.json',
+      },
     ],
   },
   {

@@ -3,9 +3,11 @@ import { useState, useEffect, useCallback } from 'react';
 interface LocationData {
   latitude: number;
   longitude: number;
+  area?: string;
   city: string;
   country: string;
   fullAddress: string;
+  accuracy?: number;
 }
 
 interface UseLocationReturn {
@@ -16,7 +18,48 @@ interface UseLocationReturn {
 }
 
 const LOCATION_CACHE_KEY = 'barakah_cached_location';
+const LOCATION_CACHE_VERSION = 2;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+const normalizePlaceName = (value?: string | null) =>
+  value
+    ?.replace(/\s+(district|county|province|state|division|region)$/i, '')
+    .trim();
+
+const getAdministrativeName = (data: any, preferredDescriptions: string[]) => {
+  const administrative = Array.isArray(data?.localityInfo?.administrative)
+    ? data.localityInfo.administrative
+    : [];
+
+  return administrative.find((item: any) => {
+    const description = String(item.description || '').toLowerCase();
+    return preferredDescriptions.includes(description) && item.name;
+  })?.name;
+};
+
+const resolveReverseGeocodeLocation = (data: any): Pick<LocationData, 'area' | 'city' | 'country' | 'fullAddress'> => {
+  const area = normalizePlaceName(
+    data.locality ||
+    getAdministrativeName(data, ['neighbourhood', 'suburb', 'quarter'])
+  );
+  const city = normalizePlaceName(
+    data.city ||
+    getAdministrativeName(data, ['city', 'town', 'municipality']) ||
+    data.locality
+  ) || 'Unknown';
+  const country = data.countryName || 'Unknown';
+
+  return {
+    area,
+    city,
+    country,
+    fullAddress: [
+      area && area !== city ? area : null,
+      city,
+      country,
+    ].filter(Boolean).join(', '),
+  };
+};
 
 export const useLocation = (): UseLocationReturn => {
   const [location, setLocation] = useState<LocationData | null>(null);
@@ -27,7 +70,11 @@ export const useLocation = (): UseLocationReturn => {
     try {
       const cached = localStorage.getItem(LOCATION_CACHE_KEY);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
+        const { data, timestamp, version } = JSON.parse(cached);
+        if (version !== LOCATION_CACHE_VERSION) {
+          localStorage.removeItem(LOCATION_CACHE_KEY);
+          return null;
+        }
         if (Date.now() - timestamp < CACHE_DURATION) {
           return data;
         }
@@ -42,7 +89,8 @@ export const useLocation = (): UseLocationReturn => {
     try {
       localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({
         data,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        version: LOCATION_CACHE_VERSION,
       }));
     } catch {
       // Ignore cache errors
@@ -70,13 +118,13 @@ export const useLocation = (): UseLocationReturn => {
     // Use high accuracy for better location
     const options: PositionOptions = {
       enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 60000 // Accept cached position up to 1 minute old
+      timeout: 30000,
+      maximumAge: 0
     };
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
 
         try {
           // Use BigDataCloud for reverse geocoding (free, no API key needed)
@@ -89,18 +137,13 @@ export const useLocation = (): UseLocationReturn => {
           }
 
           const data = await response.json();
+          const geoData = resolveReverseGeocodeLocation(data);
           
           const locationData: LocationData = {
             latitude,
             longitude,
-            city: data.city || data.locality || data.principalSubdivision || 'Unknown',
-            country: data.countryName || 'Unknown',
-            fullAddress: [
-              data.locality,
-              data.city,
-              data.principalSubdivision,
-              data.countryName
-            ].filter(Boolean).join(', ')
+            ...geoData,
+            accuracy,
           };
 
           setLocation(locationData);

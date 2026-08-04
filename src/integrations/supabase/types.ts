@@ -186,6 +186,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          image_url: string | null
           user_id: string
           user_name: string
         }
@@ -194,6 +195,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          image_url?: string | null
           user_id: string
           user_name: string
         }
@@ -202,6 +204,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          image_url?: string | null
           user_id?: string
           user_name?: string
         }
@@ -640,6 +643,7 @@ export type Database = {
           id: string
           isha: boolean
           maghrib: boolean
+          quran_read: boolean
           user_id: string
         }
         Insert: {
@@ -651,6 +655,7 @@ export type Database = {
           id?: string
           isha?: boolean
           maghrib?: boolean
+          quran_read?: boolean
           user_id: string
         }
         Update: {
@@ -662,6 +667,7 @@ export type Database = {
           id?: string
           isha?: boolean
           maghrib?: boolean
+          quran_read?: boolean
           user_id?: string
         }
         Relationships: []
@@ -794,6 +800,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_account_setup: {
+        Args: {
+          _full_name: string
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]

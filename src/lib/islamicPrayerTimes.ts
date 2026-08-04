@@ -33,6 +33,47 @@ const PRAYER_LABELS: Record<PrayerKey, string> = {
   isha: 'ISHA',
 };
 
+const PRAYER_CACHE_VERSION = 1;
+const PRAYER_CACHE_DURATION_MS = 24 * 60 * 60 * 1000;
+
+const prayerCacheKey = (latitude: number, longitude: number, dateParam: string) =>
+  `barakah_prayer_times_v${PRAYER_CACHE_VERSION}_${latitude.toFixed(3)}_${longitude.toFixed(3)}_${dateParam}`;
+
+const readPrayerCache = (latitude: number, longitude: number, dateParam: string) => {
+  try {
+    const raw = localStorage.getItem(prayerCacheKey(latitude, longitude, dateParam));
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as { version: number; savedAt: number; prayers: AppPrayerTime[] };
+    if (
+      entry.version !== PRAYER_CACHE_VERSION ||
+      !Array.isArray(entry.prayers) ||
+      Date.now() - entry.savedAt > PRAYER_CACHE_DURATION_MS
+    ) {
+      localStorage.removeItem(prayerCacheKey(latitude, longitude, dateParam));
+      return null;
+    }
+    return entry.prayers;
+  } catch {
+    return null;
+  }
+};
+
+const writePrayerCache = (
+  latitude: number,
+  longitude: number,
+  dateParam: string,
+  prayers: AppPrayerTime[],
+) => {
+  try {
+    localStorage.setItem(
+      prayerCacheKey(latitude, longitude, dateParam),
+      JSON.stringify({ version: PRAYER_CACHE_VERSION, savedAt: Date.now(), prayers }),
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
 const parsePrayerTime = (value?: string) => {
   if (!value) return null;
 
@@ -62,15 +103,29 @@ export const fetchIslamicPrayerTimes = async (
     date.getDate().toString().padStart(2, '0'),
   ].join('-');
 
+  const cached = readPrayerCache(latitude, longitude, dateParam);
+  if (cached) return cached;
+
   if (apiKey) {
     try {
-      return await fetchIslamicApiPrayerTimes(latitude, longitude, dateParam, apiKey);
+      const prayers = await fetchIslamicApiPrayerTimes(latitude, longitude, dateParam, apiKey);
+      writePrayerCache(latitude, longitude, dateParam, prayers);
+      return prayers;
     } catch (error) {
       console.warn('Islamic API prayer times failed, using fallback:', error);
     }
   }
 
-  return fetchAlAdhanPrayerTimes(latitude, longitude, date);
+  try {
+    const prayers = await fetchAlAdhanPrayerTimes(latitude, longitude, date);
+    writePrayerCache(latitude, longitude, dateParam, prayers);
+    return prayers;
+  } catch (error) {
+    console.warn('AlAdhan prayer times failed, using local calculation:', error);
+    const prayers = calculateLocalPrayerTimes(latitude, longitude, date);
+    writePrayerCache(latitude, longitude, dateParam, prayers);
+    return prayers;
+  }
 };
 
 const mapTimings = (timings: Record<string, string>) => {
@@ -98,6 +153,87 @@ const mapTimings = (timings: Record<string, string>) => {
       m: parsed.m,
     };
   });
+};
+
+const degreesToRadians = (degrees: number) => (degrees * Math.PI) / 180;
+const radiansToDegrees = (radians: number) => (radians * 180) / Math.PI;
+const fixHour = (hour: number) => ((hour % 24) + 24) % 24;
+const dayOfYear = (date: Date) =>
+  Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+
+const sunPosition = (date: Date) => {
+  const n = dayOfYear(date);
+  const gamma = (2 * Math.PI / 365) * (n - 1 + ((12 - 12) / 24));
+  const equationOfTime =
+    229.18 *
+    (
+      0.000075 +
+      0.001868 * Math.cos(gamma) -
+      0.032077 * Math.sin(gamma) -
+      0.014615 * Math.cos(2 * gamma) -
+      0.040849 * Math.sin(2 * gamma)
+    );
+  const declination =
+    0.006918 -
+    0.399912 * Math.cos(gamma) +
+    0.070257 * Math.sin(gamma) -
+    0.006758 * Math.cos(2 * gamma) +
+    0.000907 * Math.sin(2 * gamma) -
+    0.002697 * Math.cos(3 * gamma) +
+    0.00148 * Math.sin(3 * gamma);
+
+  return {
+    equationOfTime,
+    declination: radiansToDegrees(declination),
+  };
+};
+
+const hourAngle = (latitude: number, declination: number, angle: number) => {
+  const latRad = degreesToRadians(latitude);
+  const decRad = degreesToRadians(declination);
+  const angleRad = degreesToRadians(angle);
+  const value =
+    (Math.cos(angleRad) - Math.sin(latRad) * Math.sin(decRad)) /
+    (Math.cos(latRad) * Math.cos(decRad));
+
+  return radiansToDegrees(Math.acos(Math.min(1, Math.max(-1, value)))) / 15;
+};
+
+const asrHourAngle = (latitude: number, declination: number, shadowFactor = 2) => {
+  const angle = radiansToDegrees(
+    Math.atan(1 / (shadowFactor + Math.tan(Math.abs(degreesToRadians(latitude - declination))))),
+  );
+  return hourAngle(latitude, declination, 90 - angle);
+};
+
+const toPrayer = (key: PrayerKey, hour: number): AppPrayerTime => {
+  const normalized = fixHour(hour);
+  const h = Math.floor(normalized);
+  const m = Math.round((normalized - h) * 60);
+  return {
+    key,
+    label: PRAYER_LABELS[key],
+    h: m === 60 ? (h + 1) % 24 : h,
+    m: m === 60 ? 0 : m,
+  };
+};
+
+const calculateLocalPrayerTimes = (latitude: number, longitude: number, date: Date) => {
+  const { equationOfTime, declination } = sunPosition(date);
+  const timezone = -date.getTimezoneOffset() / 60;
+  const dhuhr = fixHour(12 + timezone - longitude / 15 - equationOfTime / 60);
+  const sunriseAngle = hourAngle(latitude, declination, 90.833);
+  const fajrAngle = hourAngle(latitude, declination, 108);
+  const ishaAngle = hourAngle(latitude, declination, 107);
+
+  return [
+    toPrayer('fajr', dhuhr - fajrAngle),
+    toPrayer('sunrise', dhuhr - sunriseAngle),
+    toPrayer('dhuhr', dhuhr),
+    toPrayer('asr', dhuhr + asrHourAngle(latitude, declination, 2)),
+    toPrayer('maghrib', dhuhr + sunriseAngle),
+    toPrayer('isha', dhuhr + ishaAngle),
+  ];
 };
 
 const fetchIslamicApiPrayerTimes = async (

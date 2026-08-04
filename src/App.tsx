@@ -83,7 +83,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const OrdersRedirect = () => {
   const { userRole } = useAuth();
-  return <Navigate to={userRole === 'seller' ? '/seller/orders' : '/account'} replace />;
+  return <Navigate to={userRole === 'seller' ? '/seller/orders' : '/cart'} replace />;
 };
 
 const RouteFallback = () => (

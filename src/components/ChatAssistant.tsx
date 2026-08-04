@@ -115,12 +115,6 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
 
   const userName = user?.displayName?.split(' ')[0] || '';
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
   // Load thread list when the assistant opens
   useEffect(() => {
     if (!open || !user?.uid) return;

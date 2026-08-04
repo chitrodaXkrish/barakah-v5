@@ -1,0 +1,2 @@
+ALTER TABLE public.salah_log
+ADD COLUMN IF NOT EXISTS quran_read BOOLEAN NOT NULL DEFAULT false;

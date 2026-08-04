@@ -128,7 +128,11 @@ export const Home = () => {
   const next = getNextPrayer(apiPrayers, now);
   const prayerTime = next ? formatPrayerTime12(next) : '';
 
-  const cityLabel = location?.city || (locationLoading ? 'Locating...' : 'Set location');
+  const cityLabel = location
+    ? `${location.area || location.city || 'Your area'}${location.country ? ', ' + location.country : ''}`
+    : locationLoading
+      ? 'Locating...'
+      : 'Set location';
   const prayerStatusLabel = next
     ? next.label
     : prayerTimesLoading
@@ -232,7 +236,7 @@ export const Home = () => {
             className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-white/70 text-[#F9FAFB] transition-transform active:scale-95"
           >
             <MapPin className="h-3.5 w-3.5" strokeWidth={2} />
-            <span className="text-[12px] font-medium">{cityLabel}</span>
+            <span className="max-w-[140px] truncate text-[12px] font-medium">{cityLabel}</span>
             <ChevronDown className="h-3 w-3" strokeWidth={2} />
           </button>
         </div>

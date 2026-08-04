@@ -22,6 +22,30 @@ interface NewsItem {
   time: string;
 }
 
+interface FetchedNewsArticle {
+  guid?: string;
+  id?: string;
+  title: string;
+  description: string | null;
+  content?: string | null;
+  image_url: string | null;
+  article_url: string;
+  source_name: string;
+  published_at: string | null;
+  author?: string | null;
+  category: NewsCategory;
+}
+
+interface FetchNewsResponse {
+  success?: boolean;
+  totalProcessed?: number;
+  categories?: Partial<Record<Exclude<NewsCategory, 'all'>, number>>;
+  results?: Record<string, number | string>;
+  articles?: FetchedNewsArticle[];
+  error?: string;
+  message?: string;
+}
+
 const categories: { key: NewsCategory; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'world', label: 'Ummah' },
@@ -31,6 +55,73 @@ const categories: { key: NewsCategory; label: string }[] = [
   { key: 'business', label: 'Business' },
   { key: 'politics', label: 'Politics' },
 ];
+
+const NEWS_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-news`;
+const NEWS_FUNCTION_HEADERS = {
+  'Content-Type': 'application/json',
+  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+};
+const FETCHED_ARTICLE_CACHE_KEY = 'barakah:fetched-news-articles:v1';
+
+function hashString(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = Math.imul(31, hash) + value.charCodeAt(i) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function newsItemId(article: FetchedNewsArticle): string {
+  return article.id || `feed-${hashString(article.guid || article.article_url || article.title)}`;
+}
+
+function cacheFetchedArticles(articles: FetchedNewsArticle[]) {
+  if (!articles.length) return;
+  try {
+    const existing = JSON.parse(sessionStorage.getItem(FETCHED_ARTICLE_CACHE_KEY) || '{}') as Record<string, FetchedNewsArticle>;
+    const next = { ...existing };
+    articles.forEach((article) => {
+      next[newsItemId(article)] = article;
+    });
+    sessionStorage.setItem(FETCHED_ARTICLE_CACHE_KEY, JSON.stringify(next));
+  } catch {
+    // Session storage is best-effort only; the list should still render.
+  }
+}
+
+function formatSourceResults(results: FetchNewsResponse['results']): string {
+  if (!results) return '';
+  const entries = Object.entries(results);
+  const rateLimited = entries.filter(([, result]) => String(result).includes('HTTP 429'));
+  if (rateLimited.length > 0 && rateLimited.length === entries.length) {
+    return 'News sources are temporarily rate-limited. Please try again shortly.';
+  }
+  return entries
+    .filter(([, result]) => !String(result).includes('HTTP 429'))
+    .slice(0, 4)
+    .map(([source, result]) => `${source}: ${result}`)
+    .join(', ');
+}
+
+async function fetchNewsFromEdge(category?: Exclude<NewsCategory, 'all'>): Promise<FetchNewsResponse> {
+  const response = await fetch(NEWS_FUNCTION_URL, {
+    method: 'POST',
+    headers: NEWS_FUNCTION_HEADERS,
+    body: JSON.stringify(category ? { category } : {}),
+  });
+  const raw = await response.text();
+  let data: FetchNewsResponse | null = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error(raw || `Could not fetch news (${response.status})`);
+  }
+  if (!response.ok || data?.success === false) {
+    throw new Error(data?.error || data?.message || `Could not fetch news (${response.status})`);
+  }
+  return data ?? {};
+}
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '';
@@ -45,6 +136,17 @@ function timeAgo(iso: string | null): string {
   return new Date(iso).toLocaleDateString();
 }
 
+const toNewsItem = (article: FetchedNewsArticle): NewsItem => ({
+  id: newsItemId(article),
+  title: article.title,
+  description: article.description,
+  image_url: article.image_url,
+  article_url: article.article_url,
+  source: article.source_name,
+  category: (article.category as NewsCategory) ?? 'world',
+  time: timeAgo(article.published_at),
+});
+
 export const News = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<NewsCategory>('all');
@@ -54,30 +156,32 @@ export const News = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<NewsItem[]> => {
     setLoading(true);
     let q = supabase
       .from('news_articles')
       .select('id, title, description, image_url, article_url, source_name, published_at, category')
       .order('published_at', { ascending: false, nullsFirst: false })
-      .limit(50);
+      .limit(120);
     if (selectedCategory !== 'all') q = q.eq('category', selectedCategory);
     const { data, error } = await q;
     if (!error && data) {
-      setItems(
-        data.map((d) => ({
-          id: d.id,
-          title: d.title,
-          description: d.description,
-          image_url: d.image_url,
-          article_url: d.article_url,
-          source: d.source_name,
-          category: (d.category as NewsCategory) ?? 'world',
-          time: timeAgo(d.published_at),
-        })),
-      );
+      const nextItems = data.map((d) => toNewsItem({
+        id: d.id,
+        title: d.title,
+        description: d.description,
+        image_url: d.image_url,
+        article_url: d.article_url,
+        source_name: d.source_name,
+        published_at: d.published_at,
+        category: (d.category as NewsCategory) ?? 'world',
+      }));
+      setItems(nextItems);
+      setLoading(false);
+      return nextItems;
     }
     setLoading(false);
+    return [];
   }, [selectedCategory]);
 
   useEffect(() => {
@@ -87,10 +191,42 @@ export const News = () => {
   const refresh = async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-news');
-      if (error) throw error;
-      toast({ title: 'Feed refreshed', description: `Fetched ${data?.totalProcessed ?? 0} items` });
-      await load();
+      const categoryToFetch = selectedCategory === 'all' ? undefined : selectedCategory;
+      const data = await fetchNewsFromEdge(categoryToFetch);
+      const sectionCounts = data?.categories
+        ? categories
+            .filter((category) => category.key !== 'all')
+            .map((category) => `${category.label}: ${Number(data.categories[category.key] ?? 0)}`)
+        : [];
+      const categoryTotal = data?.categories
+        ? Object.values(data.categories).filter((value) => Number(value) > 0).length
+        : 0;
+      toast({
+        title: 'Feed refreshed',
+        description: sectionCounts.length
+          ? `Fetched ${data?.totalProcessed ?? 0} articles across ${categoryTotal} sections. ${sectionCounts.join(', ')}`
+          : `Fetched ${data?.totalProcessed ?? 0} articles`,
+      });
+      const fetchedItems = Array.isArray(data?.articles)
+        ? data.articles
+            .map((article: FetchedNewsArticle) => toNewsItem(article))
+            .filter((article: NewsItem) => selectedCategory === 'all' || article.category === selectedCategory)
+        : [];
+      if (Array.isArray(data?.articles)) {
+        cacheFetchedArticles(data.articles);
+      }
+      if (fetchedItems.length > 0) {
+        setItems(fetchedItems);
+        setLoading(false);
+      }
+      const loadedItems = await load();
+      if (loadedItems.length === 0 && fetchedItems.length > 0) {
+        setItems(fetchedItems);
+      }
+      if (loadedItems.length === 0 && fetchedItems.length === 0) {
+        const details = formatSourceResults(data.results);
+        throw new Error(details || 'The feed sources returned 0 articles.');
+      }
     } catch (e) {
       toast({ title: 'Refresh failed', description: (e as Error).message, variant: 'destructive' });
     } finally {
@@ -241,7 +377,7 @@ export const News = () => {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => navigate(`/news/${item.id}`)}
+                        onClick={() => navigate(`/news/${encodeURIComponent(item.id)}`)}
                         className="snap-start shrink-0 w-[78%] text-left rounded-3xl overflow-hidden bg-white shadow-sm"
                         style={{ border: `1px solid ${BROWN_SOFT}` }}
                       >
@@ -297,7 +433,7 @@ export const News = () => {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => navigate(`/news/${item.id}`)}
+                        onClick={() => navigate(`/news/${encodeURIComponent(item.id)}`)}
                         className={cn(
                           'w-full text-left rounded-2xl bg-white p-3 flex items-center gap-3 shadow-sm',
                         )}

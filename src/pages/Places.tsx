@@ -30,6 +30,14 @@ L.Icon.Default.mergeOptions({
 });
 
 type PlaceType = 'mosque' | 'restaurant';
+const PLACES_CACHE_VERSION = 7;
+const PLACES_CACHE_DURATION_MS = 6 * 60 * 60 * 1000;
+const OVERPASS_TIMEOUT_MS = 6500;
+const NOMINATIM_TIMEOUT_MS = 6000;
+const SEARCH_RADII: Record<PlaceType, number[]> = {
+  mosque: [8000, 15000, 30000],
+  restaurant: [5000, 10000, 20000],
+};
 
 interface Place {
   id: string;
@@ -40,6 +48,12 @@ interface Place {
   address?: string;
   type: PlaceType;
 }
+
+type PlacesCacheEntry = {
+  version: number;
+  savedAt: number;
+  places: Place[];
+};
 
 export const Places = () => {
   const { location: userLocation, loading: locationLoading, error: locationError, refresh: refreshLocation, setManualLocation, clearManualLocation } = useGlobalLocation();
@@ -56,6 +70,46 @@ export const Places = () => {
   const [restaurantFilter, setRestaurantFilter] = useState<'Nearest' | 'Open Now' | 'Top Rated' | 'Turkish'>('Nearest');
   const searchRunRef = useRef(0);
 
+  const placesCacheKey = (lat: number, lon: number, type: PlaceType) => {
+    const roundedLat = lat.toFixed(3);
+    const roundedLon = lon.toFixed(3);
+    return `barakah_places_v${PLACES_CACHE_VERSION}_${type}_${roundedLat}_${roundedLon}`;
+  };
+
+  const readPlacesCache = (lat: number, lon: number, type: PlaceType, options?: { allowExpired?: boolean }) => {
+    try {
+      const raw = localStorage.getItem(placesCacheKey(lat, lon, type));
+      if (!raw) return null;
+      const entry = JSON.parse(raw) as PlacesCacheEntry;
+      if (
+        entry.version !== PLACES_CACHE_VERSION ||
+        !Array.isArray(entry.places)
+      ) {
+        localStorage.removeItem(placesCacheKey(lat, lon, type));
+        return null;
+      }
+      if (!options?.allowExpired && Date.now() - entry.savedAt > PLACES_CACHE_DURATION_MS) {
+        return null;
+      }
+      return entry.places;
+    } catch {
+      return null;
+    }
+  };
+
+  const writePlacesCache = (lat: number, lon: number, type: PlaceType, nextPlaces: Place[]) => {
+    try {
+      const entry: PlacesCacheEntry = {
+        version: PLACES_CACHE_VERSION,
+        savedAt: Date.now(),
+        places: nextPlaces,
+      };
+      localStorage.setItem(placesCacheKey(lat, lon, type), JSON.stringify(entry));
+    } catch {
+      // Ignore storage quota or private browsing failures.
+    }
+  };
+
   // Calculate distance between two points
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // Radius of the Earth in kilometers
@@ -69,6 +123,64 @@ export const Places = () => {
     return R * c;
   };
 
+  const currentLocationLabel = () => {
+    const parts = [
+      userLocation?.area,
+      userLocation?.city,
+      userLocation?.country,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  const fallbackAddress = (lat: number, lon: number) => {
+    const locationLabel = currentLocationLabel();
+    return locationLabel || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  };
+
+  const compactAddressParts = (parts: Array<string | number | undefined | null>) => {
+    const seen = new Set<string>();
+    return parts
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .filter((part) => {
+        const key = part.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 4)
+      .join(', ');
+  };
+
+  const nominatimAddressLine = (item: any, lat: number, lon: number) => {
+    const address = item.address || {};
+    const compact = compactAddressParts([
+      address.house_number && address.road ? `${address.house_number} ${address.road}` : address.road,
+      address.suburb || address.neighbourhood || address.quarter || address.city_district || address.borough,
+      address.city || address.town || address.village || address.municipality || address.county,
+      address.state,
+      address.country,
+    ]);
+    return compact || item.display_name || fallbackAddress(lat, lon);
+  };
+
+  const overpassAddressLine = (tags: Record<string, string | undefined> = {}, lat: number, lon: number) => {
+    const streetLine = compactAddressParts([
+      tags['addr:housenumber'],
+      tags['addr:street'],
+    ]);
+    const compact = compactAddressParts([
+      tags['addr:full'],
+      streetLine,
+      tags['addr:place'],
+      tags['addr:neighbourhood'] || tags['addr:suburb'] || tags['addr:quarter'] || tags['addr:city_district'],
+      tags['addr:city'] || tags['addr:town'] || tags['addr:village'] || tags['addr:municipality'] || tags['addr:county'],
+      tags['addr:state'],
+      tags['addr:postcode'],
+    ]);
+    return compact || fallbackAddress(lat, lon);
+  };
+
   // Search for city coordinates
   const searchCity = async () => {
     if (!citySearch.trim()) return;
@@ -76,13 +188,21 @@ export const Places = () => {
     setSearchingCity(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(citySearch)}&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(citySearch)}&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
       );
       const data = await response.json();
       
       if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        await setManualLocation(parseFloat(lat), parseFloat(lon));
+        const { lat, lon, address, display_name } = data[0];
+        const area = address?.suburb || address?.neighbourhood || address?.quarter || address?.borough || address?.city_district;
+        const city = address?.city || address?.town || address?.village || address?.municipality || address?.county || address?.state;
+        await setManualLocation(parseFloat(lat), parseFloat(lon), {
+          area,
+          city,
+          country: address?.country,
+          fullAddress: display_name,
+        });
         setLocationDialogOpen(false);
         setCitySearch('');
       } else {
@@ -128,7 +248,7 @@ export const Places = () => {
   const buildOverpassQuery = (lat: number, lon: number, radius: number, type: PlaceType) => {
     if (type === 'mosque') {
       return `
-        [out:json][timeout:25];
+        [out:json][timeout:8];
         (
           node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lon});
           node["amenity"="place_of_worship"]["denomination"="sunni"](around:${radius},${lat},${lon});
@@ -138,69 +258,186 @@ export const Places = () => {
           way["amenity"="place_of_worship"]["denomination"="sunni"](around:${radius},${lat},${lon});
           way["amenity"="place_of_worship"]["denomination"="shia"](around:${radius},${lat},${lon});
           way["building"="mosque"](around:${radius},${lat},${lon});
-          relation["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${lat},${lon});
-          relation["building"="mosque"](around:${radius},${lat},${lon});
         );
-        out center;
+        out tags center qt 60;
       `;
     } else {
       return `
-        [out:json][timeout:25];
+        [out:json][timeout:8];
         (
+          node["amenity"~"restaurant|fast_food|cafe"](around:${radius},${lat},${lon});
+          way["amenity"~"restaurant|fast_food|cafe"](around:${radius},${lat},${lon});
           node["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
           way["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
-          relation["amenity"~"restaurant|fast_food|cafe"]["diet:halal"="yes"](around:${radius},${lat},${lon});
           node["amenity"~"restaurant|fast_food|cafe"]["halal"="yes"](around:${radius},${lat},${lon});
           way["amenity"~"restaurant|fast_food|cafe"]["halal"="yes"](around:${radius},${lat},${lon});
           node["amenity"~"restaurant|fast_food|cafe"]["cuisine"~"halal|indian|pakistani|middle_eastern|arabic|turkish|kebab|afghan|persian|lebanese|moroccan",i](around:${radius},${lat},${lon});
           way["amenity"~"restaurant|fast_food|cafe"]["cuisine"~"halal|indian|pakistani|middle_eastern|arabic|turkish|kebab|afghan|persian|lebanese|moroccan",i](around:${radius},${lat},${lon});
         );
-        out center;
+        out tags center qt 100;
       `;
     }
   };
 
-  // Fetch with retry across multiple servers
-  const fetchWithRetry = async (query: string, signal?: AbortSignal): Promise<any> => {
-    let lastError: Error | null = null;
-    
-    for (const server of OVERPASS_SERVERS) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-        signal?.addEventListener('abort', () => controller.abort(), { once: true });
-        
-        const response = await fetch(server, {
-          method: 'POST',
-          body: `data=${encodeURIComponent(query)}`,
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          return await response.json();
-        }
-        lastError = new Error(`Server ${server} returned ${response.status}`);
-      } catch (err) {
-        lastError = err as Error;
-        // Silent fallback to next Overpass mirror — noise-free.
+  const fetchOverpassServer = async (server: string, query: string, signal?: AbortSignal): Promise<any> => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+
+    try {
+      const response = await fetch(server, {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server ${server} returned ${response.status}`);
       }
+
+      return await response.json();
+    } finally {
+      window.clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abort);
     }
-    
-    throw lastError || new Error('All servers failed');
+  };
+
+  // Race mirrors so a slow Overpass server does not block the whole search.
+  const fetchWithRetry = async (query: string, signal?: AbortSignal): Promise<any> => {
+    if (signal?.aborted) throw new DOMException('Search aborted', 'AbortError');
+    return Promise.any(OVERPASS_SERVERS.map((server) => fetchOverpassServer(server, query, signal)));
+  };
+
+  const fetchNominatimQuery = async (
+    query: string,
+    lat: number,
+    lon: number,
+    radius: number,
+    signal?: AbortSignal
+  ): Promise<any[]> => {
+    const latDelta = radius / 111320;
+    const lonDelta = radius / (111320 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
+    const viewbox = [
+      lon - lonDelta,
+      lat + latDelta,
+      lon + lonDelta,
+      lat - latDelta,
+    ].join(',');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS);
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&extratags=1&limit=30&bounded=1&viewbox=${encodeURIComponent(viewbox)}&q=${encodeURIComponent(query)}`,
+        {
+          headers: { 'Accept-Language': 'en' },
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    } finally {
+      window.clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abort);
+    }
+  };
+
+  const fetchFallbackPlaces = async (
+    lat: number,
+    lon: number,
+    type: PlaceType,
+    radius: number,
+    signal?: AbortSignal
+  ): Promise<Place[]> => {
+    const queries = type === 'mosque'
+      ? ['mosque', 'masjid']
+      : ['halal restaurant', 'halal food', 'kebab restaurant', 'biryani restaurant', 'restaurant'];
+
+    const settled = await Promise.allSettled(
+      queries.map((query) => fetchNominatimQuery(query, lat, lon, radius, signal))
+    );
+    if (signal?.aborted) return [];
+
+    const seen = new Set<string>();
+    return settled
+      .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
+      .map((item: any): Place | null => {
+        const elLat = parseFloat(item.lat);
+        const elLon = parseFloat(item.lon);
+        if (!Number.isFinite(elLat) || !Number.isFinite(elLon)) return null;
+
+        const distance = calculateDistance(lat, lon, elLat, elLon);
+        if (distance * 1000 > radius * 1.25) return null;
+
+        const dedupeKey = `${item.osm_type || 'place'}-${item.osm_id || `${elLat}:${elLon}`}`;
+        if (seen.has(dedupeKey)) return null;
+        seen.add(dedupeKey);
+
+        const defaultName = type === 'mosque' ? 'Mosque' : 'Halal Restaurant';
+        return {
+          id: `nominatim-${dedupeKey}`,
+          name: item.name || item.display_name?.split(',')[0] || defaultName,
+          lat: elLat,
+          lon: elLon,
+          distance,
+          address: nominatimAddressLine(item, elLat, elLon),
+          type,
+        };
+      })
+      .filter((place: Place | null): place is Place => place !== null)
+      .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+      .slice(0, 60);
+  };
+
+  const restaurantScore = (tags: Record<string, string | undefined> = {}) => {
+    const text = [
+      tags.name,
+      tags['name:en'],
+      tags.cuisine,
+      tags.description,
+      tags['diet:halal'],
+      tags.halal,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    if (tags['diet:halal'] === 'yes' || tags.halal === 'yes') return 0;
+    if (/\bhalal\b/.test(text)) return 1;
+    if (/(biryani|kebab|kabob|shawarma|mandi|tandoor|mughlai|arabic|pakistani|afghan|turkish|lebanese|persian|moroccan|middle_eastern|indian)/i.test(text)) return 2;
+    return 3;
   };
 
   // Find nearby places using Overpass API
-  const findNearbyPlaces = useCallback(async (lat: number, lon: number, type: PlaceType, signal?: AbortSignal) => {
+  const findNearbyPlaces = useCallback(async (
+    lat: number,
+    lon: number,
+    type: PlaceType,
+    signal?: AbortSignal,
+    options?: { forceRefresh?: boolean }
+  ) => {
     const searchRun = ++searchRunRef.current;
+    if (!options?.forceRefresh) {
+      const cachedPlaces = readPlacesCache(lat, lon, type);
+      if (cachedPlaces) {
+        setPlaces(cachedPlaces);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
-      const radii = [5000, 15000, 30000];
+      const radii = SEARCH_RADII[type];
+      const maxRadius = radii[radii.length - 1];
       let data: any = null;
       let usedRadius = radii[0];
 
@@ -214,8 +451,16 @@ export const Places = () => {
       
       if (!data.elements || data.elements.length === 0) {
         if (searchRun !== searchRunRef.current) return;
+        const fallbackPlaces = await fetchFallbackPlaces(lat, lon, type, maxRadius, signal);
+        if (signal?.aborted || searchRun !== searchRunRef.current) return;
+        if (fallbackPlaces.length > 0) {
+          setPlaces(fallbackPlaces);
+          writePlacesCache(lat, lon, type, fallbackPlaces);
+          toast.success(`Found ${fallbackPlaces.length} ${typeLabel}`);
+          return;
+        }
         setPlaces([]);
-        toast.info(`No ${typeLabel} found within 30km. Try changing your location.`);
+        toast.info(`No ${typeLabel} found within ${Math.round(maxRadius / 1000)}km. Try changing your location.`);
         return;
       }
       
@@ -233,44 +478,61 @@ export const Places = () => {
           seen.add(dedupeKey);
           
           const defaultName = type === 'mosque' ? 'Mosque' : 'Halal Restaurant';
-          const address = [
-            element.tags?.['addr:housenumber'],
-            element.tags?.['addr:street'],
-            element.tags?.['addr:city'],
-          ].filter(Boolean).join(', ');
-          
+          const score = type === 'restaurant' ? restaurantScore(element.tags || {}) : 0;
           return {
             id: `${element.type}-${element.id}`,
             name: element.tags?.name || element.tags?.['name:en'] || element.tags?.['name:ar'] || defaultName,
             lat: elLat,
             lon: elLon,
             distance,
-            address: element.tags?.['addr:full'] || address || 'Address not available',
+            address: overpassAddressLine(element.tags || {}, elLat, elLon),
             type,
+            score,
           };
         })
-        .filter((place: Place | null): place is Place => place !== null)
-        .sort((a: Place, b: Place) => (a.distance || 0) - (b.distance || 0));
+        .filter((place: (Place & { score?: number }) | null): place is Place & { score?: number } => place !== null)
+        .sort((a: Place & { score?: number }, b: Place & { score?: number }) =>
+          type === 'restaurant'
+            ? (a.score || 0) - (b.score || 0) || (a.distance || 0) - (b.distance || 0)
+            : (a.distance || 0) - (b.distance || 0)
+        )
+        .map(({ score, ...place }) => place);
 
       if (searchRun !== searchRunRef.current) return;
       setPlaces(placesList);
+      writePlacesCache(lat, lon, type, placesList);
       
       if (placesList.length > 0) {
         toast.success(`Found ${placesList.length} ${typeLabel} within ${Math.round(usedRadius / 1000)}km`);
       } else {
-        toast.info(`No ${typeLabel} found within 30km.`);
+        toast.info(`No ${typeLabel} found within ${Math.round(maxRadius / 1000)}km.`);
       }
     } catch (error) {
       if (signal?.aborted || searchRun !== searchRunRef.current) return;
       console.error('Error finding places:', error);
       const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
-      toast.error(`Failed to find nearby ${typeLabel}. Please try again.`);
+      const fallbackPlaces = await fetchFallbackPlaces(lat, lon, type, SEARCH_RADII[type].at(-1) || 25000, signal);
+      if (signal?.aborted || searchRun !== searchRunRef.current) return;
+      if (fallbackPlaces.length > 0) {
+        setPlaces(fallbackPlaces);
+        writePlacesCache(lat, lon, type, fallbackPlaces);
+        toast.success(`Found ${fallbackPlaces.length} ${typeLabel}`);
+        return;
+      }
+      const stalePlaces = readPlacesCache(lat, lon, type, { allowExpired: true });
+      if (stalePlaces) {
+        setPlaces(stalePlaces);
+        toast.info(`Showing saved ${typeLabel}. Pull refresh to update.`);
+        return;
+      }
+      setPlaces([]);
+      toast.info(`No ${typeLabel} found near this location. Try another nearby area.`);
     } finally {
       if (searchRun === searchRunRef.current) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [userLocation?.area, userLocation?.city, userLocation?.country]);
 
   // Fetch places when location is available or place type changes
   useEffect(() => {
@@ -283,6 +545,7 @@ export const Places = () => {
 
   // Filter places based on search query
   const filteredPlaces = places.filter(place =>
+    place.type === placeType &&
     place.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -295,7 +558,7 @@ export const Places = () => {
   // Refresh places search
   const handleRefresh = () => {
     if (userLocation) {
-      findNearbyPlaces(userLocation.latitude, userLocation.longitude, placeType);
+      findNearbyPlaces(userLocation.latitude, userLocation.longitude, placeType, undefined, { forceRefresh: true });
     } else {
       refreshLocation();
     }
@@ -319,7 +582,7 @@ export const Places = () => {
   const cuisines = ['Indian Cuisine', 'Turkish Cuisine', 'Middle Eastern', 'Pakistani Cuisine', 'Arabic Cuisine'];
   const mockCuisine = (id: string) => cuisines[hashNum(id, cuisines.length)];
 
-  const cityLabel = userLocation ? `${userLocation.city || 'Your area'}${userLocation.country ? ', ' + userLocation.country : ''}` : 'Set your location';
+  const cityLabel = userLocation ? `${userLocation.area || userLocation.city || 'Your area'}${userLocation.country ? ', ' + userLocation.country : ''}` : 'Set your location';
 
   // Filter restaurants by chip
   const chippedPlaces = filteredPlaces.filter((p) => {
@@ -389,7 +652,7 @@ export const Places = () => {
                       value={citySearch}
                       onChange={(e) => setCitySearch(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && searchCity()}
-                      className="bg-white"
+                      className="bg-white text-black placeholder:text-[#6B7280]"
                     />
                     <Button onClick={searchCity} disabled={searchingCity} style={{ backgroundColor: BROWN }} className="text-white">
                       {searchingCity ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -412,7 +675,7 @@ export const Places = () => {
                       step="any"
                       value={manualLat}
                       onChange={(e) => setManualLat(e.target.value)}
-                      className="bg-white"
+                      className="bg-white text-black placeholder:text-[#6B7280]"
                     />
                     <Input
                       placeholder="Longitude"
@@ -420,7 +683,7 @@ export const Places = () => {
                       step="any"
                       value={manualLon}
                       onChange={(e) => setManualLon(e.target.value)}
-                      className="bg-white"
+                      className="bg-white text-black placeholder:text-[#6B7280]"
                     />
                   </div>
                   <Button 

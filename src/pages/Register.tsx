@@ -16,22 +16,19 @@ import { assetUrl } from '@/lib/assetUrl';
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
 
 export const Register = () => {
-  const [view, setView] = useState<'welcome' | 'profile' | 'details' | 'verify'>('welcome');
+  const [view, setView] = useState<'welcome' | 'profile' | 'details'>('welcome');
   const step = view;
   const setStep = setView;
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [pendingEmail, setPendingEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
   const [isSignIn, setIsSignIn] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup, verifySignupOtp, resendSignupOtp } = useAuth();
+  const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup } = useAuth();
   const { t } = useLanguage();
 
   const resolveCurrentAccountRole = async () => {
@@ -149,30 +146,6 @@ export const Register = () => {
   };
 
   const handleSubmit = async () => {
-    if (view === 'verify') {
-      const code = otp.replace(/\D/g, '');
-      if (!pendingEmail) return toast.error('Please create your account again.');
-      if (!pendingRole) return toast.error('Please select a profile type again.');
-      if (code.length < 4) return toast.error('Please enter the 4-digit verification code');
-
-      setLoading(true);
-      try {
-        const { error, role } = await verifySignupOtp(pendingEmail, code, password, pendingRole, fullName);
-        if (error) return toast.error(error.message);
-
-        toast.success('Email verified successfully!');
-        let destination = '/';
-        const resolvedRole = role || pendingRole;
-        if (resolvedRole === 'seller') destination = '/seller-onboarding';
-        else if (resolvedRole === 'travel_partner') destination = '/business-account';
-        localStorage.setItem('barakah_onboarding_destination', destination);
-        navigate('/onboarding');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     if (needsSetup) {
       if (!selectedRole) return toast.error('Please select a profile type');
       if (!fullName) return toast.error('Please enter your full name');
@@ -241,17 +214,16 @@ export const Register = () => {
           } else {
             toast.error(error.message);
           }
+        } else if (needsEmailVerification) {
+          toast.success('Account created. Please check your email to confirm your account, then sign in.');
+          setPassword('');
+          setFullName('');
+          setSelectedRole(null);
+          setIsSignIn(true);
+          setView('details');
         } else {
-          if (needsEmailVerification) {
-            toast.success('Verification code sent to your email.');
-            setPendingEmail(email);
-            setPendingRole(role || selectedRole);
-            setOtp('');
-            setView('verify');
-          } else {
-            toast.success('Account created successfully!');
-            await routeByRole(role || selectedRole);
-          }
+          toast.success('Account created successfully!');
+          await routeByRole(role || selectedRole);
         }
       }
     } catch {
@@ -262,9 +234,7 @@ export const Register = () => {
   };
 
   const handleBack = () => {
-    if (view === 'verify') {
-      setView('details');
-    } else if (view === 'details') {
+    if (view === 'details') {
       setView(isSignIn ? 'welcome' : 'profile');
     } else if (view === 'profile') {
       setView('welcome');
@@ -274,18 +244,6 @@ export const Register = () => {
   const getSelectedRoleTitle = () => {
     const option = profileOptions.find((p) => p.role === selectedRole);
     return option ? t(option.titleKey) : '';
-  };
-
-  const handleResendOtp = async () => {
-    if (!pendingEmail) return toast.error('Please create your account again.');
-    setLoading(true);
-    try {
-      const { error } = await resendSignupOtp(pendingEmail);
-      if (error) return toast.error(error.message);
-      toast.success('A new verification code has been sent.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -519,58 +477,6 @@ export const Register = () => {
                 </button>
               </p>
             )}
-          </div>
-        )}
-
-        {view === 'verify' && (
-          <div className="space-y-4">
-            <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-1">
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-            <div className="text-center mb-3">
-              <h2 className="text-xl font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Verify your email
-              </h2>
-              <p className="text-sm leading-relaxed px-2" style={{ color: '#7c6a4f' }}>
-                Enter the verification code sent to {pendingEmail || email}.
-              </p>
-            </div>
-
-            <Input
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSubmit();
-              }}
-              placeholder="0000"
-              className="h-16 rounded-2xl bg-[#FFF5E5] border border-[#EADFC9] px-5 text-center text-[28px] font-bold tracking-[0.35em] text-[#1a1a1a] caret-[#A35334] placeholder:text-[#c4b59d] focus-visible:ring-0 focus-visible:ring-offset-0"
-            />
-
-            <Button
-              onClick={handleSubmit}
-              disabled={loading || otp.length < 4}
-              className="w-full h-14 rounded-full text-white text-base font-medium hover:opacity-90 disabled:opacity-60"
-              style={{ backgroundColor: '#A35334' }}
-            >
-              {loading ? t('login.please_wait') : 'Verify Email'}
-            </Button>
-
-            <button
-              type="button"
-              onClick={handleResendOtp}
-              disabled={loading}
-              className="w-full text-center text-sm font-semibold underline disabled:opacity-60"
-              style={{ color: '#A35334' }}
-            >
-              Resend code
-            </button>
-
-            <p className="text-[11px] text-center leading-relaxed px-3" style={{ color: '#7c6a4f' }}>
-              Enter the 4-digit Barakah verification code. It expires after 10 minutes.
-            </p>
           </div>
         )}
       </div>

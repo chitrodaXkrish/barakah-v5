@@ -48,19 +48,33 @@ export const HadithBook = () => {
     let cancel = false;
     setLoading(true);
     setError(null);
-    const url = book.edition
-      ? `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/${book.edition}.min.json`
-      : (book.altUrl as string);
-    fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`Failed (${r.status})`);
-        return r.json();
-      })
-      .then((j: any) => {
+    const urls = [
+      book.edition
+        ? `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/${book.edition}.min.json`
+        : null,
+      book.altUrl || null,
+    ].filter(Boolean) as string[];
+
+    const fetchFirstAvailable = async () => {
+      let lastError: Error | null = null;
+      for (const url of urls) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Failed (${response.status})`);
+          return { payload: await response.json(), sourceUrl: url };
+        } catch (error) {
+          lastError = error as Error;
+        }
+      }
+      throw lastError || new Error('Could not load this book.');
+    };
+
+    fetchFirstAvailable()
+      .then(({ payload, sourceUrl }) => {
         if (cancel) return;
-        if (book.altUrl && !book.edition) {
+        if (book.altUrl && sourceUrl === book.altUrl) {
           // A7med3bdulBaset/hadith-json shape: { hadiths: [{ idInBook, arabic, english: { text } }] }
-          const hadiths: Hadith[] = (j.hadiths || []).map((h: any) => ({
+          const hadiths: Hadith[] = (payload.hadiths || []).map((h: any) => ({
             hadithnumber: h.idInBook ?? h.id,
             text:
               typeof h?.english === 'string'
@@ -68,11 +82,11 @@ export const HadithBook = () => {
                 : [h?.english?.narrator, h?.english?.text].filter(Boolean).join(' — '),
           }));
           setData({
-            metadata: { name: j?.metadata?.english?.title || book.name },
+            metadata: { name: payload?.metadata?.english?.title || book.name },
             hadiths,
           });
         } else {
-          setData({ ...j, hadiths: j.hadiths || [] });
+          setData({ ...payload, hadiths: payload.hadiths || [] });
         }
       })
       .catch((e) => {

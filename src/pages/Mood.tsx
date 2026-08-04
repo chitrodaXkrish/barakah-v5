@@ -4,9 +4,23 @@ import {
   ArrowLeft,
   BookOpen,
   ChevronRight,
+  Cloud,
+  Droplets,
+  Gift,
+  Heart,
+  Home,
+  Megaphone,
+  Moon,
+  Plane,
   Search,
+  Shield,
+  Shirt,
+  Star,
+  Sun,
+  Utensils,
   X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import duasData from '../data/duas.json';
 
@@ -80,6 +94,68 @@ const groupMatchesSearch = (group: GroupedDua, query: string) =>
       .includes(query)
   );
 
+const ARABIC_RANGE = /[\u0600-\u06FF]/;
+const ARABIC_MARKS_ONLY = /^[\u064B-\u065F\u0670\u06D6-\u06ED\sـ.,،؛؟()[\]{}'"`]+$/;
+
+const cleanImportedText = (value: string) =>
+  value
+    .replace(/â€˜|â€™/g, "'")
+    .replace(/â€œ|â€/g, '"')
+    .replace(/â€¦/g, '...')
+    .replace(/ï²|/g, 'ﷺ')
+    .replace(/ï´|/g, 'رضي الله عنه')
+    .replace(/ï€¨|ï€©||/g, '')
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, '')
+    .replace(/([a-z])\.([A-Z])/g, '$1. $2')
+    .replace(/\bpartener\b/gi, 'partner')
+    .replace(/\bsalve\b/gi, 'slave')
+    .replace(/\bshaheed:One\b/g, 'shaheed: One')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim();
+
+const cleanArabicText = (value: string) => {
+  const cleaned = cleanImportedText(value)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !ARABIC_MARKS_ONLY.test(line))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([،؛؟.])/g, '$1')
+    .replace(/([،؛؟.])(?=[^\s])/g, '$1 ')
+    .trim();
+
+  return ARABIC_RANGE.test(cleaned) ? cleaned : '';
+};
+
+const cleanNotesText = (value: string) =>
+  cleanImportedText(value)
+    .replace(/\n(?=[a-z])/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const cleanTranslationText = (value: string) =>
+  cleanImportedText(value)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getDuaIcon = (title: string): LucideIcon => {
+  const text = title.toLowerCase();
+  if (/morning|waking|sunrise|dawn/.test(text)) return Sun;
+  if (/evening|night|sleep|bed/.test(text)) return Moon;
+  if (/garment|clothes|dress|wearing|undressing/.test(text)) return Shirt;
+  if (/ablution|toilet|rain|water/.test(text)) return Droplets;
+  if (/home|house|entering|leaving/.test(text)) return Home;
+  if (/adhan|call to prayer|prayer|mosque/.test(text)) return Megaphone;
+  if (/travel|journey|mount|vehicle/.test(text)) return Plane;
+  if (/food|eating|meal|fast/.test(text)) return Utensils;
+  if (/protection|evil|enemy|fear|startled/.test(text)) return Shield;
+  if (/sick|anxiety|worry|sad|forgiveness/.test(text)) return Heart;
+  if (/congrat|new|marriage|child|blessing/.test(text)) return Gift;
+  if (/praise|remembrance|glorif|dhikr/.test(text)) return Star;
+  return BookOpen;
+};
+
 export const Mood = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -142,40 +218,44 @@ export const Mood = () => {
       </div>
 
       <div className="px-5 pb-28 space-y-2.5">
-        {filteredDuas.map((dua) => (
-          <button
-            key={dua.id}
-            onClick={() => setSelectedDua(dua)}
-            className="w-full flex items-center gap-4 rounded-2xl px-4 py-4 border text-left transition-transform active:scale-[0.98]"
-            style={{ background: CREAM_CARD, borderColor: BORDER }}
-          >
-            <div
-              className="h-11 w-11 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(176,67,30,0.08)', color: BROWN_ACCENT }}
+        {filteredDuas.map((dua) => {
+          const Icon = getDuaIcon(dua.title);
+
+          return (
+            <button
+              key={dua.id}
+              onClick={() => setSelectedDua(dua)}
+              className="w-full flex items-center gap-4 rounded-2xl px-4 py-4 border text-left transition-transform active:scale-[0.98]"
+              style={{ background: CREAM_CARD, borderColor: BORDER }}
             >
-              <BookOpen className="h-5 w-5" strokeWidth={2} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-[15px] font-semibold truncate"
-                style={{ color: BROWN }}
+              <div
+                className="h-11 w-11 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(176,67,30,0.08)', color: BROWN_ACCENT }}
               >
-                {dua.title}
-              </p>
-              <p
-                className="text-[13px] truncate"
-                style={{ color: BROWN_MUTED }}
-              >
-                {formatListSubtitle(dua)}
-              </p>
-            </div>
-            <ChevronRight
-              className="h-5 w-5 flex-shrink-0"
-              style={{ color: BROWN_ACCENT }}
-              strokeWidth={2}
-            />
-          </button>
-        ))}
+                <Icon className="h-5 w-5" strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-[15px] font-semibold truncate"
+                  style={{ color: BROWN }}
+                >
+                  {dua.title}
+                </p>
+                <p
+                  className="text-[13px] truncate"
+                  style={{ color: BROWN_MUTED }}
+                >
+                  {formatListSubtitle(dua)}
+                </p>
+              </div>
+              <ChevronRight
+                className="h-5 w-5 flex-shrink-0"
+                style={{ color: BROWN_ACCENT }}
+                strokeWidth={2}
+              />
+            </button>
+          );
+        })}
 
         {filteredDuas.length === 0 && (
           <div className="text-center py-12">
@@ -226,85 +306,108 @@ export const Mood = () => {
             <div className="my-5 h-px" style={{ background: BORDER }} />
 
             <div className="space-y-7">
-              {selectedDua.duas.map((dua) => (
-                <section key={dua.number} className="space-y-5">
-                  {selectedDua.duas.length > 1 && (
-                    <p
-                      className="text-[13px] font-semibold"
-                      style={{ color: BROWN_ACCENT }}
-                    >
-                      Hisnul Muslim #{dua.number}
-                    </p>
-                  )}
+              {selectedDua.duas.map((dua) => {
+                const arabicText = cleanArabicText(dua.arabic);
+                const notesText = cleanNotesText(dua.transliteration_and_notes);
+                const translations = dua.translation.map(cleanTranslationText).filter(Boolean);
 
-                  <p
-                    className="whitespace-pre-line text-[24px] leading-[1.8] text-center font-arabic"
-                    style={{ color: BROWN }}
-                    dir="rtl"
-                  >
-                    {dua.arabic}
-                  </p>
+                return (
+                  <section key={dua.number} className="space-y-5">
+                    {selectedDua.duas.length > 1 && (
+                      <p
+                        className="text-[13px] font-semibold"
+                        style={{ color: BROWN_ACCENT }}
+                      >
+                        Hisnul Muslim #{dua.number}
+                      </p>
+                    )}
 
-                  <div
-                    className="rounded-2xl border px-4 py-4"
-                    style={{ borderColor: BORDER, background: CREAM }}
-                  >
-                    <p
-                      className="text-[14px] font-semibold mb-3"
-                      style={{ color: BROWN }}
-                    >
-                      English
-                    </p>
-                    <div className="space-y-3">
-                      {dua.translation.map((translation, index) => (
+                    {arabicText && (
+                      <div
+                        className="rounded-2xl px-4 py-5"
+                        style={{ background: '#FFF9F0' }}
+                      >
                         <p
-                          key={`${dua.number}-translation-${index}`}
-                          className="text-[16px] leading-relaxed"
+                          className="text-[27px] leading-[2.15] font-arabic text-right"
+                          style={{
+                            color: BROWN,
+                            direction: 'rtl',
+                            unicodeBidi: 'plaintext',
+                            wordSpacing: '0.08em',
+                            textRendering: 'optimizeLegibility',
+                          }}
+                          dir="rtl"
+                          lang="ar"
+                        >
+                          {arabicText}
+                        </p>
+                      </div>
+                    )}
+
+                    {translations.length > 0 && (
+                      <div
+                        className="rounded-2xl border px-4 py-4"
+                        style={{ borderColor: BORDER, background: CREAM }}
+                      >
+                        <p
+                          className="text-[14px] font-semibold mb-3"
                           style={{ color: BROWN }}
                         >
-                          {dua.translation.length > 1 && (
-                            <span
-                              className="mr-2 text-[13px] font-semibold"
-                              style={{ color: BROWN_ACCENT }}
-                            >
-                              {index + 1}.
-                            </span>
-                          )}
-                          {translation}
+                          English
                         </p>
-                      ))}
-                    </div>
-                  </div>
+                        <div className="space-y-3">
+                          {translations.map((translation, index) => (
+                            <p
+                              key={`${dua.number}-translation-${index}`}
+                              className="text-[16px] leading-relaxed"
+                              style={{ color: BROWN }}
+                            >
+                              {translations.length > 1 && (
+                                <span
+                                  className="mr-2 text-[13px] font-semibold"
+                                  style={{ color: BROWN_ACCENT }}
+                                >
+                                  {index + 1}.
+                                </span>
+                              )}
+                              {translation}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  {dua.transliteration_and_notes && (
-                    <div>
-                      <p
-                        className="text-[14px] font-semibold mb-3"
-                        style={{ color: BROWN }}
-                      >
-                        Transliteration and notes
-                      </p>
-                      <p
-                        className="whitespace-pre-line text-[14px] italic leading-relaxed"
-                        style={{ color: BROWN_MUTED }}
-                      >
-                        {dua.transliteration_and_notes}
+                    {notesText && (
+                      <div>
+                        <p
+                          className="text-[14px] font-semibold mb-3"
+                          style={{ color: BROWN }}
+                        >
+                          Transliteration and notes
+                        </p>
+                        <p
+                          className="whitespace-pre-line text-[14px] italic leading-relaxed"
+                          style={{ color: BROWN_MUTED }}
+                          dir="ltr"
+                        >
+                          {notesText}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <BookOpen
+                        className="h-4 w-4 flex-shrink-0"
+                        style={{ color: BROWN_ACCENT }}
+                        strokeWidth={2}
+                      />
+                      <p className="text-[13px]" style={{ color: BROWN_MUTED }}>
+                        Source: Hisnul Muslim #{dua.number}
                       </p>
                     </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <BookOpen
-                      className="h-4 w-4 flex-shrink-0"
-                      style={{ color: BROWN_ACCENT }}
-                      strokeWidth={2}
-                    />
-                    <p className="text-[13px]" style={{ color: BROWN_MUTED }}>
-                      Source: Hisnul Muslim #{dua.number}
-                    </p>
-                  </div>
-                </section>
-              ))}
+                  </section>
+                );
+              })}
             </div>
           </div>
         </div>

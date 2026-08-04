@@ -2,7 +2,7 @@ import navHomeIcon from '@/assets/nav-home-icon.png.asset.json';
 import navMarketplaceIcon from '@/assets/nav-marketplace-icon.png.asset.json';
 import navPrayerIcon from '@/assets/nav-prayer-icon.png.asset.json';
 import navChatIcon from '@/assets/nav-chat-icon.png.asset.json';
-import { ScanLine } from 'lucide-react';
+import { ScanBarcode } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { assetUrl } from '@/lib/assetUrl';
@@ -67,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'home', labelKey: 'nav.home', path: '/', render: (a) => <HomeIconImg isActive={a} /> },
   { key: 'shop', labelKey: 'nav.store', path: '/shop', render: (a) => <MarketplaceIconImg isActive={a} /> },
   { key: 'prayer', labelKey: 'nav.prayer', path: '/prayer-times', render: (a) => <PrayerIconImg isActive={a} /> },
-  { key: 'scan', labelKey: 'nav.scanner', customLabel: 'Halal Scan', path: '/halal-scanner', render: (a) => <ScanLine size={22} color={a ? TEXT_ACTIVE : TEXT_INACTIVE} strokeWidth={1.8} /> },
+  { key: 'scan', labelKey: 'nav.scanner', customLabel: 'Halal Scan', path: '/halal-scanner', render: (a) => <ScanBarcode size={22} color={a ? TEXT_ACTIVE : TEXT_INACTIVE} strokeWidth={1.8} /> },
 ];
 
 export const BottomNavigation = () => {

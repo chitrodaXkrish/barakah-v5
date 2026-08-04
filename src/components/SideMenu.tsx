@@ -157,7 +157,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
     user?.email?.split('@')[0] ||
     'Guest User';
   const initial = (displayName?.[0] || 'U').toUpperCase();
-  const locationLabel = location ? `${location.city}${location.country ? ', ' + location.country : ''}` : 'Set location';
+  const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : 'Set location';
   const currentLang = LANG_OPTIONS.find(l => l.code === language)?.label || 'English';
 
   return (
@@ -251,7 +251,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             <Row
               icon={<ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1.8} />}
               label="Orders"
-              onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/account')}
+              onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/cart')}
               trailing={
                 orderCount > 0 ? (
                   <span

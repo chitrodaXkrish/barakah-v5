@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 interface LocationData {
   latitude: number;
   longitude: number;
+  area?: string;
   city: string;
   country: string;
   fullAddress: string;
@@ -17,7 +18,7 @@ interface LocationContextType {
   loading: boolean;
   error: string | null;
   refresh: () => void;
-  setManualLocation: (lat: number, lon: number) => Promise<void>;
+  setManualLocation: (lat: number, lon: number, label?: ManualLocationLabel) => Promise<void>;
   clearManualLocation: () => void;
 }
 
@@ -25,12 +26,20 @@ const LocationContext = createContext<LocationContextType | undefined>(undefined
 
 const LOCATION_CACHE_KEY = 'barakah_cached_location';
 const MANUAL_LOCATION_KEY = 'barakah_manual_location';
+const LOCATION_CACHE_VERSION = 2;
 const CACHE_DURATION = 10 * 60 * 1000;
-const LOCATION_CHANGE_THRESHOLD_KM = 0.15;
+const LOCATION_CHANGE_THRESHOLD_KM = 0.05;
 const WATCH_POSITION_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  timeout: 20000,
-  maximumAge: 30000,
+  timeout: 30000,
+  maximumAge: 0,
+};
+
+type ManualLocationLabel = {
+  area?: string;
+  city?: string;
+  country?: string;
+  fullAddress?: string;
 };
 
 const normalizeLocation = (value: unknown): LocationData | null => {
@@ -49,6 +58,7 @@ const normalizeLocation = (value: unknown): LocationData | null => {
   return {
     latitude,
     longitude,
+    area: raw.area,
     city: raw.city || 'Unknown',
     country: raw.country || 'Unknown',
     fullAddress: raw.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
@@ -80,6 +90,70 @@ const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 };
 
+const normalizePlaceName = (value?: string | null) =>
+  value
+    ?.replace(/\s+(district|county|province|state|division|region)$/i, '')
+    .trim();
+
+const mergeManualLabel = (
+  geoData: Partial<LocationData>,
+  manualLabel?: ManualLocationLabel
+): Partial<LocationData> => {
+  if (!manualLabel) return geoData;
+
+  const area = normalizePlaceName(manualLabel.area) || geoData.area;
+  const city = normalizePlaceName(manualLabel.city) || geoData.city;
+  const country = manualLabel.country || geoData.country;
+
+  return {
+    ...geoData,
+    area,
+    city,
+    country,
+    fullAddress: manualLabel.fullAddress || [
+      area && area !== city ? area : null,
+      city,
+      country,
+    ].filter(Boolean).join(', ') || geoData.fullAddress,
+  };
+};
+
+const getAdministrativeName = (data: any, preferredDescriptions: string[]) => {
+  const administrative = Array.isArray(data?.localityInfo?.administrative)
+    ? data.localityInfo.administrative
+    : [];
+
+  return administrative.find((item: any) => {
+    const description = String(item.description || '').toLowerCase();
+    return preferredDescriptions.includes(description) && item.name;
+  })?.name;
+};
+
+const resolveReverseGeocodeLocation = (data: any): Partial<LocationData> => {
+  const area = normalizePlaceName(
+    data.locality ||
+    getAdministrativeName(data, ['neighbourhood', 'suburb', 'quarter'])
+  );
+  const city = normalizePlaceName(
+    data.city ||
+    getAdministrativeName(data, ['city', 'town', 'municipality']) ||
+    data.locality
+  ) || 'Unknown';
+  const country = data.countryName || 'Unknown';
+  const fullAddress = [
+    area && area !== city ? area : null,
+    city,
+    country,
+  ].filter(Boolean).join(', ');
+
+  return {
+    area,
+    city,
+    country,
+    fullAddress,
+  };
+};
+
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +180,11 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       
       const cached = localStorage.getItem(LOCATION_CACHE_KEY);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
+        const { data, timestamp, version } = JSON.parse(cached);
+        if (version !== LOCATION_CACHE_VERSION) {
+          localStorage.removeItem(LOCATION_CACHE_KEY);
+          return null;
+        }
         const parsed = normalizeLocation(data);
         if (parsed && Date.now() - timestamp < CACHE_DURATION) {
           return parsed;
@@ -126,7 +204,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       } else {
         localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({
           data,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          version: LOCATION_CACHE_VERSION,
         }));
       }
     } catch {
@@ -138,13 +217,16 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     latitude: number,
     longitude: number,
     accuracy?: number,
-    isManual = false
+    isManual = false,
+    manualLabel?: ManualLocationLabel
   ): Promise<LocationData> => {
-    const geoData = await reverseGeocode(latitude, longitude);
+    const reverseGeoData = await reverseGeocode(latitude, longitude);
+    const geoData = isManual ? mergeManualLabel(reverseGeoData, manualLabel) : reverseGeoData;
 
     return {
       latitude,
       longitude,
+      area: geoData.area,
       city: geoData.city || 'Unknown',
       country: geoData.country || 'Unknown',
       fullAddress: geoData.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
@@ -166,7 +248,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     const currentAccuracy = current.accuracy ?? Number.POSITIVE_INFINITY;
     const nextAccuracy = next.accuracy ?? Number.POSITIVE_INFINITY;
 
-    return movedKm >= LOCATION_CHANGE_THRESHOLD_KM || nextAccuracy + 25 < currentAccuracy;
+    return movedKm >= LOCATION_CHANGE_THRESHOLD_KM || nextAccuracy + 10 < currentAccuracy;
   };
 
   const applyPosition = useCallback(async (position: GeolocationPosition, source: 'initial' | 'watch') => {
@@ -210,16 +292,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await response.json();
       
-      return {
-        city: data.city || data.locality || data.principalSubdivision || 'Unknown',
-        country: data.countryName || 'Unknown',
-        fullAddress: [
-          data.locality,
-          data.city,
-          data.principalSubdivision,
-          data.countryName
-        ].filter(Boolean).join(', ')
-      };
+      return resolveReverseGeocodeLocation(data);
     } catch {
       return {
         city: 'Unknown',
@@ -229,15 +302,15 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const setManualLocation = async (lat: number, lon: number) => {
+  const setManualLocation = async (lat: number, lon: number, label?: ManualLocationLabel) => {
     stopTracking();
     setLoading(true);
-    const locationData = await buildLocationData(lat, lon, undefined, true);
+    const locationData = await buildLocationData(lat, lon, undefined, true, label);
 
     setLocation(locationData);
     cacheLocation(locationData);
     setLoading(false);
-    toast.success(`Location set to ${locationData.city}, ${locationData.country}`);
+    toast.success(`Location set to ${locationData.area || locationData.city}, ${locationData.country}`);
   };
 
   const clearManualLocation = () => {
@@ -246,7 +319,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     fetchLocation();
   };
 
-  const fetchLocation = useCallback(async () => {
+  const fetchLocation = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
 
@@ -260,7 +333,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // Check cache
-    const cached = getCachedLocation();
+    const cached = forceRefresh ? null : getCachedLocation();
     if (cached && !cached.isManual) {
       setLocation(cached);
       setLoading(false);
@@ -322,7 +395,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       location,
       loading,
       error,
-      refresh: fetchLocation,
+      refresh: () => fetchLocation(true),
       setManualLocation,
       clearManualLocation
     }}>

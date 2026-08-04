@@ -15,10 +15,12 @@ const MISSED = '#C0392B';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PRAYER_KEYS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
+const DAILY_MARKER_TOTAL = PRAYER_KEYS.length + 1;
 
 type SalahLog = {
   date: string;
   fajr: boolean; dhuhr: boolean; asr: boolean; maghrib: boolean; isha: boolean;
+  quran_read?: boolean;
 };
 
 const fmt = (d: Date) =>
@@ -81,31 +83,32 @@ export const MonthlyStreak = () => {
   for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, ds: fmt(new Date(year, month, d)) });
   while (cells.length % 7 !== 0) cells.push({ day: null });
 
-  const completedCount = (l?: SalahLog) => l ? PRAYER_KEYS.filter(k => l[k]).length : 0;
+  const completedPrayerCount = (l?: SalahLog) => l ? PRAYER_KEYS.filter(k => l[k]).length : 0;
+  const completedMarkerCount = (l?: SalahLog) => l ? completedPrayerCount(l) + (l.quran_read ? 1 : 0) : 0;
 
   // Stats
   const monthLogs = Object.values(logs);
-  const totalPossiblePrayersThisMonth = (() => {
+  const totalPossibleMarkersThisMonth = (() => {
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
     const days = isCurrentMonth ? today.getDate() : daysInMonth;
-    return days * 5;
+    return days * DAILY_MARKER_TOTAL;
   })();
-  const monthCompleted = monthLogs.reduce((s, l) => s + completedCount(l), 0);
-  const monthPct = totalPossiblePrayersThisMonth ? Math.round((monthCompleted / totalPossiblePrayersThisMonth) * 100) : 0;
+  const monthCompleted = monthLogs.reduce((s, l) => s + completedMarkerCount(l), 0);
+  const monthPct = totalPossibleMarkersThisMonth ? Math.round((monthCompleted / totalPossibleMarkersThisMonth) * 100) : 0;
 
-  const totalComplete = allLogs.reduce((s, l) => s + completedCount(l), 0);
+  const totalComplete = allLogs.reduce((s, l) => s + completedMarkerCount(l), 0);
 
   // Qada count: missed prayers ONLY on past days the user actually logged something
   // (avoids counting every untouched day since signup as a missed day).
   const todayStr = fmt(today);
   const qadaCount = allLogs
     .filter(l => l.date < todayStr)
-    .reduce((s, l) => s + (5 - completedCount(l)), 0);
+    .reduce((s, l) => s + (PRAYER_KEYS.length - completedPrayerCount(l)), 0);
 
   // Best streak (consecutive full days)
   const bestStreak = (() => {
     if (allLogs.length === 0) return 0;
-    const fulls = new Set(allLogs.filter(l => completedCount(l) === 5).map(l => l.date));
+    const fulls = new Set(allLogs.filter(l => completedMarkerCount(l) === DAILY_MARKER_TOTAL).map(l => l.date));
     let best = 0, cur = 0;
     const sorted = [...fulls].sort();
     if (sorted.length === 0) return 0;
@@ -123,9 +126,9 @@ export const MonthlyStreak = () => {
     if (!ds || !day) return null;
     const isFuture = ds > todayStr;
     if (isFuture) return <span className="block h-1.5 w-1.5 rounded-full mt-1" style={{ background: '#F0E0CB' }} />;
-    const c = completedCount(logs[ds]);
+    const c = completedMarkerCount(logs[ds]);
     let color = MISSED;
-    if (c === 5) color = FULL;
+    if (c === DAILY_MARKER_TOTAL) color = FULL;
     else if (c > 0) color = PARTIAL;
     else if (!logs[ds]) color = MISSED;
     return <span className="block h-1.5 w-1.5 rounded-full mt-1" style={{ background: color }} />;

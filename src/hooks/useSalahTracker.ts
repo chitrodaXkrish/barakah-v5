@@ -12,6 +12,7 @@ interface SalahLog {
   asr: boolean;
   maghrib: boolean;
   isha: boolean;
+  quran_read: boolean;
 }
 
 interface SalahStreak {
@@ -29,6 +30,7 @@ interface PrayerStatus {
 const PRAYER_KEYS: Array<'fajr' | 'dhuhr' | 'maghrib' | 'asr' | 'isha'> = [
   'fajr', 'dhuhr', 'maghrib', 'asr', 'isha'
 ];
+const DAILY_MARKER_TOTAL = PRAYER_KEYS.length + 1;
 
 export const useSalahTracker = () => {
   const { user } = useAuth();
@@ -302,6 +304,7 @@ export const useSalahTracker = () => {
           asr: false,
           maghrib: false,
           isha: false,
+          quran_read: false,
           [prayerKey]: true,
         };
 
@@ -326,6 +329,55 @@ export const useSalahTracker = () => {
     }
   };
 
+  const toggleQuranRead = async () => {
+    if (!user) {
+      toast.error('Please log in to track Quran reading');
+      return;
+    }
+
+    const today = getToday();
+    const newValue = !(todayLog?.quran_read ?? false);
+
+    try {
+      if (todayLog) {
+        const { error } = await supabase
+          .from('salah_log')
+          .update({ quran_read: newValue })
+          .eq('id', todayLog.id);
+
+        if (error) throw error;
+
+        setTodayLog({ ...todayLog, quran_read: newValue });
+      } else {
+        const newLog = {
+          user_id: user.uid,
+          date: today,
+          fajr: false,
+          dhuhr: false,
+          asr: false,
+          maghrib: false,
+          isha: false,
+          quran_read: true,
+        };
+
+        const { data, error } = await supabase
+          .from('salah_log')
+          .insert(newLog)
+          .select()
+          .single();
+
+        if (error) throw error;
+        setTodayLog(data);
+      }
+
+      await fetchWeeklyLogs();
+      toast.success(newValue ? 'Quran reading marked as completed' : 'Quran reading unmarked');
+    } catch (error) {
+      console.error('Error updating Quran reading:', error);
+      toast.error('Failed to update Quran reading status');
+    }
+  };
+
   const getWeeklyData = useCallback(() => {
     const today = new Date();
     const days: { date: string; dayName: string; completed: number; total: number }[] = [];
@@ -342,10 +394,10 @@ export const useSalahTracker = () => {
 
       const log = weeklyLogs.find(l => l.date === dateStr);
       const completed = log
-        ? PRAYER_KEYS.filter(key => log[key]).length
+        ? PRAYER_KEYS.filter(key => log[key]).length + (log.quran_read ? 1 : 0)
         : 0;
 
-      days.push({ date: dateStr, dayName, completed, total: 5 });
+      days.push({ date: dateStr, dayName, completed, total: DAILY_MARKER_TOTAL });
     }
 
     return days;
@@ -366,16 +418,18 @@ export const useSalahTracker = () => {
   }, [user, fetchTodayLog, fetchStreak, fetchWeeklyLogs]);
 
   const completedToday = todayLog
-    ? PRAYER_KEYS.filter(key => todayLog[key]).length
+    ? PRAYER_KEYS.filter(key => todayLog[key]).length + (todayLog.quran_read ? 1 : 0)
     : 0;
 
-  const progressPercentage = Math.round((completedToday / 5) * 100);
+  const progressPercentage = Math.round((completedToday / DAILY_MARKER_TOTAL) * 100);
 
   return {
     loading,
     prayerStatus: getPrayerStatus(),
     streak,
     togglePrayer,
+    quranReadCompleted: todayLog?.quran_read ?? false,
+    toggleQuranRead,
     completedToday,
     progressPercentage,
     weeklyData: getWeeklyData(),

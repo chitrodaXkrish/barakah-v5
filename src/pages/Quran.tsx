@@ -71,6 +71,12 @@ interface QuranReadingStats {
   totalReadDays: number;
 }
 
+interface PlaybackTarget {
+  surahNo: number;
+  verseNo: number;
+  key: string;
+}
+
 const JUZ_RANGES: JuzRange[] = [
   { juz: 1, start: { surah: 1, ayah: 1 }, end: { surah: 2, ayah: 141 } },
   { juz: 2, start: { surah: 2, ayah: 142 }, end: { surah: 2, ayah: 252 } },
@@ -388,6 +394,49 @@ export const Quran = () => {
     }
   };
 
+  const getNextVerse = (surahNo: number, verseNo: number, key: string): PlaybackTarget | null => {
+    if (selectedPara) {
+      const index = selectedPara.verses.findIndex((verse) => verse.key === key);
+      const next = index >= 0 ? selectedPara.verses[index + 1] : null;
+      return next ? { surahNo: next.surahNo, verseNo: next.ayahNo, key: next.key } : null;
+    }
+
+    if (selectedSurah?.surahNo === surahNo && verseNo < selectedSurah.arabic1.length) {
+      const nextVerseNo = verseNo + 1;
+      return { surahNo, verseNo: nextVerseNo, key: `${surahNo}:${nextVerseNo}` };
+    }
+
+    return null;
+  };
+
+  const startVerseAudio = (surahNo: number, verseNo: number, key: string) => {
+    const audio = new Audio(verseAudio(surahNo, verseNo, selectedReciter));
+
+    audio.onended = () => {
+      const nextVerse = getNextVerse(surahNo, verseNo, key);
+      if (nextVerse) {
+        startVerseAudio(nextVerse.surahNo, nextVerse.verseNo, nextVerse.key);
+        return;
+      }
+
+      setPlayingVerse(null);
+      setCurrentAudio(null);
+    };
+
+    audio.onerror = () => {
+      setPlayingVerse(null);
+      setCurrentAudio(null);
+    };
+
+    audio.play().catch(() => {
+      setPlayingVerse(null);
+      setCurrentAudio(null);
+    });
+    setCurrentAudio(audio);
+    setPlayingVerse(key);
+    saveQuranReadingDay();
+  };
+
   const playVerse = (surahNo: number, verseNo: number, key: string) => {
     if (currentAudio) {
       currentAudio.pause();
@@ -397,16 +446,8 @@ export const Quran = () => {
         return;
       }
     }
-    const audio = new Audio(verseAudio(surahNo, verseNo, selectedReciter));
-    audio.loop = true;
-    audio.play().catch(() => {});
-    audio.onended = () => {
-      setPlayingVerse(null);
-      setCurrentAudio(null);
-    };
-    setCurrentAudio(audio);
-    setPlayingVerse(key);
-    saveQuranReadingDay();
+
+    startVerseAudio(surahNo, verseNo, key);
   };
 
   const filtered = useMemo(

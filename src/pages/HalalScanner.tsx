@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { ArrowLeft, Flashlight, ScanLine, Check, Shield, Sparkles, ChevronLeft, ChevronRight, ExternalLink, X, Keyboard, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ArrowLeft, ScanBarcode, Check, Shield, Sparkles, X, Keyboard, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import scannerProduct from '@/assets/scanner-product.jpg';
-import scannerAlt1 from '@/assets/scanner-alt-1.jpg';
-import scannerAlt2 from '@/assets/scanner-alt-2.jpg';
 import { supabase } from '@/integrations/supabase/client';
 
 const CREAM_BG = '#FFF5E5';
@@ -51,11 +49,6 @@ const PRODUCT = {
   ] as Ingredient[],
 };
 
-const ALTERNATIVES = [
-  { brand: 'MEDINA ORGANICS', name: 'Medina Date Crisps', price: '$12.50', rating: '4.9', image: scannerAlt1 },
-  { brand: 'PERSIAN HOUSE', name: 'Saffron Shortbread', price: '$14.00', rating: '4.8', image: scannerAlt2 },
-];
-
 export const HalalScanner = () => {
   const navigate = useNavigate();
   const { location } = useGlobalLocation();
@@ -72,22 +65,6 @@ export const HalalScanner = () => {
   const scannerIdRef = useRef(`halal-scanner-${Date.now()}`);
   const mountedRef = useRef(true);
   const handlingScanRef = useRef(false);
-
-  const captureScannerFrame = useCallback(() => {
-    const video = scannerDivRef.current?.querySelector('video') as HTMLVideoElement | null;
-    if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-      return null;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext('2d');
-    if (!context) return null;
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.82);
-  }, []);
 
   const cleanupScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -112,7 +89,6 @@ export const HalalScanner = () => {
     setAnalyzing(true);
     setLastBarcode(barcode);
     setScanResult(null);
-    const imageBase64 = captureScannerFrame();
     await cleanupScanner();
     setScanning(false);
 
@@ -121,10 +97,7 @@ export const HalalScanner = () => {
         body: {
           barcode,
           ...(location
-            ? { region: [location.city, location.country].filter(Boolean).join(', ') }
-            : {}),
-          ...(imageBase64
-            ? { imageBase64, imageMimeType: 'image/jpeg' }
+            ? { region: [location.area || location.city, location.country].filter(Boolean).join(', ') }
             : {}),
         },
       });
@@ -157,7 +130,7 @@ export const HalalScanner = () => {
       handlingScanRef.current = false;
       if (mountedRef.current) setAnalyzing(false);
     }
-  }, [captureScannerFrame, cleanupScanner, location]);
+  }, [cleanupScanner, location]);
 
   const startScanning = async () => {
     setError(null);
@@ -312,8 +285,8 @@ const ScanView = ({
         <h1 className="italic text-[17px] tracking-tight" style={{ fontFamily: SERIF, color: BROWN }}>
           Ingredient Scanner
         </h1>
-        <button className="h-9 w-9 flex items-center justify-center" aria-label="Flashlight">
-          <Flashlight className="h-5 w-5" strokeWidth={1.75} style={{ color: BROWN }} />
+        <button className="h-9 w-9 flex items-center justify-center" aria-label="Scan">
+          <ScanBarcode className="h-5 w-5" strokeWidth={1.75} style={{ color: BROWN }} />
         </button>
       </div>
 
@@ -360,7 +333,7 @@ const ScanView = ({
           {analyzing ? (
             <Sparkles className="h-6 w-6 text-white animate-pulse" strokeWidth={1.75} />
           ) : (
-            <Flashlight className="h-6 w-6 text-white" strokeWidth={1.75} />
+            <ScanBarcode className="h-6 w-6 text-white" strokeWidth={1.75} />
           )}
         </button>
       </div>
@@ -502,8 +475,8 @@ const Step = ({ n, label }: { n: number; label: string }) => (
         className="h-12 w-12 rounded-full flex items-center justify-center"
         style={{ backgroundColor: '#EAD3AE' }}
       >
-        {n === 1 && <ScanLine className="h-5 w-5" style={{ color: BROWN }} strokeWidth={1.75} />}
-        {n === 2 && <Flashlight className="h-5 w-5" style={{ color: BROWN }} strokeWidth={1.75} />}
+        {n === 1 && <ScanBarcode className="h-5 w-5" style={{ color: BROWN }} strokeWidth={1.75} />}
+        {n === 2 && <ScanBarcode className="h-5 w-5" style={{ color: BROWN }} strokeWidth={1.75} />}
         {n === 3 && <Check className="h-5 w-5" style={{ color: BROWN }} strokeWidth={2} />}
       </div>
       <div
@@ -588,9 +561,7 @@ const ResultView = ({
         <h1 className="italic text-[17px]" style={{ fontFamily: SERIF, color: BROWN }}>
           Barakah
         </h1>
-        <div className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: '#C9A77A' }}>
-          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: BROWN }} />
-        </div>
+        <div className="h-9 w-9" aria-hidden="true" />
       </div>
 
       {/* Halal verified card */}
@@ -628,7 +599,7 @@ const ResultView = ({
           className="w-full rounded-full py-3.5 text-white text-[13px] font-semibold tracking-[0.14em] flex items-center justify-center gap-2 shadow-sm"
           style={{ backgroundColor: BROWN_BTN }}
         >
-          <ScanLine className="h-4 w-4" strokeWidth={2} />
+          <ScanBarcode className="h-4 w-4" strokeWidth={2} />
           SCAN ANOTHER PRODUCT
         </button>
       </div>
@@ -718,53 +689,6 @@ const ResultView = ({
         </div>
       </div>
 
-      {/* Halal Alternatives */}
-      <div className="px-5 mt-10 flex items-start justify-between">
-        <h3 className="italic text-[24px] leading-tight" style={{ fontFamily: SERIF, color: BROWN }}>
-          Halal<br />Alternatives
-        </h3>
-        <div className="flex gap-1.5 mt-2">
-          <button className="h-8 w-8 rounded-full border flex items-center justify-center" style={{ borderColor: '#C9A77A', color: BROWN }}>
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button className="h-8 w-8 rounded-full border flex items-center justify-center" style={{ borderColor: '#C9A77A', color: BROWN }}>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-      <p className="px-5 mt-2 text-[13px]" style={{ color: MUTED }}>
-        Recommended similar items from verified brands.
-      </p>
-
-      <div className="mt-4 flex gap-3 overflow-x-auto px-5 pb-2 snap-x snap-mandatory" style={{ scrollbarWidth: 'none' }}>
-        {ALTERNATIVES.map((a) => (
-          <div
-            key={a.name}
-            className="min-w-[78%] snap-start rounded-2xl overflow-hidden"
-            style={{ backgroundColor: CARD_CREAM }}
-          >
-            <div className="relative">
-              <img src={a.image} alt={a.name} className="w-full h-44 object-cover" loading="lazy" />
-              <div
-                className="absolute bottom-2 right-2 inline-flex items-center gap-1 text-[10px] font-semibold text-white px-2 py-1 rounded-full"
-                style={{ backgroundColor: 'rgba(46,125,78,0.92)' }}
-              >
-                On Marketplace <ExternalLink className="h-3 w-3" />
-              </div>
-            </div>
-            <div className="px-4 py-3">
-              <div className="text-[10px] tracking-[0.18em] font-semibold" style={{ color: BROWN_BTN }}>
-                {a.brand}
-              </div>
-              <div className="text-[15px] font-semibold mt-1" style={{ color: BROWN }}>{a.name}</div>
-              <div className="flex items-center justify-between mt-1">
-                <div className="text-[15px] font-bold" style={{ color: BROWN }}>{a.price}</div>
-                <div className="text-[12px]" style={{ color: BROWN }}>★ {a.rating}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

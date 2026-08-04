@@ -8,9 +8,16 @@ interface NominatimResult {
   lat: string;
   lon: string;
   address?: {
+    suburb?: string;
+    neighbourhood?: string;
+    quarter?: string;
+    borough?: string;
+    city_district?: string;
     city?: string;
     town?: string;
     village?: string;
+    municipality?: string;
+    county?: string;
     state?: string;
     country?: string;
   };
@@ -65,8 +72,17 @@ export const LocationPicker = ({ isOpen, onClose }: LocationPickerProps) => {
 
   if (!isOpen) return null;
 
+  const getResultLabel = (r: NominatimResult) => {
+    const address = r.address || {};
+    const area = address.suburb || address.neighbourhood || address.quarter || address.borough || address.city_district;
+    const city = address.city || address.town || address.village || address.municipality || address.county || address.state || '';
+    const country = address.country || '';
+
+    return { area, city, country, fullAddress: r.display_name };
+  };
+
   const pick = async (r: NominatimResult) => {
-    await setManualLocation(parseFloat(r.lat), parseFloat(r.lon));
+    await setManualLocation(parseFloat(r.lat), parseFloat(r.lon), getResultLabel(r));
     onClose();
   };
 
@@ -137,8 +153,8 @@ export const LocationPicker = ({ isOpen, onClose }: LocationPickerProps) => {
 
           <ul className="space-y-1.5">
             {results.map((r) => {
-              const city = r.address?.city || r.address?.town || r.address?.village || r.address?.state || '';
-              const country = r.address?.country || '';
+              const { area, city, country } = getResultLabel(r);
+              const primary = area || city || country;
               return (
                 <li key={r.place_id}>
                   <button
@@ -148,9 +164,9 @@ export const LocationPicker = ({ isOpen, onClose }: LocationPickerProps) => {
                   >
                     <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: '#B0431E' }} />
                     <div className="min-w-0">
-                      {(city || country) && (
+                      {primary && (
                         <p className="text-[14px] font-semibold truncate" style={{ color: '#2C1309' }}>
-                          {[city, country].filter(Boolean).join(', ')}
+                          {[primary, primary !== city ? city : null, country].filter(Boolean).join(', ')}
                         </p>
                       )}
                       <p className="text-[11px] leading-snug" style={{ color: '#8B5A3C' }}>
