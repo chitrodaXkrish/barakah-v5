@@ -15,6 +15,15 @@ interface ScanRequest {
   region?: string;
 }
 
+const RULES_VERSION = "halal-rules-v1";
+const AI_PROMPT_VERSION: string | null = null;
+
+const normalizeBarcode = (raw: string | null | undefined): string | null => {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw.replace(/\D/g, "");
+  return cleaned.length > 0 ? cleaned : null;
+};
+
 interface ProductLookup {
   source: string;
   product_name: string;
@@ -352,6 +361,168 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    let userId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const jwt = authHeader.slice(7);
+        const payload = JSON.parse(atob(jwt.split(".")[1]));
+        userId = payload.sub ?? null;
+      } catch {
+        // Ignore malformed auth headers.
+      }
+    }
+
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Step 1: Cache-first lookup
+    const normalizedBarcode = normalizeBarcode(body.barcode);
+    let cachedProduct: any | null = null;
+    if (normalizedBarcode) {
+      const { data: cached, error: cacheReadError } = await supabase
+        .from("product_halal_cache")
+        .select("*")
+        .eq("normalized_barcode", normalizedBarcode)
+        .maybeSingle();
+
+      if (cacheReadError) {
+        console.error("product_halal_cache read error:", cacheReadError);
+      } else if (cached) {
+        cachedProduct = cached;
+        const cachedIngredients = Array.isArray(cached.ingredients) ? cached.ingredients : [];
+
+        const cachedResult = {
+          product_name: cached.product_name,
+          brand: cached.brand ?? null,
+          status: cached.status,
+          confidence: cached.confidence ?? null,
+          verdict: cached.verdict ?? null,
+          category: null,
+          region: body.region ?? null,
+          ingredients: cachedIngredients,
+          ingredients_hash: cached.ingredients_hash ?? null,
+          source: cached.source ?? "product_halal_cache",
+          lookup: null,
+          deterministic: { status: cached.status, matched: [] },
+        };
+
+        const cachedScanRow = {
+          user_id: userId,
+          barcode: body.barcode ?? null,
+          product_name: cachedResult.product_name || "Unknown Product",
+          brand: cachedResult.brand ?? null,
+          status: cachedResult.status || "unknown",
+          confidence: typeof cachedResult.confidence === "number" ? cachedResult.confidence : null,
+          verdict: cachedResult.verdict ?? null,
+          category: cachedResult.category ?? null,
+          region: cachedResult.region ?? body.region ?? null,
+          ingredients_hash: cachedResult.ingredients_hash ?? null,
+          ingredients: cachedResult.ingredients ?? null,
+          raw_response: cachedResult,
+          session_id: body.session_id ?? null,
+          product_cache_id: cached.id,
+        };
+
+        const { data: cachedScan, error: cachedScanError } = await supabase
+          .from("scan_history")
+          .insert(cachedScanRow)
+          .select()
+          .single();
+
+        if (cachedScanError) {
+          console.error("scan_history insert error (cache hit):", cachedScanError);
+          // Continue with existing flow; do not abort the response.
+        } else {
+          return new Response(
+            JSON.stringify({ scan: cachedScan, result: cachedResult }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
+
+    let userId: string | null = null;    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const jwt = authHeader.slice(7);
+        const payload = JSON.parse(atob(jwt.split(".")[1]));
+        userId = payload.sub ?? null;
+      } catch {
+        // Ignore malformed auth headers.
+      }
+    }
+
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Step 1: cache-first lookup. A cache hit short-circuits all upstream work.
+    const normalizedBarcode = normalizeBarcode(body.barcode);
+    let cachedProduct: any | null = null;
+    if (normalizedBarcode) {
+      const { data: cached, error: cacheReadError } = await supabase
+        .from("product_halal_cache")
+        .select("*")
+        .eq("normalized_barcode", normalizedBarcode)
+        .maybeSingle();
+
+      if (cacheReadError) {
+        console.error("product_halal_cache read error:", cacheReadError);
+      } else if (cached) {
+        cachedProduct = cached;
+        const cachedIngredients = Array.isArray(cached.ingredients) ? cached.ingredients : [];
+
+        const cachedResult = {
+          product_name: cached.product_name,
+          brand: cached.brand ?? null,
+          status: cached.status,
+          confidence: cached.confidence ?? null,
+          verdict: cached.verdict ?? null,
+          category: null,
+          region: body.region ?? null,
+          ingredients: cachedIngredients,
+          ingredients_hash: cached.ingredients_hash ?? null,
+          source: cached.source ?? "product_halal_cache",
+          lookup: null,
+          deterministic: { status: cached.status, matched: [] },
+        };
+
+        const cachedRow = {
+          user_id: userId,
+          barcode: body.barcode ?? null,
+          product_name: cachedResult.product_name || "Unknown Product",
+          brand: cachedResult.brand ?? null,
+          status: cachedResult.status || "unknown",
+          confidence: typeof cachedResult.confidence === "number" ? cachedResult.confidence : null,
+          verdict: cachedResult.verdict ?? null,
+          category: cachedResult.category ?? null,
+          region: cachedResult.region ?? body.region ?? null,
+          ingredients_hash: cachedResult.ingredients_hash ?? null,
+          ingredients: cachedResult.ingredients ?? null,
+          raw_response: cachedResult,
+          session_id: body.session_id ?? null,
+          product_cache_id: cached.id,
+        };
+
+        const { data: cachedScan, error: cachedScanError } = await supabase
+          .from("scan_history")
+          .insert(cachedRow)
+          .select()
+          .single();
+
+        if (cachedScanError) {
+          console.error("scan_history insert error (cache hit):", cachedScanError);
+          return new Response(
+            JSON.stringify({ error: cachedScanError.message, result: cachedResult }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ scan: cachedScan, result: cachedResult }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const productFacts = await lookupBarcode(body.barcode);
