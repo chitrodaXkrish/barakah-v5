@@ -181,7 +181,7 @@ function runDeterministicHalalCheck(productFacts: ProductLookup, body: ScanReque
   const confidence = status === "halal" ? 82 : status === "haram" ? 96 : 78;
   const verdict =
     status === "halal"
-      ? "No prohibited or doubtful ingredients were detected by Barakah's deterministic halal rules. Gemini verification was requested for an extra review."
+      ? "No prohibited or doubtful ingredients were detected by Barakah's deterministic halal rules. GPT-5 nano verification was requested for an extra review."
       : status === "haram"
         ? `Haram ingredient detected: ${matched.find((match) => match.status === "haram")?.ingredient}.`
         : `Doubtful ingredient needs verification: ${matched[0]?.ingredient}.`;
@@ -266,8 +266,101 @@ const unknownBarcodeResult = (body: ScanRequest) => ({
   source: "barcode_lookup_miss",
 });
 
-async function callGemini(apiKey: string, body: ScanRequest, productFacts: ProductLookup | null) {
-  const userParts: any[] = [];
+
+interface AIResult {
+  product_name: string;
+  brand: string | null;
+  status: HalalStatus;
+  confidence: number;
+  verdict: string;
+  category: string | null;
+  region: string | null;
+  ingredients: IngredientDecision[];
+  ingredients_hash: string | null;
+}
+
+const AI_MODEL = "gpt-5-nano";
+
+const AI_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    product_name: { type: "string" },
+    brand: { type: ["string", "null"] },
+    status: { type: "string", enum: ["halal", "haram", "mushbooh", "unknown"] },
+    confidence: { type: "integer", minimum: 0, maximum: 100 },
+    verdict: { type: "string" },
+    category: { type: ["string", "null"] },
+    region: { type: ["string", "null"] },
+    ingredients: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          ok: { type: "boolean" },
+          note: { type: ["string", "null"] },
+        },
+        required: ["name", "ok", "note"],
+      },
+    },
+    ingredients_hash: { type: ["string", "null"] },
+  },
+  required: [
+    "product_name",
+    "brand",
+    "status",
+    "confidence",
+    "verdict",
+    "category",
+    "region",
+    "ingredients",
+    "ingredients_hash",
+  ],
+} as const;
+
+function extractAiContent(data: any): string {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part: any) => typeof part?.text === "string" ? part.text : "")
+      .join("");
+  }
+  return "";
+}
+
+function isValidAiResult(value: any): value is AIResult {
+  return Boolean(
+    value &&
+      typeof value.product_name === "string" &&
+      (value.brand === null || typeof value.brand === "string") &&
+      ["halal", "haram", "mushbooh", "unknown"].includes(value.status) &&
+      Number.isInteger(value.confidence) &&
+      value.confidence >= 0 &&
+      value.confidence <= 100 &&
+      typeof value.verdict === "string" &&
+      (value.category === null || typeof value.category === "string") &&
+      (value.region === null || typeof value.region === "string") &&
+      Array.isArray(value.ingredients) &&
+      value.ingredients.every(
+        (item: any) =>
+          item &&
+          typeof item.name === "string" &&
+          typeof item.ok === "boolean" &&
+          (item.note === null || typeof item.note === "string"),
+      ) &&
+      (value.ingredients_hash === null || typeof value.ingredients_hash === "string")
+  );
+}
+
+async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null): Promise<AIResult> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
   const parts: string[] = [];
 
   if (body.barcode) parts.push(`Barcode: ${body.barcode}`);
@@ -290,72 +383,189 @@ async function callGemini(apiKey: string, body: ScanRequest, productFacts: Produ
     parts.push("No verified barcode lookup facts were found.");
   }
 
-  parts.push("Analyze this product for halal compliance and return the JSON.");
-  userParts.push({ type: "text", text: parts.join("\n") });
+  parts.push("Analyze this product for halal compliance and return the requested structured result.");
+
+  const userContent: any[] = [{ type: "text", text: parts.join("\n") }];
 
   if (body.imageBase64) {
-    const url = body.imageBase64.startsWith("data:")
+    const imageUrl = body.imageBase64.startsWith("data:")
       ? body.imageBase64
       : `data:${body.imageMimeType ?? "image/jpeg"};base64,${body.imageBase64}`;
-    userParts.push({ type: "image_url", image_url: { url } });
+
+    userContent.push({
+      type: "image_url",
+      image_url: { url: imageUrl },
+    });
   }
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: AI_MODEL,
+      reasoning_effort: "minimal",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userParts },
+        { role: "user", content: userContent },
       ],
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "halal_product_analysis",
+          strict: true,
+          schema: AI_RESPONSE_SCHEMA,
+        },
+      },
+      max_completion_tokens: 1200,
     }),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`AI gateway ${response.status}: ${text}`);
+    const errorText = await response.text();
+    throw new Error(`OpenAI API ${response.status}: ${errorText}`);
   }
 
   const data = await response.json();
-  const content: string = data?.choices?.[0]?.message?.content ?? "{}";
+  const content = extractAiContent(data);
 
-  try {
-    return JSON.parse(content);
-  } catch {
-    const match = content.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : {};
+  if (!content) {
+    throw new Error("OpenAI returned an empty structured response");
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(
+      `OpenAI returned invalid JSON: ${error instanceof Error ? error.message : "parse error"}`,
+    );
+  }
+
+  if (!isValidAiResult(parsed)) {
+    throw new Error("OpenAI returned a response that does not match the halal analysis schema");
+  }
+
+  return parsed;
 }
 
-const mergeGeminiWithDeterministic = (geminiResult: any, deterministicResult: DeterministicResult) => ({
-  ...geminiResult,
+const mergeAiWithDeterministic = (aiResult: AIResult, deterministicResult: DeterministicResult) => ({
+  ...aiResult,
   product_name: deterministicResult.product_name,
   brand: deterministicResult.brand,
   status: deterministicResult.status,
   confidence: deterministicResult.confidence,
   verdict: deterministicResult.verdict,
-  category: geminiResult.category ?? deterministicResult.category,
-  region: geminiResult.region ?? deterministicResult.region,
+  category: aiResult.category ?? deterministicResult.category,
+  region: aiResult.region ?? deterministicResult.region,
   ingredients:
-    Array.isArray(geminiResult.ingredients) && geminiResult.ingredients.length > 0
-      ? geminiResult.ingredients
+    aiResult.ingredients.length > 0
+      ? aiResult.ingredients
       : deterministicResult.ingredients,
-  source: "openfoodfacts_deterministic_gemini",
+  source: "openfoodfacts_deterministic_openai_gpt5nano",
   lookup: deterministicResult.lookup,
   deterministic: deterministicResult.deterministic,
   deterministic_verdict: deterministicResult.verdict,
 });
+
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function getIngredientsHash(parsed: any): Promise<string | null> {
+  const ingredients = Array.isArray(parsed?.ingredients)
+    ? parsed.ingredients
+        .map((item: any) => typeof item?.name === "string" ? item.name.trim().toLowerCase() : "")
+        .filter(Boolean)
+    : [];
+
+  if (ingredients.length === 0) return null;
+
+  const canonical = Array.from(new Set(ingredients)).sort().join("|");
+  return sha256Hex(canonical);
+}
+
+function getAiModelFromSource(source: unknown): string | null {
+  return typeof source === "string" && source.includes("gpt5nano") ? AI_MODEL : null;
+}
+
+async function writeProductCache(
+  supabase: ReturnType<typeof createClient>,
+  normalizedBarcode: string | null,
+  parsed: any,
+): Promise<any | null> {
+  if (!normalizedBarcode) return null;
+
+  const status = parsed?.status;
+  const source = parsed?.source;
+
+  // Decision #11: never cache unknown or barcode lookup misses.
+  if (status === "unknown" || source === "barcode_lookup_miss") {
+    return null;
+  }
+
+  const ingredientsHash = await getIngredientsHash(parsed);
+  parsed.ingredients_hash = ingredientsHash;
+  const cacheRow = {
+    normalized_barcode: normalizedBarcode,
+    product_name: parsed?.product_name || "Unknown Product",
+    brand: parsed?.brand ?? null,
+    status,
+    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : null,
+    verdict: parsed?.verdict ?? null,
+    ingredients: Array.isArray(parsed?.ingredients) ? parsed.ingredients : [],
+    ingredients_hash: ingredientsHash,
+    source: typeof source === "string" ? source : "scan_halal",
+    rules_version: RULES_VERSION,
+    ai_model: getAiModelFromSource(source),
+    ai_prompt_version: AI_PROMPT_VERSION,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from("product_halal_cache")
+      .upsert(cacheRow, { onConflict: "normalized_barcode" })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("product_halal_cache upsert error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("product_halal_cache write exception:", error);
+    return null;
+  }
+}
+
+function buildScanHistoryRow(parsed: any, productCacheId: string | null) {
+  return {
+    product_name: parsed?.product_name || "Unknown Product",
+    brand: parsed?.brand ?? null,
+    status: parsed?.status || "unknown",
+    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : null,
+    verdict: parsed?.verdict ?? null,
+    category: parsed?.category ?? null,
+    region: parsed?.region ?? null,
+    ingredients_hash: parsed?.ingredients_hash ?? null,
+    product_cache_id: productCacheId,
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = (await req.json()) as ScanRequest;
+
     if (!body.barcode && !body.imageBase64) {
       return new Response(JSON.stringify({ error: "Provide barcode and/or imageBase64" }), {
         status: 400,
@@ -363,165 +573,63 @@ serve(async (req) => {
       });
     }
 
-    let userId: string | null = null;
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      try {
-        const jwt = authHeader.slice(7);
-        const payload = JSON.parse(atob(jwt.split(".")[1]));
-        userId = payload.sub ?? null;
-      } catch {
-        // Ignore malformed auth headers.
-      }
-    }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-    // Step 1: Cache-first lookup
+    // Cache-first lookup: a hit short-circuits all upstream work.
     const normalizedBarcode = normalizeBarcode(body.barcode);
-    let cachedProduct: any | null = null;
+
     if (normalizedBarcode) {
-      const { data: cached, error: cacheReadError } = await supabase
-        .from("product_halal_cache")
-        .select("*")
-        .eq("normalized_barcode", normalizedBarcode)
-        .maybeSingle();
+      try {
+        const { data: cached, error: cacheReadError } = await supabase
+          .from("product_halal_cache")
+          .select("*")
+          .eq("normalized_barcode", normalizedBarcode)
+          .maybeSingle();
 
-      if (cacheReadError) {
-        console.error("product_halal_cache read error:", cacheReadError);
-      } else if (cached) {
-        cachedProduct = cached;
-        const cachedIngredients = Array.isArray(cached.ingredients) ? cached.ingredients : [];
+        if (cacheReadError) {
+          console.error("product_halal_cache read error:", cacheReadError);
+        } else if (cached) {
+          const cachedResult = {
+            product_name: cached.product_name,
+            brand: cached.brand ?? null,
+            status: cached.status,
+            confidence: cached.confidence ?? null,
+            verdict: cached.verdict ?? null,
+            category: cached.category ?? null,
+            region: cached.region ?? body.region ?? null,
+            ingredients: Array.isArray(cached.ingredients) ? cached.ingredients : [],
+            ingredients_hash: cached.ingredients_hash ?? null,
+            source: cached.source ?? "product_halal_cache",
+            lookup: null,
+            deterministic: { status: cached.status, matched: [] },
+          };
 
-        const cachedResult = {
-          product_name: cached.product_name,
-          brand: cached.brand ?? null,
-          status: cached.status,
-          confidence: cached.confidence ?? null,
-          verdict: cached.verdict ?? null,
-          category: null,
-          region: body.region ?? null,
-          ingredients: cachedIngredients,
-          ingredients_hash: cached.ingredients_hash ?? null,
-          source: cached.source ?? "product_halal_cache",
-          lookup: null,
-          deterministic: { status: cached.status, matched: [] },
-        };
+          const { data: cachedScan, error: cachedScanError } = await supabase
+            .from("scan_history")
+            .insert(buildScanHistoryRow(cachedResult, cached.id))
+            .select()
+            .single();
 
-        const cachedScanRow = {
-          user_id: userId,
-          barcode: body.barcode ?? null,
-          product_name: cachedResult.product_name || "Unknown Product",
-          brand: cachedResult.brand ?? null,
-          status: cachedResult.status || "unknown",
-          confidence: typeof cachedResult.confidence === "number" ? cachedResult.confidence : null,
-          verdict: cachedResult.verdict ?? null,
-          category: cachedResult.category ?? null,
-          region: cachedResult.region ?? body.region ?? null,
-          ingredients_hash: cachedResult.ingredients_hash ?? null,
-          ingredients: cachedResult.ingredients ?? null,
-          raw_response: cachedResult,
-          session_id: body.session_id ?? null,
-          product_cache_id: cached.id,
-        };
+          if (cachedScanError) {
+            console.error("scan_history insert error (cache hit):", cachedScanError);
+            // Cache read remains useful even if history logging fails.
+            return new Response(
+              JSON.stringify({ result: cachedResult }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
 
-        const { data: cachedScan, error: cachedScanError } = await supabase
-          .from("scan_history")
-          .insert(cachedScanRow)
-          .select()
-          .single();
-
-        if (cachedScanError) {
-          console.error("scan_history insert error (cache hit):", cachedScanError);
-          // Continue with existing flow; do not abort the response.
-        } else {
           return new Response(
             JSON.stringify({ scan: cachedScan, result: cachedResult }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
-      }
-    }
-
-    let userId: string | null = null;    const authHeader = req.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      try {
-        const jwt = authHeader.slice(7);
-        const payload = JSON.parse(atob(jwt.split(".")[1]));
-        userId = payload.sub ?? null;
-      } catch {
-        // Ignore malformed auth headers.
-      }
-    }
-
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-    // Step 1: cache-first lookup. A cache hit short-circuits all upstream work.
-    const normalizedBarcode = normalizeBarcode(body.barcode);
-    let cachedProduct: any | null = null;
-    if (normalizedBarcode) {
-      const { data: cached, error: cacheReadError } = await supabase
-        .from("product_halal_cache")
-        .select("*")
-        .eq("normalized_barcode", normalizedBarcode)
-        .maybeSingle();
-
-      if (cacheReadError) {
-        console.error("product_halal_cache read error:", cacheReadError);
-      } else if (cached) {
-        cachedProduct = cached;
-        const cachedIngredients = Array.isArray(cached.ingredients) ? cached.ingredients : [];
-
-        const cachedResult = {
-          product_name: cached.product_name,
-          brand: cached.brand ?? null,
-          status: cached.status,
-          confidence: cached.confidence ?? null,
-          verdict: cached.verdict ?? null,
-          category: null,
-          region: body.region ?? null,
-          ingredients: cachedIngredients,
-          ingredients_hash: cached.ingredients_hash ?? null,
-          source: cached.source ?? "product_halal_cache",
-          lookup: null,
-          deterministic: { status: cached.status, matched: [] },
-        };
-
-        const cachedRow = {
-          user_id: userId,
-          barcode: body.barcode ?? null,
-          product_name: cachedResult.product_name || "Unknown Product",
-          brand: cachedResult.brand ?? null,
-          status: cachedResult.status || "unknown",
-          confidence: typeof cachedResult.confidence === "number" ? cachedResult.confidence : null,
-          verdict: cachedResult.verdict ?? null,
-          category: cachedResult.category ?? null,
-          region: cachedResult.region ?? body.region ?? null,
-          ingredients_hash: cachedResult.ingredients_hash ?? null,
-          ingredients: cachedResult.ingredients ?? null,
-          raw_response: cachedResult,
-          session_id: body.session_id ?? null,
-          product_cache_id: cached.id,
-        };
-
-        const { data: cachedScan, error: cachedScanError } = await supabase
-          .from("scan_history")
-          .insert(cachedRow)
-          .select()
-          .single();
-
-        if (cachedScanError) {
-          console.error("scan_history insert error (cache hit):", cachedScanError);
-          return new Response(
-            JSON.stringify({ error: cachedScanError.message, result: cachedResult }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-
-        return new Response(
-          JSON.stringify({ scan: cachedScan, result: cachedResult }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+      } catch (error) {
+        console.error("product_halal_cache read exception:", error);
+        // Fall through to the existing scan flow.
       }
     }
 
@@ -532,45 +640,31 @@ serve(async (req) => {
       const deterministicResult = runDeterministicHalalCheck(productFacts, body);
 
       if (deterministicResult.status === "halal") {
-        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-        if (!LOVABLE_API_KEY) {
+        try {
+          const aiResult = await callOpenAI(body, productFacts);
+          parsed = mergeAiWithDeterministic(aiResult, deterministicResult);
+        } catch (error) {
+          console.error("GPT-5 nano verification failed after deterministic halal result:", error);
           parsed = {
             ...deterministicResult,
-            verdict: `${deterministicResult.verdict} Gemini verification could not run because LOVABLE_API_KEY is not configured.`,
+            verdict: `${deterministicResult.verdict} GPT-5 nano verification failed, so this result is based on deterministic rules only.`,
+            source: "openfoodfacts_deterministic_rules",
           };
-        } else {
-          try {
-            const geminiResult = await callGemini(LOVABLE_API_KEY, body, productFacts);
-            parsed = mergeGeminiWithDeterministic(geminiResult, deterministicResult);
-          } catch (error) {
-            console.error("Gemini verification failed after deterministic halal result:", error);
-            parsed = {
-              ...deterministicResult,
-              verdict: `${deterministicResult.verdict} Gemini verification failed, so this result is based on deterministic rules only.`,
-            };
-          }
         }
       } else {
         parsed = deterministicResult;
       }
     } else {
       if (body.barcode) {
+        // Decision #11: barcode lookup misses remain uncached.
         parsed = unknownBarcodeResult(body);
       } else {
-        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-        if (!LOVABLE_API_KEY) {
+        try {
+          parsed = await callOpenAI(body, null);
+          parsed.source = "openai_gpt5nano_image";
+        } catch (error) {
+          console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
           parsed = unknownBarcodeResult(body);
-        } else {
-          try {
-            parsed = await callGemini(LOVABLE_API_KEY, body, null);
-            parsed.source = "gemini_openfoodfacts_miss";
-            parsed.verdict =
-              parsed.verdict ??
-              "OpenFoodFacts did not return a product match, so Gemini reviewed the available barcode/image context.";
-          } catch (error) {
-            console.error("Gemini fallback failed after OpenFoodFacts miss:", error);
-            parsed = unknownBarcodeResult(body);
-          }
         }
       }
     }
@@ -580,41 +674,21 @@ serve(async (req) => {
       parsed.brand = productFacts.brand;
       parsed.category = parsed.category ?? productFacts.category;
       parsed.region = parsed.region ?? productFacts.region ?? body.region ?? null;
-      parsed.source = productFacts.source;
       parsed.lookup = productFacts;
+    } else {
+      parsed.region = parsed.region ?? body.region ?? null;
     }
 
-    let userId: string | null = null;
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      try {
-        const jwt = authHeader.slice(7);
-        const payload = JSON.parse(atob(jwt.split(".")[1]));
-        userId = payload.sub ?? null;
-      } catch {
-        // Ignore malformed auth headers.
-      }
-    }
+    // Cache write is best-effort. It never blocks a scan response.
+    const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
+    const productCacheId = cachedProduct?.id ?? null;
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-    const row = {
-      user_id: userId,
-      barcode: body.barcode ?? null,
-      product_name: parsed.product_name || "Unknown Product",
-      brand: parsed.brand ?? null,
-      status: parsed.status || "unknown",
-      confidence: typeof parsed.confidence === "number" ? parsed.confidence : null,
-      verdict: parsed.verdict ?? null,
-      category: parsed.category ?? null,
-      region: parsed.region ?? body.region ?? null,
-      ingredients_hash: parsed.ingredients_hash ?? null,
-      ingredients: parsed.ingredients ?? null,
-      raw_response: parsed,
-      session_id: body.session_id ?? null,
-    };
-
-    const { data, error } = await supabase.from("scan_history").insert(row).select().single();
+    const row = buildScanHistoryRow(parsed, productCacheId);
+    const { data, error } = await supabase
+      .from("scan_history")
+      .insert(row)
+      .select()
+      .single();
 
     if (error) {
       console.error("scan_history insert error:", error);
