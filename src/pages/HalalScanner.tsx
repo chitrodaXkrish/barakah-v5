@@ -60,6 +60,7 @@ export const HalalScanner = () => {
   const [lastBarcode, setLastBarcode] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
   const scannerIdRef = useRef(`halal-scanner-${Date.now()}`);
@@ -193,6 +194,68 @@ export const HalalScanner = () => {
     setManualOpen(false);
     setManualBarcode('');
     analyzeBarcode(barcode);
+  };
+
+  // Image-based ingredient label analysis start
+  const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset any previous errors/state
+    setError(null);
+    setAnalyzing(true);
+
+    // Read file as data URL to send to edge function
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        const { data, error: invokeError } = await supabase.functions.invoke('scan-halal', {
+          body: {
+            imageBase64: dataUrl,
+            imageMimeType: file.type,
+            region: location
+              ? [location.area || location.city, location.country]
+                  .filter(Boolean)
+                  .join(', ')
+              : undefined,
+            // Include last known barcode if available to aid AI enrichment
+            barcode: lastBarcode ?? undefined,
+          },
+        });
+        if (invokeError) throw invokeError;
+        const result = data?.result ?? data?.scan?.result ?? null;
+        const ai = (result && typeof result === 'object') ? result : null;
+        if (!ai) throw new Error('No AI result returned');
+
+        // Map to ScanResult shape using existing UI mapping logic
+        const mapped: any = {
+          product_name: ai.product_name ?? 'Unknown Product',
+          brand: ai.brand ?? null,
+          status: ai.status,
+          confidence: Number.isInteger(ai.confidence) ? ai.confidence : null,
+          verdict: ai.verdict ?? null,
+          category: ai.category ?? null,
+          region: ai.region ?? null,
+          ingredients: Array.isArray(ai.ingredients) ? ai.ingredients : [],
+          source: ai.source ?? null,
+        };
+
+        setScanResult(mapped);
+        setView('result');
+      } catch (err: any) {
+        setError(err?.message ?? 'Ingredient analysis failed');
+        setView('scan');
+      } finally {
+        setAnalyzing(false);
+        // Clear input value so user can re-upload if desired
+        if (imageInputRef.current) imageInputRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setError('Failed to read image');
+      setAnalyzing(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (

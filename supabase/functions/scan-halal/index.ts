@@ -226,6 +226,7 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     headers: {
       "User-Agent": "BarakahApp/1.0 halal-scanner",
     },
+  }
   });
 
   if (!response.ok) return null;
@@ -351,14 +352,18 @@ function isValidAiResult(value: any): value is AIResult {
           typeof item.ok === "boolean" &&
           (item.note === null || typeof item.note === "string"),
       ) &&
-      (value.ingredients_hash === null || typeof value.ingredients_hash === "string")
+      (value.ingredients_hash === null || typeof value.ingredients_hash === "string"),
   );
 }
 
-async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null): Promise<AIResult> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+async function callOpenAI(
+  body: ScanRequest,
+  productFacts: ProductLookup | null,
+): Promise<AIResult> {
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+    throw new Error("OPENROUTER_API_KEY is not configured");
   }
 
   const parts: string[] = [];
@@ -383,9 +388,13 @@ async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null)
     parts.push("No verified barcode lookup facts were found.");
   }
 
-  parts.push("Analyze this product for halal compliance and return the requested structured result.");
+  parts.push(
+    "Analyze this product for halal compliance and return the requested structured result.",
+  );
 
-  const userContent: any[] = [{ type: "text", text: parts.join("\n") }];
+  const userContent: any[] = [
+    { type: "text", text: parts.join("\n") },
+  ];
 
   if (body.imageBase64) {
     const imageUrl = body.imageBase64.startsWith("data:")
@@ -398,54 +407,67 @@ async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null)
     });
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      reasoning_effort: "minimal",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "halal_product_analysis",
-          strict: true,
-          schema: AI_RESPONSE_SCHEMA,
-        },
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      max_completion_tokens: 1200,
-    }),
-  });
+      body: JSON.stringify({
+        models: [
+          "openai/gpt-5-nano",
+          "deepseek/deepseek-v4-flash",
+        ],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        stream: false,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "halal_product_analysis",
+            strict: true,
+            schema: AI_RESPONSE_SCHEMA,
+          },
+        },
+        max_tokens: 1200,
+      }),
+    },
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI API ${response.status}: ${errorText}`);
+    throw new Error(
+      `OpenRouter API ${response.status}: ${errorText}`,
+    );
   }
 
   const data = await response.json();
   const content = extractAiContent(data);
 
   if (!content) {
-    throw new Error("OpenAI returned an empty structured response");
+    throw new Error("OpenRouter returned an empty structured response");
   }
 
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(content);
   } catch (error) {
     throw new Error(
-      `OpenAI returned invalid JSON: ${error instanceof Error ? error.message : "parse error"}`,
+      `OpenRouter response JSON parse error: ${
+        error instanceof Error ? error.message : "parse error"
+      }`,
     );
   }
 
   if (!isValidAiResult(parsed)) {
-    throw new Error("OpenAI returned a response that does not match the halal analysis schema");
+    throw new Error(
+      "OpenRouter returned a response that does not match the halal analysis schema",
+    );
   }
 
   return parsed;
@@ -540,44 +562,13 @@ async function writeProductCache(
     }
 
     return data;
-  } catch (error) {
-    console.error("product_halal_cache write exception:", error);
-    return null;
-  }
-}
-
-function buildScanHistoryRow(parsed: any, productCacheId: string | null) {
-  return {
-    product_name: parsed?.product_name || "Unknown Product",
-    brand: parsed?.brand ?? null,
-    status: parsed?.status || "unknown",
-    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : null,
-    verdict: parsed?.verdict ?? null,
-    category: parsed?.category ?? null,
-    region: parsed?.region ?? null,
-    ingredients_hash: parsed?.ingredients_hash ?? null,
-    product_cache_id: productCacheId,
-  };
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = (await req.json()) as ScanRequest;
 
-    if (!body.barcode && !body.imageBase64) {
-      return new Response(JSON.stringify({ error: "Provide barcode and/or imageBase64" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
+    // Cache-hit / cache-miss logic reconstruction
     // Cache-first lookup: a hit short-circuits all upstream work.
     const normalizedBarcode = normalizeBarcode(body.barcode);
 
@@ -615,24 +606,24 @@ serve(async (req) => {
 
           if (cachedScanError) {
             console.error("scan_history insert error (cache hit):", cachedScanError);
-            // Cache read remains useful even if history logging fails.
             return new Response(
               JSON.stringify({ result: cachedResult }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
 
+          // Success path: return the cached scan along with the cached result
           return new Response(
             JSON.stringify({ scan: cachedScan, result: cachedResult }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-      } catch (error) {
-        console.error("product_halal_cache read exception:", error);
-        // Fall through to the existing scan flow.
+      } catch (e) {
+        console.error("cache-hit error:", e);
       }
     }
 
+    // CACHE MISS PATH
     const productFacts = await lookupBarcode(body.barcode);
     let parsed: any;
 
@@ -644,7 +635,11 @@ serve(async (req) => {
           const aiResult = await callOpenAI(body, productFacts);
           parsed = mergeAiWithDeterministic(aiResult, deterministicResult);
         } catch (error) {
-          console.error("GPT-5 nano verification failed after deterministic halal result:", error);
+          console.error(
+            "GPT-5 nano verification failed after deterministic halal result:",
+            error,
+          );
+
           parsed = {
             ...deterministicResult,
             verdict: `${deterministicResult.verdict} GPT-5 nano verification failed, so this result is based on deterministic rules only.`,
@@ -655,28 +650,20 @@ serve(async (req) => {
         parsed = deterministicResult;
       }
     } else {
-      if (body.barcode) {
-        // Decision #11: barcode lookup misses remain uncached.
-        parsed = unknownBarcodeResult(body);
-      } else {
+      if (body.imageBase64) {
         try {
           parsed = await callOpenAI(body, null);
           parsed.source = "openai_gpt5nano_image";
         } catch (error) {
-          console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
+          console.error(
+            "GPT-5 nano image analysis failed after OpenFoodFacts miss:",
+            error,
+          );
           parsed = unknownBarcodeResult(body);
         }
+      } else {
+        parsed = unknownBarcodeResult(body);
       }
-    }
-
-    if (productFacts) {
-      parsed.product_name = productFacts.product_name;
-      parsed.brand = productFacts.brand;
-      parsed.category = parsed.category ?? productFacts.category;
-      parsed.region = parsed.region ?? productFacts.region ?? body.region ?? null;
-      parsed.lookup = productFacts;
-    } else {
-      parsed.region = parsed.region ?? body.region ?? null;
     }
 
     // Cache write is best-effort. It never blocks a scan response.
@@ -701,6 +688,113 @@ serve(async (req) => {
     return new Response(JSON.stringify({ scan: data, result: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } catch (e) {
+    console.error("scan-halal error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ scan: data, result: parsed }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("scan-halal error:", e);
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    // If no barcode provided, fall back to unknown response as a safety net
+    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("scan-halal error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+        if (productFacts) {
+          parsed = runDeterministicHalalCheck(productFacts, body);
+          if (parsed.status === "halal") {
+            try {
+              const aiResult = await callOpenAI(body, productFacts);
+              if (isValidAiResult(aiResult)) {
+                parsed = mergeAiWithDeterministic(aiResult, parsed);
+              }
+            } catch {
+              // AI enrichment failed; keep deterministic result
+            }
+          }
+        } else if (body.imageBase64) {
+          try {
+            const aiResult = await callOpenAI(body, null);
+            if (isValidAiResult(aiResult)) {
+              (aiResult as any).source = "openai_gpt5nano_image";
+              parsed = aiResult;
+            } else {
+              parsed = unknownBarcodeResult(body);
+            }
+          } catch {
+            parsed = unknownBarcodeResult(body);
+          }
+        } else {
+          parsed = unknownBarcodeResult(body);
+        }
+
+        // Cache write is best-effort. It never blocks a scan response.
+        const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
+        const productCacheId = cachedProduct?.id ?? null;
+
+        const row = buildScanHistoryRow(parsed, productCacheId);
+        const { data, error } = await supabase
+          .from("scan_history")
+          .insert(row)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("scan_history insert error:", error);
+          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ scan: data, result: parsed }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("scan-halal error:", e);
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    // If no barcode provided, fall back to unknown response as a safety net
+    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+          return new Response(
+  }
+  
+  // end of normalizedBarcode block
+});
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } 
   } catch (e) {
     console.error("scan-halal error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {

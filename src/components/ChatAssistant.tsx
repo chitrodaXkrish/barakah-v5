@@ -19,7 +19,8 @@ interface NativeSpeechRecognitionPlugin {
   requestPermissions(options?: { permissions?: string[] }): Promise<{ microphone?: string }>;
 }
 
-const NativeSpeechRecognition = registerPlugin<NativeSpeechRecognitionPlugin>('NativeSpeechRecognition');
+const NativeSpeechRecognition =
+  registerPlugin<NativeSpeechRecognitionPlugin>('NativeSpeechRecognition');
 
 const CREAM_BG = '#FFF1DD';
 const BROWN = '#2C1309';
@@ -32,9 +33,18 @@ const SUGGESTION_COLOR = '#776F69';
 const SERIF_ITALIC = "'Newsreader', Georgia, serif";
 
 const SUGGESTIONS = [
-  { title: '99 Names of Allah', sub: 'Explore the beautiful names of Allah S.W.T' },
-  { title: 'How to perform Wudu', sub: 'Step-by-step guide to ablution' },
-  { title: 'Dua for anxiety', sub: 'Find peace with authentic supplications' },
+  {
+    title: '99 Names of Allah',
+    sub: 'Explore the beautiful names of Allah S.W.T',
+  },
+  {
+    title: 'How to perform Wudu',
+    sub: 'Step-by-step guide to ablution',
+  },
+  {
+    title: 'Dua for anxiety',
+    sub: 'Find peace with authentic supplications',
+  },
 ];
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
@@ -50,57 +60,158 @@ async function streamChat({
   onDone: () => void;
   onError: (err: string) => void;
 }) {
-  const resp = await fetch(CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
-    body: JSON.stringify({ messages }),
-  });
+  try {
+    const resp = await fetch(CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({ messages }),
+    });
 
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    onError(data.error || 'Failed to connect');
-    return;
-  }
+    if (!resp.ok) {
+      const raw = await resp.text();
 
-  if (!resp.body) { onError('No response'); return; }
+      let message = `Request failed (${resp.status})`;
 
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let idx: number;
-    while ((idx = buffer.indexOf('\n')) !== -1) {
-      let line = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 1);
-      if (line.endsWith('\r')) line = line.slice(0, -1);
-      if (!line.startsWith('data: ')) continue;
-      const json = line.slice(6).trim();
-      if (json === '[DONE]') { onDone(); return; }
       try {
-        const parsed = JSON.parse(json);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) onDelta(content);
+        const data = JSON.parse(raw);
+        message = data?.error || message;
       } catch {
-        buffer = line + '\n' + buffer;
+        if (raw) {
+          message = raw;
+        }
+      }
+
+      onError(message);
+      return;
+    }
+
+    if (!resp.body) {
+      onError('No response body received from the AI service.');
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    let buffer = '';
+    let finished = false;
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      onDone();
+    };
+
+    while (!finished) {
+      const { value, done } = await reader.read();
+
+      if (value) {
+        buffer += decoder.decode(value, { stream: !done });
+      }
+
+      // Process complete SSE lines.
+      while (true) {
+        const newlineIndex = buffer.indexOf('\n');
+
+        if (newlineIndex === -1) {
+          break;
+        }
+
+        let line = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
+
+        if (line.endsWith('\r')) {
+          line = line.slice(0, -1);
+        }
+
+        line = line.trim();
+
+        if (!line) continue;
+
+        // Ignore SSE metadata/comments.
+        if (!line.startsWith('data:')) continue;
+
+        const payload = line.slice(5).trim();
+
+        if (!payload) continue;
+
+        if (payload === '[DONE]') {
+          finish();
+          break;
+        }
+
+        try {
+          const parsed = JSON.parse(payload);
+          const content = parsed?.choices?.[0]?.delta?.content;
+
+          if (typeof content === 'string' && content.length > 0) {
+            onDelta(content);
+          }
+        } catch (parseError) {
+          console.warn(
+            'Could not parse SSE chunk:',
+            payload,
+            parseError,
+          );
+        }
+      }
+
+      if (done) {
+        // Flush any remaining decoder bytes.
+        buffer += decoder.decode();
+
+        // Process a final line if one exists without a trailing newline.
+        const finalLine = buffer.trim();
+
+        if (finalLine.startsWith('data:')) {
+          const payload = finalLine.slice(5).trim();
+
+          if (payload === '[DONE]') {
+            finish();
+          } else if (payload) {
+            try {
+              const parsed = JSON.parse(payload);
+              const content = parsed?.choices?.[0]?.delta?.content;
+
+              if (typeof content === 'string' && content.length > 0) {
+                onDelta(content);
+              }
+            } catch (parseError) {
+              console.warn(
+                'Could not parse final SSE chunk:',
+                payload,
+                parseError,
+              );
+            }
+          }
+        }
+
         break;
       }
     }
+
+    finish();
+  } catch (error) {
+    console.error('Chat stream error:', error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Failed to connect to the AI assistant.';
+
+    onError(message);
   }
-  onDone();
 }
 
 interface ChatAssistantProps {
   open: boolean;
   onClose: () => void;
 }
+
 
 export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   const { user } = useAuth();
