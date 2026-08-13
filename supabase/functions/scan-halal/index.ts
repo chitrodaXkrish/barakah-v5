@@ -226,7 +226,6 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     headers: {
       "User-Agent": "BarakahApp/1.0 halal-scanner",
     },
-  }
   });
 
   if (!response.ok) return null;
@@ -562,14 +561,68 @@ async function writeProductCache(
     }
 
     return data;
+  } catch (e) {
+    console.error("product_halal_cache write error:", e);
+    return null;
+  }
+}
+
+function buildScanHistoryRow(parsed: any, productCacheId: string | null, userId: string | null) {
+  return {
+    user_id: userId,
+    product_name: parsed?.product_name || "Unknown Product",
+    brand: parsed?.brand ?? null,
+    status: parsed?.status || "unknown",
+    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : null,
+    verdict: parsed?.verdict ?? null,
+    category: parsed?.category ?? null,
+    region: parsed?.region ?? null,
+    ingredients_hash: parsed?.ingredients_hash ?? null,
+    product_cache_id: productCacheId,
+  };
+}
+
+async function getRequestUserId(
+  supabase: ReturnType<typeof createClient>,
+  req: Request,
+): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) {
+    console.error("scan-halal auth user lookup error:", error);
+    return null;
+  }
+
+  return data.user?.id ?? null;
+}
+
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   try {
-    const body = (await req.json()) as ScanRequest;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    // Cache-hit / cache-miss logic reconstruction
-    // Cache-first lookup: a hit short-circuits all upstream work.
+    if (!supabaseUrl || !serviceRoleKey) {
+      return jsonResponse({ error: "Supabase service credentials are not configured" }, 500);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    const userId = await getRequestUserId(supabase, req);
+    const body = (await req.json()) as ScanRequest;
     const normalizedBarcode = normalizeBarcode(body.barcode);
 
     if (normalizedBarcode) {
@@ -589,8 +642,8 @@ serve(async (req) => {
             status: cached.status,
             confidence: cached.confidence ?? null,
             verdict: cached.verdict ?? null,
-            category: cached.category ?? null,
-            region: cached.region ?? body.region ?? null,
+            category: null,
+            region: body.region ?? null,
             ingredients: Array.isArray(cached.ingredients) ? cached.ingredients : [],
             ingredients_hash: cached.ingredients_hash ?? null,
             source: cached.source ?? "product_halal_cache",
@@ -600,30 +653,22 @@ serve(async (req) => {
 
           const { data: cachedScan, error: cachedScanError } = await supabase
             .from("scan_history")
-            .insert(buildScanHistoryRow(cachedResult, cached.id))
+            .insert(buildScanHistoryRow(cachedResult, cached.id, userId))
             .select()
             .single();
 
           if (cachedScanError) {
             console.error("scan_history insert error (cache hit):", cachedScanError);
-            return new Response(
-              JSON.stringify({ result: cachedResult }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            return jsonResponse({ result: cachedResult });
           }
 
-          // Success path: return the cached scan along with the cached result
-          return new Response(
-            JSON.stringify({ scan: cachedScan, result: cachedResult }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return jsonResponse({ scan: cachedScan, result: cachedResult });
         }
       } catch (e) {
         console.error("cache-hit error:", e);
       }
     }
 
-    // CACHE MISS PATH
     const productFacts = await lookupBarcode(body.barcode);
     let parsed: any;
 
@@ -635,171 +680,45 @@ serve(async (req) => {
           const aiResult = await callOpenAI(body, productFacts);
           parsed = mergeAiWithDeterministic(aiResult, deterministicResult);
         } catch (error) {
-          console.error(
-            "GPT-5 nano verification failed after deterministic halal result:",
-            error,
-          );
-
+          console.error("GPT-5 nano verification failed after deterministic halal result:", error);
           parsed = {
             ...deterministicResult,
-            verdict: `${deterministicResult.verdict} GPT-5 nano verification failed, so this result is based on deterministic rules only.`,
+            verdict: `${deterministicResult.verdict} AI verification failed, so this result is based on deterministic rules only.`,
             source: "openfoodfacts_deterministic_rules",
           };
         }
       } else {
         parsed = deterministicResult;
       }
-    } else {
-      if (body.imageBase64) {
-        try {
-          parsed = await callOpenAI(body, null);
-          parsed.source = "openai_gpt5nano_image";
-        } catch (error) {
-          console.error(
-            "GPT-5 nano image analysis failed after OpenFoodFacts miss:",
-            error,
-          );
-          parsed = unknownBarcodeResult(body);
-        }
-      } else {
+    } else if (body.imageBase64) {
+      try {
+        parsed = await callOpenAI(body, null);
+        parsed.source = "openai_gpt5nano_image";
+      } catch (error) {
+        console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
         parsed = unknownBarcodeResult(body);
       }
+    } else {
+      parsed = unknownBarcodeResult(body);
     }
 
-    // Cache write is best-effort. It never blocks a scan response.
     const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
     const productCacheId = cachedProduct?.id ?? null;
 
-    const row = buildScanHistoryRow(parsed, productCacheId);
     const { data, error } = await supabase
       .from("scan_history")
-      .insert(row)
+      .insert(buildScanHistoryRow(parsed, productCacheId, userId))
       .select()
       .single();
 
     if (error) {
       console.error("scan_history insert error:", error);
-      return new Response(JSON.stringify({ error: error.message, result: parsed }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: error.message, result: parsed }, 500);
     }
 
-    return new Response(JSON.stringify({ scan: data, result: parsed }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ scan: data, result: parsed });
   } catch (e) {
     console.error("scan-halal error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-});
-          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        return new Response(JSON.stringify({ scan: data, result: parsed }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (e) {
-        console.error("scan-halal error:", e);
-        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-    // If no barcode provided, fall back to unknown response as a safety net
-    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    console.error("scan-halal error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-});
-        if (productFacts) {
-          parsed = runDeterministicHalalCheck(productFacts, body);
-          if (parsed.status === "halal") {
-            try {
-              const aiResult = await callOpenAI(body, productFacts);
-              if (isValidAiResult(aiResult)) {
-                parsed = mergeAiWithDeterministic(aiResult, parsed);
-              }
-            } catch {
-              // AI enrichment failed; keep deterministic result
-            }
-          }
-        } else if (body.imageBase64) {
-          try {
-            const aiResult = await callOpenAI(body, null);
-            if (isValidAiResult(aiResult)) {
-              (aiResult as any).source = "openai_gpt5nano_image";
-              parsed = aiResult;
-            } else {
-              parsed = unknownBarcodeResult(body);
-            }
-          } catch {
-            parsed = unknownBarcodeResult(body);
-          }
-        } else {
-          parsed = unknownBarcodeResult(body);
-        }
-
-        // Cache write is best-effort. It never blocks a scan response.
-        const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
-        const productCacheId = cachedProduct?.id ?? null;
-
-        const row = buildScanHistoryRow(parsed, productCacheId);
-        const { data, error } = await supabase
-          .from("scan_history")
-          .insert(row)
-          .select()
-          .single();
-
-        if (error) {
-          console.error("scan_history insert error:", error);
-          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        return new Response(JSON.stringify({ scan: data, result: parsed }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (e) {
-        console.error("scan-halal error:", e);
-        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-    // If no barcode provided, fall back to unknown response as a safety net
-    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-          return new Response(
-  }
-  
-  // end of normalizedBarcode block
-});
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } 
-  } catch (e) {
-    console.error("scan-halal error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });
