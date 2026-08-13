@@ -213,7 +213,11 @@ export const HalalScanner = () => {
           body: {
             imageBase64: dataUrl,
             imageMimeType: file.type,
-            region: location ?? undefined,
+            region: location
+              ? [location.area || location.city, location.country]
+                  .filter(Boolean)
+                  .join(', ')
+              : undefined,
             // Include last known barcode if available to aid AI enrichment
             barcode: lastBarcode ?? undefined,
           },

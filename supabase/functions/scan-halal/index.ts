@@ -226,6 +226,7 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     headers: {
       "User-Agent": "BarakahApp/1.0 halal-scanner",
     },
+  }
   });
 
   if (!response.ok) return null;
@@ -561,44 +562,13 @@ async function writeProductCache(
     }
 
     return data;
-  } catch (error) {
-    console.error("product_halal_cache write exception:", error);
-    return null;
-  }
-}
-
-function buildScanHistoryRow(parsed: any, productCacheId: string | null) {
-  return {
-    product_name: parsed?.product_name || "Unknown Product",
-    brand: parsed?.brand ?? null,
-    status: parsed?.status || "unknown",
-    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : null,
-    verdict: parsed?.verdict ?? null,
-    category: parsed?.category ?? null,
-    region: parsed?.region ?? null,
-    ingredients_hash: parsed?.ingredients_hash ?? null,
-    product_cache_id: productCacheId,
-  };
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = (await req.json()) as ScanRequest;
 
-    if (!body.barcode && !body.imageBase64) {
-      return new Response(JSON.stringify({ error: "Provide barcode and/or imageBase64" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
+    // Cache-hit / cache-miss logic reconstruction
     // Cache-first lookup: a hit short-circuits all upstream work.
     const normalizedBarcode = normalizeBarcode(body.barcode);
 
@@ -636,24 +606,24 @@ serve(async (req) => {
 
           if (cachedScanError) {
             console.error("scan_history insert error (cache hit):", cachedScanError);
-            // Cache read remains useful even if history logging fails.
             return new Response(
               JSON.stringify({ result: cachedResult }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
 
+          // Success path: return the cached scan along with the cached result
           return new Response(
             JSON.stringify({ scan: cachedScan, result: cachedResult }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-      } catch (error) {
-        console.error("product_halal_cache read exception:", error);
-        // Fall through to the existing scan flow.
+      } catch (e) {
+        console.error("cache-hit error:", e);
       }
     }
 
+    // CACHE MISS PATH
     const productFacts = await lookupBarcode(body.barcode);
     let parsed: any;
 
@@ -665,7 +635,11 @@ serve(async (req) => {
           const aiResult = await callOpenAI(body, productFacts);
           parsed = mergeAiWithDeterministic(aiResult, deterministicResult);
         } catch (error) {
-          console.error("GPT-5 nano verification failed after deterministic halal result:", error);
+          console.error(
+            "GPT-5 nano verification failed after deterministic halal result:",
+            error,
+          );
+
           parsed = {
             ...deterministicResult,
             verdict: `${deterministicResult.verdict} GPT-5 nano verification failed, so this result is based on deterministic rules only.`,
@@ -673,32 +647,23 @@ serve(async (req) => {
           };
         }
       } else {
+        parsed = deterministicResult;
+      }
     } else {
-      // Barcode lookup missed. If an image is supplied, analyze it with AI;
-      // otherwise preserve the existing barcode_lookup_miss result for safety.
       if (body.imageBase64) {
         try {
           parsed = await callOpenAI(body, null);
           parsed.source = "openai_gpt5nano_image";
         } catch (error) {
-          console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
+          console.error(
+            "GPT-5 nano image analysis failed after OpenFoodFacts miss:",
+            error,
+          );
           parsed = unknownBarcodeResult(body);
         }
       } else {
         parsed = unknownBarcodeResult(body);
       }
-    }
-      parsed = unknownBarcodeResult(body);
-    }
-
-    if (productFacts) {
-      parsed.product_name = productFacts.product_name;
-      parsed.brand = productFacts.brand;
-      parsed.category = parsed.category ?? productFacts.category;
-      parsed.region = parsed.region ?? productFacts.region ?? body.region ?? null;
-      parsed.lookup = productFacts;
-    } else {
-      parsed.region = parsed.region ?? body.region ?? null;
     }
 
     // Cache write is best-effort. It never blocks a scan response.
@@ -723,6 +688,113 @@ serve(async (req) => {
     return new Response(JSON.stringify({ scan: data, result: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } catch (e) {
+    console.error("scan-halal error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ scan: data, result: parsed }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("scan-halal error:", e);
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    // If no barcode provided, fall back to unknown response as a safety net
+    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("scan-halal error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+        if (productFacts) {
+          parsed = runDeterministicHalalCheck(productFacts, body);
+          if (parsed.status === "halal") {
+            try {
+              const aiResult = await callOpenAI(body, productFacts);
+              if (isValidAiResult(aiResult)) {
+                parsed = mergeAiWithDeterministic(aiResult, parsed);
+              }
+            } catch {
+              // AI enrichment failed; keep deterministic result
+            }
+          }
+        } else if (body.imageBase64) {
+          try {
+            const aiResult = await callOpenAI(body, null);
+            if (isValidAiResult(aiResult)) {
+              (aiResult as any).source = "openai_gpt5nano_image";
+              parsed = aiResult;
+            } else {
+              parsed = unknownBarcodeResult(body);
+            }
+          } catch {
+            parsed = unknownBarcodeResult(body);
+          }
+        } else {
+          parsed = unknownBarcodeResult(body);
+        }
+
+        // Cache write is best-effort. It never blocks a scan response.
+        const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
+        const productCacheId = cachedProduct?.id ?? null;
+
+        const row = buildScanHistoryRow(parsed, productCacheId);
+        const { data, error } = await supabase
+          .from("scan_history")
+          .insert(row)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("scan_history insert error:", error);
+          return new Response(JSON.stringify({ error: error.message, result: parsed }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ scan: data, result: parsed }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("scan-halal error:", e);
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    // If no barcode provided, fall back to unknown response as a safety net
+    return new Response(JSON.stringify({ scan: null, result: unknownBarcodeResult(body) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+          return new Response(
+  }
+  
+  // end of normalizedBarcode block
+});
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } 
   } catch (e) {
     console.error("scan-halal error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
