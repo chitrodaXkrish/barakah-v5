@@ -351,14 +351,18 @@ function isValidAiResult(value: any): value is AIResult {
           typeof item.ok === "boolean" &&
           (item.note === null || typeof item.note === "string"),
       ) &&
-      (value.ingredients_hash === null || typeof value.ingredients_hash === "string")
+      (value.ingredients_hash === null || typeof value.ingredients_hash === "string"),
   );
 }
 
-async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null): Promise<AIResult> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+async function callOpenAI(
+  body: ScanRequest,
+  productFacts: ProductLookup | null,
+): Promise<AIResult> {
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+    throw new Error("OPENROUTER_API_KEY is not configured");
   }
 
   const parts: string[] = [];
@@ -383,9 +387,13 @@ async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null)
     parts.push("No verified barcode lookup facts were found.");
   }
 
-  parts.push("Analyze this product for halal compliance and return the requested structured result.");
+  parts.push(
+    "Analyze this product for halal compliance and return the requested structured result.",
+  );
 
-  const userContent: any[] = [{ type: "text", text: parts.join("\n") }];
+  const userContent: any[] = [
+    { type: "text", text: parts.join("\n") },
+  ];
 
   if (body.imageBase64) {
     const imageUrl = body.imageBase64.startsWith("data:")
@@ -398,54 +406,67 @@ async function callOpenAI(body: ScanRequest, productFacts: ProductLookup | null)
     });
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      reasoning_effort: "minimal",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "halal_product_analysis",
-          strict: true,
-          schema: AI_RESPONSE_SCHEMA,
-        },
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      max_completion_tokens: 1200,
-    }),
-  });
+      body: JSON.stringify({
+        models: [
+          "openai/gpt-5-nano",
+          "deepseek/deepseek-v4-flash",
+        ],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        stream: false,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "halal_product_analysis",
+            strict: true,
+            schema: AI_RESPONSE_SCHEMA,
+          },
+        },
+        max_tokens: 1200,
+      }),
+    },
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI API ${response.status}: ${errorText}`);
+    throw new Error(
+      `OpenRouter API ${response.status}: ${errorText}`,
+    );
   }
 
   const data = await response.json();
   const content = extractAiContent(data);
 
   if (!content) {
-    throw new Error("OpenAI returned an empty structured response");
+    throw new Error("OpenRouter returned an empty structured response");
   }
 
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(content);
   } catch (error) {
     throw new Error(
-      `OpenAI returned invalid JSON: ${error instanceof Error ? error.message : "parse error"}`,
+      `OpenRouter response JSON parse error: ${
+        error instanceof Error ? error.message : "parse error"
+      }`,
     );
   }
 
   if (!isValidAiResult(parsed)) {
-    throw new Error("OpenAI returned a response that does not match the halal analysis schema");
+    throw new Error(
+      "OpenRouter returned a response that does not match the halal analysis schema",
+    );
   }
 
   return parsed;
@@ -652,13 +673,10 @@ serve(async (req) => {
           };
         }
       } else {
-        parsed = deterministicResult;
-      }
     } else {
-      if (body.barcode) {
-        // Decision #11: barcode lookup misses remain uncached.
-        parsed = unknownBarcodeResult(body);
-      } else {
+      // Barcode lookup missed. If an image is supplied, analyze it with AI;
+      // otherwise preserve the existing barcode_lookup_miss result for safety.
+      if (body.imageBase64) {
         try {
           parsed = await callOpenAI(body, null);
           parsed.source = "openai_gpt5nano_image";
@@ -666,7 +684,11 @@ serve(async (req) => {
           console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
           parsed = unknownBarcodeResult(body);
         }
+      } else {
+        parsed = unknownBarcodeResult(body);
       }
+    }
+      parsed = unknownBarcodeResult(body);
     }
 
     if (productFacts) {
