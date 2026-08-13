@@ -1,8 +1,28 @@
 -- Create enum for order status
-CREATE TYPE public.order_status AS ENUM ('pending', 'paid', 'shipped', 'delivered', 'cancelled');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'order_status' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.order_status AS ENUM ('pending', 'paid', 'shipped', 'delivered', 'cancelled');
+  END IF;
+END;
+$$;
 
 -- Create enum for booking status
-CREATE TYPE public.booking_status AS ENUM ('pending', 'confirmed', 'cancelled');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'booking_status' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.booking_status AS ENUM ('pending', 'confirmed', 'cancelled');
+  END IF;
+END;
+$$;
 
 -- Create salah_log table for prayer tracking
 CREATE TABLE public.salah_log (

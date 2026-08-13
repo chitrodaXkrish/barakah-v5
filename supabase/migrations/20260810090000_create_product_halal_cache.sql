@@ -2,7 +2,7 @@
 -- One row per normalized barcode, shared across all users.
 -- scan_history remains the per-user scan log.
 
-CREATE TABLE public.product_halal_cache (
+CREATE TABLE IF NOT EXISTS public.product_halal_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   normalized_barcode TEXT NOT NULL UNIQUE,
   product_name TEXT NOT NULL,
@@ -20,13 +20,13 @@ CREATE TABLE public.product_halal_cache (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX product_halal_cache_status_idx
+CREATE INDEX IF NOT EXISTS product_halal_cache_status_idx
   ON public.product_halal_cache(status);
 
-CREATE INDEX product_halal_cache_ingredients_hash_idx
+CREATE INDEX IF NOT EXISTS product_halal_cache_ingredients_hash_idx
   ON public.product_halal_cache(ingredients_hash);
 
-CREATE INDEX product_halal_cache_rules_version_idx
+CREATE INDEX IF NOT EXISTS product_halal_cache_rules_version_idx
   ON public.product_halal_cache(rules_version);
 
 GRANT SELECT ON public.product_halal_cache TO authenticated, anon;
@@ -34,18 +34,27 @@ GRANT ALL ON public.product_halal_cache TO service_role;
 
 ALTER TABLE public.product_halal_cache ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated can read product halal cache"
+  ON public.product_halal_cache;
+
 CREATE POLICY "Authenticated can read product halal cache"
   ON public.product_halal_cache
   FOR SELECT
   TO authenticated
   USING (true);
 
--- scan_history: add nullable FK to the canonical cache. No existing rows are
--- touched in this migration.
-ALTER TABLE public.scan_history
-  ADD COLUMN IF NOT EXISTS product_cache_id UUID
-  REFERENCES public.product_halal_cache(id)
-  ON DELETE SET NULL;
+-- scan_history: add nullable FK to the canonical cache when that table exists.
+-- Some checkouts/projects do not include scan_history, so keep this dump replayable.
+DO $$
+BEGIN
+  IF to_regclass('public.scan_history') IS NOT NULL THEN
+    ALTER TABLE public.scan_history
+      ADD COLUMN IF NOT EXISTS product_cache_id UUID
+      REFERENCES public.product_halal_cache(id)
+      ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS scan_history_product_cache_id_idx
-  ON public.scan_history(product_cache_id);
+    CREATE INDEX IF NOT EXISTS scan_history_product_cache_id_idx
+      ON public.scan_history(product_cache_id);
+  END IF;
+END;
+$$;

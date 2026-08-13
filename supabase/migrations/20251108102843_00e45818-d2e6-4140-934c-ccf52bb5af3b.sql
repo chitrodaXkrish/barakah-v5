@@ -1,5 +1,15 @@
 -- Create enum for user roles
-CREATE TYPE public.app_role AS ENUM ('normal_user', 'seller', 'travel_partner');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'app_role' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.app_role AS ENUM ('normal_user', 'seller', 'travel_partner');
+  END IF;
+END;
+$$;
 
 -- Create user_roles table
 CREATE TABLE public.user_roles (
