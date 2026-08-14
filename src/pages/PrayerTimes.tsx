@@ -72,7 +72,7 @@ const essentials = [
   { label: 'Hadith', img: assetUrl(hadithIcon), icon: null, path: '/hadith' },
   { label: 'Quran', img: assetUrl(qaQuranAsset), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
   { label: 'Hajj Packages', img: assetUrl(hajjIcon), icon: null, path: '/hajj' },
-  { label: 'Places', img: assetUrl(placesIcon), icon: null, path: '/places' },
+  { label: 'Nearby', img: assetUrl(placesIcon), icon: null, path: '/places' },
   { label: 'Zakat Calc.', img: assetUrl(zakatIcon), icon: null, path: '/zakat' },
   { label: "Dua's", img: assetUrl(duaIcon), icon: null, path: '/mood' },
   { label: 'Qibla', img: assetUrl(qiblaIcon), icon: null, path: '/qibla' },

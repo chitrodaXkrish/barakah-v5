@@ -349,49 +349,64 @@ const ExploreView = ({
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-bold" style={{ color: BROWN_DARK }}>
-          Top Picks
-        </h2>
-        <button className="text-sm" style={{ color: '#9C8569' }}>
-          See all
-        </button>
-      </div>
+      {communities.length === 0 ? (
+        <div className="text-center py-16 rounded-2xl" style={{ background: '#FFFFFF' }}>
+          <Users className="h-10 w-10 mx-auto mb-4" style={{ color: '#C4A98A' }} />
+          <p className="font-medium" style={{ color: BROWN_DARK }}>
+            No communities to explore yet
+          </p>
+          <p className="text-sm mt-1" style={{ color: '#9C8569' }}>
+            New communities will appear here once they are available.
+          </p>
+        </div>
+      ) : (
+        <>
+          {featured.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold" style={{ color: BROWN_DARK }}>
+                  Top Picks
+                </h2>
+              </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide mb-5">
-        {featured.map((c) => (
-          <CommunityHeroCard
-            key={c.id}
-            community={c}
-            joined={joined.has(c.id)}
-            onToggle={onToggle}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
+              <div className="flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide mb-5">
+                {featured.map((c) => (
+                  <CommunityHeroCard
+                    key={c.id}
+                    community={c}
+                    joined={joined.has(c.id)}
+                    onToggle={onToggle}
+                    onOpen={onOpen}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
-        {COMMUNITY_CATEGORIES.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setCategory(id)}
-            className="px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all border"
-            style={
-              category === id
-                ? { background: BROWN, borderColor: 'transparent', color: '#FFFFFF' }
-                : { background: '#FFFFFF', borderColor: SOFT_BORDER, color: BROWN_DARK }
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+          <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
+            {COMMUNITY_CATEGORIES.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setCategory(id)}
+                className="px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all border"
+                style={
+                  category === id
+                    ? { background: BROWN, borderColor: 'transparent', color: '#FFFFFF' }
+                    : { background: '#FFFFFF', borderColor: SOFT_BORDER, color: BROWN_DARK }
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-      <div className="space-y-3 pb-6">
-        {rest.map((c) => (
-          <CommunityRow key={c.id} community={c} joined={joined.has(c.id)} onToggle={onToggle} onOpen={onOpen} />
-        ))}
-      </div>
+          <div className="space-y-3 pb-6">
+            {rest.map((c) => (
+              <CommunityRow key={c.id} community={c} joined={joined.has(c.id)} onToggle={onToggle} onOpen={onOpen} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -1415,7 +1430,7 @@ export const Forum = () => {
     }
   };
 
-  const ReportPostDialog = () => (
+  const renderReportPostDialog = () => (
     <Dialog
       open={!!reportPost}
       onOpenChange={(open) => {
@@ -1844,7 +1859,7 @@ export const Forum = () => {
             </div>
           </div>
         </div>
-        <ReportPostDialog />
+        {renderReportPostDialog()}
       </Layout>
     );
   }
@@ -2232,7 +2247,7 @@ export const Forum = () => {
           ) : activeTab === 'communities' ? (
             <MyCommunitiesView
               joined={joinedCommunities}
-              communities={COMMUNITIES}
+              communities={[]}
               userCreated={userCommunities}
               onToggle={toggleJoinCommunity}
               onExplore={() => setActiveTab('explore')}
@@ -2242,7 +2257,7 @@ export const Forum = () => {
           ) : activeTab === 'explore' ? (
             <ExploreView
               joined={joinedCommunities}
-              communities={COMMUNITIES}
+              communities={[]}
               category={exploreCategory}
               setCategory={setExploreCategory}
               onToggle={toggleJoinCommunity}
@@ -2468,7 +2483,7 @@ export const Forum = () => {
           onOpenChange={setCreateCommunityOpen}
           onCreate={handleCreateCommunity}
         />
-        <ReportPostDialog />
+        {renderReportPostDialog()}
       </div>
     </Layout>
   );

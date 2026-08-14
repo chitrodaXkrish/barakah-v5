@@ -31,16 +31,18 @@ const BROWN_MUTED = '#8B6F5C';
 const BORDER = 'rgba(232,213,196,0.86)';
 
 interface DuaItem {
-  id: number;
-  category: string;
-  title: string;
-  arabic: string;
-  transliteration: string;
-  translation: string;
-  reference: string;
-  source: string;
-  slug: string;
-  tags: string[];
+  id: number | string;
+  category?: string;
+  title?: string;
+  arabic?: string;
+  transliteration?: string;
+  translation?: string;
+  translation_en?: string;
+  reference?: string;
+  source?: string;
+  grade?: string;
+  slug?: string;
+  tags?: string[];
 }
 
 interface GroupedDua {
@@ -56,6 +58,17 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
+const getDuaNumber = (dua: DuaItem) => {
+  const parsed = Number(dua.id);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getDuaTranslation = (dua: DuaItem) =>
+  dua.translation || dua.translation_en || '';
+
+const getDuaSourceBase = (dua?: DuaItem) =>
+  (dua?.source || 'Hisn al-Muslim').replace(/\s+#?\d+\s*$/, '');
+
 const groupedDuas: GroupedDua[] = Array.from(
   (duasData as DuaItem[]).reduce((groups, dua) => {
     const categoryName = dua.category || dua.title || 'General';
@@ -67,19 +80,22 @@ const groupedDuas: GroupedDua[] = Array.from(
 ).map(([category, duas]) => ({
   id: slugify(category),
   category,
-  duas: duas.sort((a, b) => a.id - b.id),
+  duas: duas.sort((a, b) => getDuaNumber(a) - getDuaNumber(b)),
   partCount: duas.length,
 }));
 
 const formatListSubtitle = (group: GroupedDua) => {
-  const numbers = group.duas.map((dua) => dua.id);
+  const numbers = group.duas.map(getDuaNumber).filter(Boolean);
+  const source = getDuaSourceBase(group.duas[0]);
   const range =
     numbers.length > 1
       ? `#${Math.min(...numbers)}-${Math.max(...numbers)}`
-      : `#${numbers[0]}`;
+      : numbers[0]
+        ? `#${numbers[0]}`
+        : '';
   const partLabel = group.partCount === 1 ? 'section' : 'sections';
 
-  return `Hisnul Muslim ${range} - ${group.partCount} ${partLabel}`;
+  return `${source}${range ? ` ${range}` : ''} - ${group.partCount} ${partLabel}`;
 };
 
 const groupMatchesSearch = (group: GroupedDua, query: string) =>
@@ -90,8 +106,11 @@ const groupMatchesSearch = (group: GroupedDua, query: string) =>
       dua.title,
       dua.arabic,
       dua.transliteration,
-      dua.translation,
+      getDuaTranslation(dua),
       dua.reference,
+      dua.source,
+      dua.grade,
+      dua.slug,
       ...(dua.tags || []),
     ]
       .join(' ')
@@ -273,7 +292,7 @@ export const Mood = () => {
                       className="text-[13px] font-semibold px-2.5 py-1 rounded-md"
                       style={{ background: 'rgba(176,67,30,0.1)', color: BROWN_ACCENT }}
                     >
-                      Hisnul Muslim #{dua.id}
+                      {dua.source || `${getDuaSourceBase(dua)} #${dua.id}`}
                     </span>
                   </div>
 
@@ -283,11 +302,9 @@ export const Mood = () => {
                       style={{ background: '#FFF9F0' }}
                     >
                       <p
-                        className="text-[26px] leading-[2.2] font-arabic text-right"
+                        className="text-[26px] leading-[2.1] font-quran whitespace-pre-line"
                         style={{
                           color: BROWN,
-                          direction: 'rtl',
-                          unicodeBidi: 'plaintext',
                           wordSpacing: '0.08em',
                           textRendering: 'optimizeLegibility',
                         }}
@@ -320,7 +337,7 @@ export const Mood = () => {
                     </div>
                   )}
 
-                  {dua.translation && (
+                  {getDuaTranslation(dua) && (
                     <div
                       className="rounded-2xl border px-4 py-4"
                       style={{ borderColor: BORDER, background: CREAM_CARD }}
@@ -336,7 +353,7 @@ export const Mood = () => {
                         style={{ color: BROWN }}
                         dir="ltr"
                       >
-                        {dua.translation}
+                        {getDuaTranslation(dua)}
                       </p>
                     </div>
                   )}
@@ -350,6 +367,7 @@ export const Mood = () => {
                       />
                       <p className="text-[13px] leading-snug" style={{ color: BROWN_MUTED }}>
                         <span className="font-semibold text-[#6E5544]">Reference:</span> {dua.reference}
+                        {dua.grade ? ` | ${dua.grade}` : ''}
                       </p>
                     </div>
                   )}

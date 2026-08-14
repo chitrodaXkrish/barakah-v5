@@ -79,7 +79,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.home': 'Home',
     'nav.store': 'Marketplace',
     'nav.guftagu': 'Guftagu',
-    'nav.places': 'Places',
+    'nav.places': 'Nearby',
     'nav.account': 'Account',
     'nav.prayer': 'Prayer',
     'nav.scanner': 'Scanner',

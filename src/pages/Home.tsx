@@ -156,7 +156,7 @@ export const Home = () => {
   const quickActions = [
     { label: 'Quran', img: assetUrl(qaQuranAsset), onClick: () => navigate('/quran') },
     { label: 'Islamic AI', img: assetUrl(qaAiAsset), onClick: () => setIsChatOpen(true) },
-    { label: 'Places', img: assetUrl(qaPlacesAsset), onClick: () => navigate('/places') },
+    { label: 'Nearby', img: assetUrl(qaPlacesAsset), onClick: () => navigate('/places') },
     { label: 'Hajj Packages', img: assetUrl(qaHajjAsset), onClick: () => navigate('/hajj') },
   ];
 

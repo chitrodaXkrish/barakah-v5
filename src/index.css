@@ -175,6 +175,14 @@ All colors MUST be HSL.
   .font-arabic {
     font-family: 'Plus Jakarta Sans', sans-serif;
   }
+
+  .font-quran {
+    direction: rtl;
+    text-align: right;
+    unicode-bidi: plaintext;
+    font-family: 'Amiri', 'Noto Naskh Arabic', 'KFGQPC Uthman Taha Naskh', serif;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  }
   
   /* Premium glow effects */
   .glow-brown {

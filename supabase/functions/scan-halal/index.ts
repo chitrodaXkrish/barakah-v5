@@ -26,6 +26,17 @@ const normalizeBarcode = (raw: string | null | undefined): string | null => {
   return cleaned.length > 0 ? cleaned : null;
 };
 
+const getBarcodeCandidates = (raw: string | null | undefined): string[] => {
+  const normalized = normalizeBarcode(raw);
+  if (!normalized) return [];
+
+  const candidates = [normalized];
+  if (normalized.length === 12) candidates.push(`0${normalized}`);
+  if (normalized.length === 13 && normalized.startsWith("0")) candidates.push(normalized.slice(1));
+
+  return Array.from(new Set(candidates));
+};
+
 async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -297,8 +308,8 @@ function runMetadataHalalHeuristic(productFacts: ProductLookup, body: ScanReques
 }
 
 async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
-  const normalized = barcode?.replace(/\D/g, "");
-  if (!normalized) return null;
+  const candidates = getBarcodeCandidates(barcode);
+  if (candidates.length === 0) return null;
 
   const fields = [
     "product_name",
@@ -312,48 +323,55 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     "ingredients",
   ].join(",");
 
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      `https://world.openfoodfacts.org/api/v2/product/${normalized}.json?fields=${fields}`,
-      {
-        headers: {
-          "User-Agent": "BarakahApp/1.0 halal-scanner",
+  for (const candidate of candidates) {
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        `https://world.openfoodfacts.org/api/v2/product/${candidate}.json?fields=${fields}`,
+        {
+          headers: {
+            "User-Agent": "BarakahApp/1.0 halal-scanner",
+          },
         },
-      },
-      BARCODE_LOOKUP_TIMEOUT_MS,
-    );
-  } catch (error) {
-    console.error("OpenFoodFacts lookup failed:", error);
-    return null;
+        BARCODE_LOOKUP_TIMEOUT_MS,
+      );
+    } catch (error) {
+      console.error(`OpenFoodFacts lookup failed for ${candidate}:`, error);
+      continue;
+    }
+
+    if (!response.ok) continue;
+
+    const data = await response.json();
+    if (data?.status !== 1 || !data?.product) continue;
+
+    const product = data.product;
+    const ingredientNames = Array.isArray(product.ingredients)
+      ? product.ingredients
+          .map((ingredient: any) => ingredient?.text || ingredient?.id)
+          .filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)
+      : [];
+
+    return {
+      source: candidate === candidates[0] ? "openfoodfacts" : "openfoodfacts_barcode_alias",
+      product_name: product.product_name_en || product.product_name || product.generic_name || "Unknown Product",
+      brand: product.brands || null,
+      category: product.categories || null,
+      region: product.countries || null,
+      ingredients_text: product.ingredients_text_en || product.ingredients_text || null,
+      ingredients: ingredientNames,
+    };
   }
 
-  if (!response.ok) return null;
-
-  const data = await response.json();
-  if (data?.status !== 1 || !data?.product) return null;
-
-  const product = data.product;
-  const ingredientNames = Array.isArray(product.ingredients)
-    ? product.ingredients
-        .map((ingredient: any) => ingredient?.text || ingredient?.id)
-        .filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)
-    : [];
-
-  return {
-    source: "openfoodfacts",
-    product_name: product.product_name_en || product.product_name || product.generic_name || "Unknown Product",
-    brand: product.brands || null,
-    category: product.categories || null,
-    region: product.countries || null,
-    ingredients_text: product.ingredients_text_en || product.ingredients_text || null,
-    ingredients: ingredientNames,
-  };
+  return null;
 }
 
 function lookupBarcodeHint(barcode?: string): ProductLookup | null {
-  const normalized = normalizeBarcode(barcode);
-  return normalized ? BARCODE_HINTS[normalized] ?? null : null;
+  for (const candidate of getBarcodeCandidates(barcode)) {
+    const hint = BARCODE_HINTS[candidate];
+    if (hint) return hint;
+  }
+  return null;
 }
 
 const unknownBarcodeResult = (body: ScanRequest) => ({
@@ -382,6 +400,7 @@ interface AIResult {
   region: string | null;
   ingredients: IngredientDecision[];
   ingredients_hash: string | null;
+  ai_model?: string;
 }
 
 const AI_MODEL_FALLBACKS = [
@@ -464,9 +483,10 @@ function isValidAiResult(value: any): value is AIResult {
   );
 }
 
-async function callOpenAI(
+async function callOpenAIWithModel(
   body: ScanRequest,
   productFacts: ProductLookup | null,
+  model: string,
   timeoutMs = AI_TIMEOUT_MS,
 ): Promise<AIResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
@@ -477,7 +497,14 @@ async function callOpenAI(
 
   const parts: string[] = [];
 
-  if (body.barcode) parts.push(`Barcode: ${body.barcode}`);
+  const barcodeCandidates = getBarcodeCandidates(body.barcode);
+  if (body.barcode) {
+    parts.push(`Scanned barcode: ${body.barcode}`);
+    if (barcodeCandidates.length > 1) {
+      parts.push(`Barcode aliases to check: ${barcodeCandidates.join(", ")}`);
+      parts.push("Treat UPC-A and leading-zero EAN-13 forms as the same product when reasoning from barcode knowledge.");
+    }
+  }
   if (body.region) parts.push(`User region hint: ${body.region}`);
 
   if (productFacts) {
@@ -496,7 +523,7 @@ async function callOpenAI(
   } else {
     parts.push(
       body.barcode
-        ? "No verified barcode lookup facts were found. Try a cautious barcode-only assessment using general product knowledge; return unknown if you cannot recognize the product reliably."
+        ? "No verified barcode lookup facts were found for the scanned barcode or its aliases. Try a cautious barcode-only assessment using general product knowledge for any listed barcode candidate; return unknown if you cannot recognize the product reliably."
         : "No verified barcode lookup facts were found.",
     );
   }
@@ -529,7 +556,7 @@ async function callOpenAI(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        models: AI_MODEL_FALLBACKS,
+        model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
@@ -581,7 +608,30 @@ async function callOpenAI(
     );
   }
 
-  return parsed;
+  return { ...parsed, ai_model: model };
+}
+
+async function callOpenAI(
+  body: ScanRequest,
+  productFacts: ProductLookup | null,
+  timeoutMs = AI_TIMEOUT_MS,
+): Promise<AIResult> {
+  let firstUnknown: AIResult | null = null;
+  let lastError: unknown = null;
+
+  for (const model of AI_MODEL_FALLBACKS) {
+    try {
+      const result = await callOpenAIWithModel(body, productFacts, model, timeoutMs);
+      if (result.status !== "unknown") return result;
+      firstUnknown ??= result;
+    } catch (error) {
+      lastError = error;
+      console.error(`OpenRouter model ${model} failed:`, error);
+    }
+  }
+
+  if (firstUnknown) return firstUnknown;
+  throw lastError instanceof Error ? lastError : new Error("All OpenRouter models failed");
 }
 
 const mergeAiWithDeterministic = (aiResult: AIResult, deterministicResult: DeterministicResult) => {
@@ -681,7 +731,7 @@ async function writeProductCache(
     ingredients_hash: ingredientsHash,
     source: typeof source === "string" ? source : "scan_halal",
     rules_version: RULES_VERSION,
-    ai_model: getAiModelFromSource(source),
+    ai_model: typeof parsed?.ai_model === "string" ? parsed.ai_model : getAiModelFromSource(source),
     ai_prompt_version: AI_PROMPT_VERSION,
   };
 
@@ -785,13 +835,16 @@ serve(async (req) => {
     const userId = await getRequestUserId(supabase, req);
     const body = (await req.json()) as ScanRequest;
     const normalizedBarcode = normalizeBarcode(body.barcode);
+    const barcodeCandidates = getBarcodeCandidates(body.barcode);
 
     if (normalizedBarcode) {
       try {
         const { data: cached, error: cacheReadError } = await supabase
           .from("product_halal_cache")
           .select("*")
-          .eq("normalized_barcode", normalizedBarcode)
+          .in("normalized_barcode", barcodeCandidates)
+          .order("updated_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (cacheReadError) {
@@ -845,7 +898,7 @@ serve(async (req) => {
               ingredients_hash
             )
           `)
-          .eq("barcode", normalizedBarcode)
+          .in("barcode", barcodeCandidates)
           .neq("status", "unknown")
           .order("created_at", { ascending: false })
           .limit(1)

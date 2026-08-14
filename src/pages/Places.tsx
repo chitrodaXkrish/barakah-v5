@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useGlobalLocation } from '@/contexts/LocationContext';
+import { supabase } from '@/integrations/supabase/client';
 import restaurantImg from '@/assets/place-restaurant.jpg';
 import mosqueImg from '@/assets/place-mosque.jpg';
 import { openExternalUrl } from '@/lib/externalUrl';
@@ -21,6 +22,7 @@ const BROWN = '#7B3F1E';
 const BROWN_DARK = '#5C2E15';
 const SOFT_BORDER = '#E8D2A8';
 const MUTED_TEXT = '#8B6E4A';
+const MAX_PLACE_RESULTS = 60;
 
 // Fix Leaflet default markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -31,7 +33,7 @@ L.Icon.Default.mergeOptions({
 });
 
 type PlaceType = 'mosque' | 'restaurant';
-const PLACES_CACHE_VERSION = 7;
+const PLACES_CACHE_VERSION = 11;
 const PLACES_CACHE_DURATION_MS = 6 * 60 * 60 * 1000;
 const OVERPASS_TIMEOUT_MS = 6500;
 const NOMINATIM_TIMEOUT_MS = 6000;
@@ -138,6 +140,9 @@ export const Places = () => {
     return locationLabel || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
   };
 
+  const sortNearestFirst = <T extends Place>(nextPlaces: T[]) =>
+    [...nextPlaces].sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY));
+
   const compactAddressParts = (parts: Array<string | number | undefined | null>) => {
     const seen = new Set<string>();
     return parts
@@ -188,14 +193,42 @@ export const Places = () => {
     
     setSearchingCity(true);
     try {
+      const searchTerm = citySearch.trim().replace(/[\/|]+/g, ' ');
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(citySearch)}&limit=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(searchTerm)}&limit=8`,
         { headers: { 'Accept-Language': 'en' } }
       );
       const data = await response.json();
       
       if (data && data.length > 0) {
-        const { lat, lon, address, display_name } = data[0];
+        const originalTokens = citySearch
+          .toLowerCase()
+          .split(/[^a-z0-9]+/i)
+          .map((part) => part.trim())
+          .filter((part) => part.length > 2);
+        const selected = [...data].sort((a: any, b: any) => {
+          const scoreResult = (item: any) => {
+            const address = item.address || {};
+            const area = [
+              address.suburb,
+              address.neighbourhood,
+              address.quarter,
+              address.borough,
+              address.city_district,
+              address.town,
+              address.village,
+            ].filter(Boolean).join(' ').toLowerCase();
+            const label = `${item.display_name || ''} ${area}`.toLowerCase();
+            const matchedTokens = originalTokens.filter((token) => label.includes(token)).length;
+            const hasSpecificArea = Boolean(address.suburb || address.neighbourhood || address.quarter || address.borough || address.city_district);
+            const broadCityOnly = !hasSpecificArea && Boolean(address.city || address.county || address.state);
+
+            return matchedTokens * 8 + (hasSpecificArea ? 5 : 0) - (broadCityOnly ? 4 : 0) + Number(item.importance || 0);
+          };
+          return scoreResult(b) - scoreResult(a);
+        })[0];
+
+        const { lat, lon, address, display_name } = selected;
         const area = address?.suburb || address?.neighbourhood || address?.quarter || address?.borough || address?.city_district;
         const city = address?.city || address?.town || address?.village || address?.municipality || address?.county || address?.state;
         await setManualLocation(parseFloat(lat), parseFloat(lon), {
@@ -237,6 +270,89 @@ export const Places = () => {
     clearManualLocation();
     setLocationDialogOpen(false);
   };
+
+  // Find nearby places using Google Places through a Supabase Edge Function.
+  const findNearbyPlaces = useCallback(async (
+    lat: number,
+    lon: number,
+    type: PlaceType,
+    signal?: AbortSignal,
+    options?: { forceRefresh?: boolean }
+  ) => {
+    const searchRun = ++searchRunRef.current;
+    if (!options?.forceRefresh) {
+      const cachedPlaces = readPlacesCache(lat, lon, type);
+      if (cachedPlaces) {
+        setPlaces(cachedPlaces);
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
+      const radius = SEARCH_RADII[type].at(-1) || 20000;
+      const { data, error } = await supabase.functions.invoke('google-places', {
+        body: { lat, lon, type, radius },
+      });
+
+      if (error) throw error;
+      if (signal?.aborted || searchRun !== searchRunRef.current) return;
+
+      const placesList = sortNearestFirst(
+        Array.isArray(data?.places)
+          ? data.places
+              .map((place: any): Place | null => {
+                const placeLat = Number(place.lat);
+                const placeLon = Number(place.lon);
+                if (!Number.isFinite(placeLat) || !Number.isFinite(placeLon)) return null;
+                return {
+                  id: String(place.id || `${type}-${placeLat}:${placeLon}`),
+                  name: String(place.name || (type === 'mosque' ? 'Mosque' : 'Halal Restaurant')),
+                  lat: placeLat,
+                  lon: placeLon,
+                  distance: typeof place.distance === 'number'
+                    ? place.distance
+                    : calculateDistance(lat, lon, placeLat, placeLon),
+                  address: place.address || fallbackAddress(placeLat, placeLon),
+                  type,
+                };
+              })
+              .filter((place: Place | null): place is Place => place !== null)
+          : []
+      ).slice(0, MAX_PLACE_RESULTS);
+
+      setPlaces(placesList);
+      writePlacesCache(lat, lon, type, placesList);
+
+      if (placesList.length > 0) {
+        toast.success(`Found ${placesList.length} ${typeLabel}`);
+      } else {
+        toast.info(`No ${typeLabel} found near this location. Try changing your location.`);
+      }
+    } catch (error) {
+      if (signal?.aborted || searchRun !== searchRunRef.current) return;
+      console.error('Error finding places with Google Places:', error);
+      const typeLabel = type === 'mosque' ? 'mosques' : 'halal restaurants';
+      const stalePlaces = readPlacesCache(lat, lon, type, { allowExpired: true });
+      if (stalePlaces) {
+        setPlaces(stalePlaces);
+        toast.info(`Showing saved ${typeLabel}. Pull refresh to update.`);
+        return;
+      }
+      setPlaces([]);
+      toast.error(`Could not load ${typeLabel}. Please try again.`);
+    } finally {
+      if (searchRun === searchRunRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [userLocation?.area, userLocation?.city, userLocation?.country]);
+
+  /*
+   * Legacy OpenStreetMap/Overpass implementation.
+   * Kept commented as requested while Google Places is active above.
 
   // Overpass API endpoints (fallback servers)
   const OVERPASS_SERVERS = [
@@ -396,24 +512,8 @@ export const Places = () => {
         };
       })
       .filter((place: Place | null): place is Place => place !== null)
-      .sort((a, b) => (a.distance || 0) - (b.distance || 0))
-      .slice(0, 60);
-  };
-
-  const restaurantScore = (tags: Record<string, string | undefined> = {}) => {
-    const text = [
-      tags.name,
-      tags['name:en'],
-      tags.cuisine,
-      tags.description,
-      tags['diet:halal'],
-      tags.halal,
-    ].filter(Boolean).join(' ').toLowerCase();
-
-    if (tags['diet:halal'] === 'yes' || tags.halal === 'yes') return 0;
-    if (/\bhalal\b/.test(text)) return 1;
-    if (/(biryani|kebab|kabob|shawarma|mandi|tandoor|mughlai|arabic|pakistani|afghan|turkish|lebanese|persian|moroccan|middle_eastern|indian)/i.test(text)) return 2;
-    return 3;
+      .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY))
+      .slice(0, MAX_PLACE_RESULTS);
   };
 
   // Find nearby places using Overpass API
@@ -466,12 +566,12 @@ export const Places = () => {
       }
       
       const seen = new Set<string>();
-      const placesList: Place[] = data.elements
+      const placesList: Place[] = sortNearestFirst(data.elements
         .map((element: any) => {
-          const elLat = element.lat || element.center?.lat;
-          const elLon = element.lon || element.center?.lon;
+          const elLat = Number(element.lat ?? element.center?.lat);
+          const elLon = Number(element.lon ?? element.center?.lon);
           
-          if (!elLat || !elLon) return null;
+          if (!Number.isFinite(elLat) || !Number.isFinite(elLon)) return null;
           
           const distance = calculateDistance(lat, lon, elLat, elLon);
           const dedupeKey = `${Math.round(elLat * 100000)}:${Math.round(elLon * 100000)}:${element.tags?.name || element.id}`;
@@ -479,7 +579,6 @@ export const Places = () => {
           seen.add(dedupeKey);
           
           const defaultName = type === 'mosque' ? 'Mosque' : 'Halal Restaurant';
-          const score = type === 'restaurant' ? restaurantScore(element.tags || {}) : 0;
           return {
             id: `${element.type}-${element.id}`,
             name: element.tags?.name || element.tags?.['name:en'] || element.tags?.['name:ar'] || defaultName,
@@ -488,16 +587,10 @@ export const Places = () => {
             distance,
             address: overpassAddressLine(element.tags || {}, elLat, elLon),
             type,
-            score,
           };
         })
-        .filter((place: (Place & { score?: number }) | null): place is Place & { score?: number } => place !== null)
-        .sort((a: Place & { score?: number }, b: Place & { score?: number }) =>
-          type === 'restaurant'
-            ? (a.score || 0) - (b.score || 0) || (a.distance || 0) - (b.distance || 0)
-            : (a.distance || 0) - (b.distance || 0)
-        )
-        .map(({ score, ...place }) => place);
+        .filter((place: Place | null): place is Place => place !== null))
+        .slice(0, MAX_PLACE_RESULTS);
 
       if (searchRun !== searchRunRef.current) return;
       setPlaces(placesList);
@@ -534,6 +627,7 @@ export const Places = () => {
       }
     }
   }, [userLocation?.area, userLocation?.city, userLocation?.country]);
+  */
 
   // Fetch places when location is available or place type changes
   useEffect(() => {
@@ -579,7 +673,6 @@ export const Places = () => {
   const mockRating = (id: string) => (40 + hashNum(id, 10)) / 10; // 4.0 - 4.9
   const mockReviews = (id: string) => 50 + hashNum(id, 250);
   const mockOpen = (id: string) => hashNum(id, 4) !== 0; // ~75% open
-  const mockPrice = (id: string) => ['£', '££', '£££'][hashNum(id, 3)];
   const cuisines = ['Indian Cuisine', 'Turkish Cuisine', 'Middle Eastern', 'Pakistani Cuisine', 'Arabic Cuisine'];
   const mockCuisine = (id: string) => cuisines[hashNum(id, cuisines.length)];
 
@@ -596,7 +689,7 @@ export const Places = () => {
 
   return (
     <Layout
-      headerTitle="Places"
+      headerTitle="Nearby"
       leftAlignHeaderTitle
       headerClassName="bg-white border-b border-[#F0E0C2]"
       headerTitleClassName="font-bold text-lg"
@@ -858,7 +951,6 @@ export const Places = () => {
                       rating={mockRating(place.id)}
                       reviews={mockReviews(place.id)}
                       cuisine={mockCuisine(place.id)}
-                      price={mockPrice(place.id)}
                       onDirections={() => openDirections(place)}
                     />
                   ) : (
@@ -886,12 +978,11 @@ interface RestaurantCardProps {
   rating: number;
   reviews: number;
   cuisine: string;
-  price: string;
   onDirections: () => void;
 }
 
-const RestaurantCard = ({ place, open, rating, reviews, cuisine, price, onDirections }: RestaurantCardProps) => {
-  const miles = place.distance ? (place.distance * 0.621371).toFixed(1) : '—';
+const RestaurantCard = ({ place, open, rating, reviews, cuisine, onDirections }: RestaurantCardProps) => {
+  const distanceKm = typeof place.distance === 'number' ? place.distance.toFixed(1) : '-';
   return (
     <div
       className="bg-white rounded-3xl overflow-hidden"
@@ -932,9 +1023,8 @@ const RestaurantCard = ({ place, open, rating, reviews, cuisine, price, onDirect
         <div className="flex items-center gap-3 text-sm mb-4">
           <span className="flex items-center gap-1 font-semibold" style={{ color: BROWN }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
-            {miles} miles
+            {distanceKm} km
           </span>
-          <span style={{ color: HEADER_TEXT }}>{price}</span>
         </div>
         <Button
           onClick={onDirections}
@@ -954,7 +1044,7 @@ interface MosqueCardProps {
 }
 
 const MosqueCard = ({ place, onDirections }: MosqueCardProps) => {
-  const miles = place.distance ? (place.distance * 0.621371).toFixed(1) : '—';
+  const distanceKm = typeof place.distance === 'number' ? place.distance.toFixed(1) : '-';
   // Static representative prayer times — page does not fetch per-mosque times
   const prayers = [
     { label: 'FAJR', time: '05:22' },
@@ -980,7 +1070,7 @@ const MosqueCard = ({ place, onDirections }: MosqueCardProps) => {
             {place.name}
           </h3>
           <span className="text-sm whitespace-nowrap" style={{ color: HEADER_TEXT }}>
-            {miles} miles away
+            {distanceKm} km away
           </span>
         </div>
         <p className="text-base mb-4" style={{ color: HEADER_TEXT }}>
