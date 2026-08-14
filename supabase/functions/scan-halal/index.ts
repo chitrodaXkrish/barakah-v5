@@ -18,7 +18,7 @@ interface ScanRequest {
 const RULES_VERSION = "halal-rules-v1";
 const AI_PROMPT_VERSION: string | null = null;
 const BARCODE_LOOKUP_TIMEOUT_MS = 4500;
-const AI_TIMEOUT_MS = 12000;
+const AI_TIMEOUT_MS = 30000;
 
 const normalizeBarcode = (raw: string | null | undefined): string | null => {
   if (typeof raw !== "string") return null;
@@ -49,6 +49,18 @@ interface ProductLookup {
   ingredients_text: string | null;
   ingredients: string[];
 }
+
+const BARCODE_HINTS: Record<string, ProductLookup> = {
+  "8909081012709": {
+    source: "barcode_hint",
+    product_name: "Candyman Choco Double Eclairs Birthday Pack",
+    brand: "Candyman",
+    category: "Chocolate eclairs candy",
+    region: "India",
+    ingredients_text: null,
+    ingredients: [],
+  },
+};
 
 type HalalStatus = "halal" | "haram" | "mushbooh" | "unknown";
 
@@ -92,11 +104,12 @@ Return STRICT JSON only (no prose, no markdown fences) matching this schema:
 }
 
 Rules:
-- Do not identify a barcode from memory.
+- Prefer verified barcode lookup facts and uploaded label text/images over model knowledge.
+- If a barcode lookup fails but a barcode was supplied, you may cautiously use general product knowledge to identify a highly recognizable product. Keep confidence low unless the product is very clear.
 - If product facts are supplied, keep product_name and brand aligned with those facts.
 - Never invent ingredients. If no ingredient list is supplied or readable, leave ingredients empty.
 - If product facts identify a common packaged food but ingredients are unavailable, make a cautious metadata-based assessment with low confidence instead of automatically returning unknown.
-- If no reliable product facts or readable image are available, set status="unknown" with confidence <= 20 and product_name "Unknown Product".`;
+- If no reliable product facts, recognizable barcode knowledge, or readable image are available, set status="unknown" with confidence <= 20 and product_name "Unknown Product".`;
 
 const HARAM_RULES = [
   { pattern: /\bpork\b/i, label: "Pork", note: "Pork is prohibited." },
@@ -276,7 +289,7 @@ function runMetadataHalalHeuristic(productFacts: ProductLookup, body: ScanReques
       },
     ],
     ingredients_hash: null,
-    source: aiResult ? "openfoodfacts_ai_metadata_heuristic" : "openfoodfacts_metadata_heuristic",
+    source: aiResult ? `${productFacts.source}_ai_metadata_heuristic` : `${productFacts.source}_metadata_heuristic`,
     lookup: productFacts,
     deterministic: { status, matched },
     ai_verdict: aiResult?.verdict ?? null,
@@ -336,6 +349,11 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     ingredients_text: product.ingredients_text_en || product.ingredients_text || null,
     ingredients: ingredientNames,
   };
+}
+
+function lookupBarcodeHint(barcode?: string): ProductLookup | null {
+  const normalized = normalizeBarcode(barcode);
+  return normalized ? BARCODE_HINTS[normalized] ?? null : null;
 }
 
 const unknownBarcodeResult = (body: ScanRequest) => ({
@@ -449,6 +467,7 @@ function isValidAiResult(value: any): value is AIResult {
 async function callOpenAI(
   body: ScanRequest,
   productFacts: ProductLookup | null,
+  timeoutMs = AI_TIMEOUT_MS,
 ): Promise<AIResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
 
@@ -475,7 +494,11 @@ async function callOpenAI(
       ].join("\n"),
     );
   } else {
-    parts.push("No verified barcode lookup facts were found.");
+    parts.push(
+      body.barcode
+        ? "No verified barcode lookup facts were found. Try a cautious barcode-only assessment using general product knowledge; return unknown if you cannot recognize the product reliably."
+        : "No verified barcode lookup facts were found.",
+    );
   }
 
   parts.push(
@@ -523,7 +546,7 @@ async function callOpenAI(
         max_tokens: 1200,
       }),
     },
-    AI_TIMEOUT_MS,
+    timeoutMs,
   );
 
   if (!response.ok) {
@@ -561,24 +584,49 @@ async function callOpenAI(
   return parsed;
 }
 
-const mergeAiWithDeterministic = (aiResult: AIResult, deterministicResult: DeterministicResult) => ({
-  ...aiResult,
-  product_name: deterministicResult.product_name,
-  brand: deterministicResult.brand,
-  status: deterministicResult.status,
-  confidence: deterministicResult.confidence,
-  verdict: deterministicResult.verdict,
-  category: aiResult.category ?? deterministicResult.category,
-  region: aiResult.region ?? deterministicResult.region,
-  ingredients:
-    aiResult.ingredients.length > 0
-      ? aiResult.ingredients
-      : deterministicResult.ingredients,
-  source: "openfoodfacts_deterministic_openrouter_ai",
-  lookup: deterministicResult.lookup,
-  deterministic: deterministicResult.deterministic,
-  deterministic_verdict: deterministicResult.verdict,
-});
+const mergeAiWithDeterministic = (aiResult: AIResult, deterministicResult: DeterministicResult) => {
+  const deterministicMatched = deterministicResult.deterministic.matched;
+  const deterministicHasFlag = deterministicResult.status === "haram" || deterministicResult.status === "mushbooh";
+  const aiHasUsableDecision = aiResult.status !== "unknown";
+
+  const status = deterministicHasFlag
+    ? deterministicResult.status
+    : aiHasUsableDecision
+      ? aiResult.status
+      : deterministicResult.status;
+
+  const confidence = deterministicHasFlag
+    ? Math.max(deterministicResult.confidence, aiResult.confidence)
+    : aiHasUsableDecision
+      ? aiResult.confidence
+      : deterministicResult.confidence;
+
+  const verdict = deterministicHasFlag
+    ? `${deterministicResult.verdict} AI verification was also requested, but deterministic safety rules keep this classification conservative.`
+    : aiHasUsableDecision
+      ? aiResult.verdict
+      : `${deterministicResult.verdict} AI verification did not add enough extra evidence.`;
+
+  return {
+    ...aiResult,
+    product_name: deterministicResult.product_name,
+    brand: deterministicResult.brand,
+    status,
+    confidence,
+    verdict,
+    category: aiResult.category ?? deterministicResult.category,
+    region: aiResult.region ?? deterministicResult.region,
+    ingredients:
+      aiResult.ingredients.length > 0
+        ? aiResult.ingredients
+        : deterministicResult.ingredients,
+    source: "openfoodfacts_deterministic_openrouter_ai",
+    lookup: deterministicResult.lookup,
+    deterministic: { ...deterministicResult.deterministic, matched: deterministicMatched },
+    deterministic_verdict: deterministicResult.verdict,
+    ai_verdict: aiResult.verdict,
+  };
+};
 
 async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
@@ -748,7 +796,7 @@ serve(async (req) => {
 
         if (cacheReadError) {
           console.error("product_halal_cache read error:", cacheReadError);
-        } else if (cached) {
+        } else if (cached?.status && cached.status !== "unknown") {
           const cachedResult = {
             product_name: cached.product_name,
             brand: cached.brand ?? null,
@@ -831,46 +879,49 @@ serve(async (req) => {
     }
 
     const productFacts = await lookupBarcode(body.barcode);
+    const barcodeHint = productFacts ? null : lookupBarcodeHint(body.barcode);
+    const lookupFacts = productFacts ?? barcodeHint;
     let parsed: any;
 
-    if (productFacts) {
-      const deterministicResult = runDeterministicHalalCheck(productFacts, body);
+    if (lookupFacts) {
+      const deterministicResult = runDeterministicHalalCheck(lookupFacts, body);
 
-      if (deterministicResult.status === "halal") {
-        parsed = {
-          ...deterministicResult,
-          source: "openfoodfacts_deterministic_rules",
-        };
-      } else if (deterministicResult.status === "unknown") {
-        if (!body.imageBase64) {
-          parsed = runMetadataHalalHeuristic(productFacts, body);
-        } else {
-          try {
-            const aiResult = await callOpenAI(body, productFacts);
-            parsed = aiResult.status === "unknown"
-              ? runMetadataHalalHeuristic(productFacts, body, aiResult)
-              : {
-                  ...aiResult,
-                  product_name: productFacts.product_name,
-                  brand: productFacts.brand,
-                  category: aiResult.category ?? productFacts.category,
-                  region: aiResult.region ?? productFacts.region ?? body.region ?? null,
-                  source: "openfoodfacts_unknown_openrouter_ai",
-                  lookup: productFacts,
-                  deterministic: deterministicResult.deterministic,
-                  deterministic_verdict: deterministicResult.verdict,
-                };
-          } catch (error) {
-            console.error("AI fallback failed after unknown deterministic barcode result:", error);
-            parsed = runMetadataHalalHeuristic(productFacts, body);
-          }
-        }
-      } else {
-        parsed = deterministicResult;
+      try {
+        const aiResult = await callOpenAI(body, lookupFacts);
+        parsed = deterministicResult.status === "unknown"
+          ? aiResult.status === "unknown"
+            ? runMetadataHalalHeuristic(lookupFacts, body, aiResult)
+            : {
+                ...aiResult,
+                product_name: lookupFacts.product_name,
+                brand: lookupFacts.brand,
+                category: aiResult.category ?? lookupFacts.category,
+                region: aiResult.region ?? lookupFacts.region ?? body.region ?? null,
+                source: `${lookupFacts.source}_unknown_openrouter_ai`,
+                lookup: lookupFacts,
+                deterministic: deterministicResult.deterministic,
+                deterministic_verdict: deterministicResult.verdict,
+              }
+          : mergeAiWithDeterministic(aiResult, deterministicResult);
+      } catch (error) {
+        console.error("AI verification failed after OpenFoodFacts result:", error);
+        parsed = deterministicResult.status === "unknown"
+          ? runMetadataHalalHeuristic(lookupFacts, body)
+          : {
+              ...deterministicResult,
+              verdict: `${deterministicResult.verdict} AI verification failed, so this result is based on deterministic rules only.`,
+              source: "openfoodfacts_deterministic_rules",
+            };
       }
     } else {
       if (!body.imageBase64) {
-        parsed = unknownBarcodeResult(body);
+        try {
+          parsed = await callOpenAI(body, null);
+          parsed.source = "openrouter_ai_barcode_lookup_miss";
+        } catch (error) {
+          console.error("AI fallback failed after barcode lookup miss:", error);
+          parsed = unknownBarcodeResult(body);
+        }
       } else {
         try {
           parsed = await callOpenAI(body, null);
