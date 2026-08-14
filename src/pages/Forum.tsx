@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   MessageCircle, Plus, Send, ArrowLeft, Loader2, Trash2, Heart, RefreshCw, 
-  Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight
+  Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight, Flag
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -189,6 +189,15 @@ const CREATE_CATEGORIES = [
   { id: 'heritage', label: 'Heritage' },
   { id: 'knowledge', label: 'Deen & Knowledge' },
   { id: 'dua', label: 'Dua & Reflection' },
+];
+
+const REPORT_REASONS = [
+  { id: 'harassment', label: 'Harassment or bullying' },
+  { id: 'hate', label: 'Hate or abusive content' },
+  { id: 'misinformation', label: 'Religious misinformation' },
+  { id: 'spam', label: 'Spam or promotion' },
+  { id: 'inappropriate', label: 'Inappropriate content' },
+  { id: 'other', label: 'Other' },
 ];
 
 // ---------- Community sub-components ----------
@@ -696,6 +705,10 @@ export const Forum = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [reportPost, setReportPost] = useState<Post | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reporting, setReporting] = useState(false);
   const [newReply, setNewReply] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [likingPosts, setLikingPosts] = useState<Set<string>>(new Set());
@@ -1359,6 +1372,144 @@ export const Forum = () => {
     }
   };
 
+  const resetReportDialog = () => {
+    setReportPost(null);
+    setReportReason('');
+    setReportDetails('');
+  };
+
+  const handleSubmitReport = async () => {
+    if (!user) {
+      toast.error('Please sign in to report posts');
+      return;
+    }
+    if (!reportPost) return;
+    if (!reportReason) {
+      toast.error('Please select a reason');
+      return;
+    }
+
+    setReporting(true);
+    try {
+      const reasonLabel = REPORT_REASONS.find((reason) => reason.id === reportReason)?.label || reportReason;
+      const { error } = await (supabase as any).from('guftagu_post_reports').insert({
+        post_id: reportPost.id,
+        reporter_id: user.uid,
+        reporter_name: currentUserName,
+        reason: reasonLabel,
+        details: reportDetails.trim() || null,
+      } as any);
+
+      if (error) throw error;
+      toast.success('Post reported. Our team will review it.');
+      resetReportDialog();
+    } catch (error: any) {
+      console.error('Error reporting post:', error);
+      if (error?.code === '23505') {
+        toast.error('You have already reported this post.');
+      } else {
+        toast.error(error?.message || 'Failed to report post');
+      }
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const ReportPostDialog = () => (
+    <Dialog
+      open={!!reportPost}
+      onOpenChange={(open) => {
+        if (!open) resetReportDialog();
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-md border-0"
+        style={{ background: '#FFF8EA' }}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-xl flex items-center gap-2" style={{ color: BROWN }}>
+            <Flag className="h-5 w-5" />
+            Report Post
+          </DialogTitle>
+          <DialogDescription className="text-sm" style={{ color: '#9C8569' }}>
+            Let us know why this post should be reviewed.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          {reportPost && (
+            <div
+              className="rounded-xl p-3 text-sm leading-relaxed line-clamp-3"
+              style={{ background: '#FFFFFF', color: '#5C4632', border: `1px solid ${SOFT_BORDER}` }}
+            >
+              {reportPost.content || 'Image post'}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold mb-2" style={{ color: BROWN_DARK }}>
+              Reason
+            </label>
+            <Select value={reportReason} onValueChange={setReportReason}>
+              <SelectTrigger
+                className="rounded-xl bg-white"
+                style={{ borderColor: SOFT_BORDER, color: BROWN_DARK }}
+              >
+                <SelectValue placeholder="Select a reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {REPORT_REASONS.map((reason) => (
+                  <SelectItem key={reason.id} value={reason.id}>
+                    {reason.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-2" style={{ color: BROWN_DARK }}>
+              Details optional
+            </label>
+            <Textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
+              placeholder="Add a short note for the review team..."
+              className="min-h-[96px] resize-none rounded-xl"
+              style={{ background: '#FFFFFF', color: BROWN_DARK, border: `1px solid ${SOFT_BORDER}` }}
+            />
+            <p className="text-xs mt-1 text-right" style={{ color: '#9C8569' }}>
+              {reportDetails.length}/500
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetReportDialog}
+              disabled={reporting}
+              className="rounded-full"
+              style={{ borderColor: SOFT_BORDER, color: BROWN_DARK }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmitReport}
+              disabled={!reportReason || reporting}
+              className="rounded-full text-white"
+              style={{ background: BROWN }}
+            >
+              {reporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
+              Submit Report
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   const PostCard = ({ post }: { post: Post; index?: number }) => {
     const isOwner = user?.uid === post.user_id;
     const isLiking = likingPosts.has(post.id);
@@ -1501,9 +1652,20 @@ export const Forum = () => {
                 onClick={() => handleShare(post)}
                 className="transition-colors"
                 style={{ color: '#9C8569' }}
+                aria-label="Share post"
               >
                 <Share2 className="h-4 w-4" />
               </button>
+              {!isOwner && (
+                <button
+                  onClick={() => setReportPost(post)}
+                  className="transition-colors"
+                  style={{ color: '#9C8569' }}
+                  aria-label="Report post"
+                >
+                  <Flag className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1548,21 +1710,34 @@ export const Forum = () => {
                 )}
                 <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ color: '#3D2A1E' }}>{renderContentWithMentions(selectedPost.content)}</p>
                 
-                <div className="flex items-center gap-5 mt-5 pt-4" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
-                  <button
-                    onClick={() => handleToggleLike(selectedPost.id, selectedPost.isLiked || false)}
-                    disabled={likingPosts.has(selectedPost.id)}
-                    className="flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                    style={{ color: selectedPost.isLiked ? '#D9534F' : '#9C8569' }}
-                    aria-label={selectedPost.isLiked ? 'Unlike post' : 'Like post'}
-                  >
-                    <Heart className={cn("h-4 w-4", selectedPost.isLiked && "fill-current")} />
-                    <span className="text-sm">{selectedPost.likeCount || 0}</span>
-                  </button>
-                  <div className="flex items-center gap-1.5" style={{ color: '#9C8569' }}>
-                    <MessageCircle className="h-4 w-4" />
-                    <span className="text-sm">{selectedPost.replies?.length || 0}</span>
+                <div className="flex items-center justify-between mt-5 pt-4" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
+                  <div className="flex items-center gap-5">
+                    <button
+                      onClick={() => handleToggleLike(selectedPost.id, selectedPost.isLiked || false)}
+                      disabled={likingPosts.has(selectedPost.id)}
+                      className="flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                      style={{ color: selectedPost.isLiked ? '#D9534F' : '#9C8569' }}
+                      aria-label={selectedPost.isLiked ? 'Unlike post' : 'Like post'}
+                    >
+                      <Heart className={cn("h-4 w-4", selectedPost.isLiked && "fill-current")} />
+                      <span className="text-sm">{selectedPost.likeCount || 0}</span>
+                    </button>
+                    <div className="flex items-center gap-1.5" style={{ color: '#9C8569' }}>
+                      <MessageCircle className="h-4 w-4" />
+                      <span className="text-sm">{selectedPost.replies?.length || 0}</span>
+                    </div>
                   </div>
+                  {user?.uid !== selectedPost.user_id && (
+                    <button
+                      onClick={() => setReportPost(selectedPost)}
+                      className="flex items-center gap-1.5 transition-colors text-sm"
+                      style={{ color: '#9C8569' }}
+                      aria-label="Report post"
+                    >
+                      <Flag className="h-4 w-4" />
+                      Report
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1669,6 +1844,7 @@ export const Forum = () => {
             </div>
           </div>
         </div>
+        <ReportPostDialog />
       </Layout>
     );
   }
@@ -2292,6 +2468,7 @@ export const Forum = () => {
           onOpenChange={setCreateCommunityOpen}
           onCreate={handleCreateCommunity}
         />
+        <ReportPostDialog />
       </div>
     </Layout>
   );

@@ -17,12 +17,28 @@ interface ScanRequest {
 
 const RULES_VERSION = "halal-rules-v1";
 const AI_PROMPT_VERSION: string | null = null;
+const BARCODE_LOOKUP_TIMEOUT_MS = 4500;
+const AI_TIMEOUT_MS = 12000;
 
 const normalizeBarcode = (raw: string | null | undefined): string | null => {
   if (typeof raw !== "string") return null;
   const cleaned = raw.replace(/\D/g, "");
   return cleaned.length > 0 ? cleaned : null;
 };
+
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 interface ProductLookup {
   source: string;
@@ -79,7 +95,8 @@ Rules:
 - Do not identify a barcode from memory.
 - If product facts are supplied, keep product_name and brand aligned with those facts.
 - Never invent ingredients. If no ingredient list is supplied or readable, leave ingredients empty.
-- If product facts and image are insufficient, set status="unknown" with confidence <= 20 and product_name "Unknown Product".`;
+- If product facts identify a common packaged food but ingredients are unavailable, make a cautious metadata-based assessment with low confidence instead of automatically returning unknown.
+- If no reliable product facts or readable image are available, set status="unknown" with confidence <= 20 and product_name "Unknown Product".`;
 
 const HARAM_RULES = [
   { pattern: /\bpork\b/i, label: "Pork", note: "Pork is prohibited." },
@@ -181,7 +198,7 @@ function runDeterministicHalalCheck(productFacts: ProductLookup, body: ScanReque
   const confidence = status === "halal" ? 82 : status === "haram" ? 96 : 78;
   const verdict =
     status === "halal"
-      ? "No prohibited or doubtful ingredients were detected by Barakah's deterministic halal rules. GPT-5 nano verification was requested for an extra review."
+      ? "No prohibited or doubtful ingredients were detected by Barakah's deterministic halal rules."
       : status === "haram"
         ? `Haram ingredient detected: ${matched.find((match) => match.status === "haram")?.ingredient}.`
         : `Doubtful ingredient needs verification: ${matched[0]?.ingredient}.`;
@@ -206,6 +223,66 @@ function runDeterministicHalalCheck(productFacts: ProductLookup, body: ScanReque
   };
 }
 
+function runMetadataHalalHeuristic(productFacts: ProductLookup, body: ScanRequest, aiResult?: AIResult | null) {
+  const metadata = [
+    productFacts.product_name,
+    productFacts.brand,
+    productFacts.category,
+    productFacts.region,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const parts = splitIngredientsText(metadata);
+  const decisions = parts.map((part) => ({
+    part,
+    decision: evaluateIngredient(part),
+  }));
+
+  const matched = decisions
+    .filter(({ decision }) => decision.status !== "halal")
+    .map(({ part, decision }) => ({
+      ingredient: part,
+      rule: decision.rule,
+      status: decision.status,
+      note: decision.note,
+    }));
+
+  const hasHaram = matched.some((match) => match.status === "haram");
+  const hasMushbooh = matched.some((match) => match.status === "mushbooh");
+  const status: HalalStatus = hasHaram ? "haram" : hasMushbooh ? "mushbooh" : "halal";
+  const confidence = status === "halal" ? 58 : status === "haram" ? 82 : 62;
+  const metadataNote =
+    "Ingredient list was unavailable, so this is a cautious product-name/category assessment. Scan the ingredient label for stronger verification.";
+
+  return {
+    product_name: productFacts.product_name,
+    brand: productFacts.brand,
+    status,
+    confidence,
+    verdict:
+      status === "halal"
+        ? `No prohibited or doubtful terms were detected in the available product metadata. ${metadataNote}`
+        : status === "haram"
+          ? `Prohibited term detected in product metadata: ${matched.find((match) => match.status === "haram")?.ingredient}. ${metadataNote}`
+          : `Doubtful term detected in product metadata: ${matched[0]?.ingredient}. ${metadataNote}`,
+    category: aiResult?.category ?? productFacts.category,
+    region: aiResult?.region ?? productFacts.region ?? body.region ?? null,
+    ingredients: [
+      {
+        name: `Product metadata: ${[productFacts.product_name, productFacts.category].filter(Boolean).join(" - ")}`,
+        ok: status === "halal",
+        note: status === "halal" ? metadataNote : matched[0]?.note ?? metadataNote,
+      },
+    ],
+    ingredients_hash: null,
+    source: aiResult ? "openfoodfacts_ai_metadata_heuristic" : "openfoodfacts_metadata_heuristic",
+    lookup: productFacts,
+    deterministic: { status, matched },
+    ai_verdict: aiResult?.verdict ?? null,
+  };
+}
+
 async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
   const normalized = barcode?.replace(/\D/g, "");
   if (!normalized) return null;
@@ -222,11 +299,21 @@ async function lookupBarcode(barcode?: string): Promise<ProductLookup | null> {
     "ingredients",
   ].join(",");
 
-  const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${normalized}.json?fields=${fields}`, {
-    headers: {
-      "User-Agent": "BarakahApp/1.0 halal-scanner",
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://world.openfoodfacts.org/api/v2/product/${normalized}.json?fields=${fields}`,
+      {
+        headers: {
+          "User-Agent": "BarakahApp/1.0 halal-scanner",
+        },
+      },
+      BARCODE_LOOKUP_TIMEOUT_MS,
+    );
+  } catch (error) {
+    console.error("OpenFoodFacts lookup failed:", error);
+    return null;
+  }
 
   if (!response.ok) return null;
 
@@ -279,7 +366,11 @@ interface AIResult {
   ingredients_hash: string | null;
 }
 
-const AI_MODEL = "gpt-5-nano";
+const AI_MODEL_FALLBACKS = [
+  "openai/gpt-5-nano",
+  "deepseek/deepseek-v4-flash",
+];
+const AI_MODEL = AI_MODEL_FALLBACKS[0];
 
 const AI_RESPONSE_SCHEMA = {
   type: "object",
@@ -406,7 +497,7 @@ async function callOpenAI(
     });
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     "https://openrouter.ai/api/v1/chat/completions",
     {
       method: "POST",
@@ -415,10 +506,7 @@ async function callOpenAI(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        models: [
-          "openai/gpt-5-nano",
-          "deepseek/deepseek-v4-flash",
-        ],
+        models: AI_MODEL_FALLBACKS,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
@@ -435,6 +523,7 @@ async function callOpenAI(
         max_tokens: 1200,
       }),
     },
+    AI_TIMEOUT_MS,
   );
 
   if (!response.ok) {
@@ -485,7 +574,7 @@ const mergeAiWithDeterministic = (aiResult: AIResult, deterministicResult: Deter
     aiResult.ingredients.length > 0
       ? aiResult.ingredients
       : deterministicResult.ingredients,
-  source: "openfoodfacts_deterministic_openai_gpt5nano",
+  source: "openfoodfacts_deterministic_openrouter_ai",
   lookup: deterministicResult.lookup,
   deterministic: deterministicResult.deterministic,
   deterministic_verdict: deterministicResult.verdict,
@@ -513,7 +602,7 @@ async function getIngredientsHash(parsed: any): Promise<string | null> {
 }
 
 function getAiModelFromSource(source: unknown): string | null {
-  return typeof source === "string" && source.includes("gpt5nano") ? AI_MODEL : null;
+  return typeof source === "string" && source.includes("openrouter_ai") ? AI_MODEL : null;
 }
 
 async function writeProductCache(
@@ -567,9 +656,15 @@ async function writeProductCache(
   }
 }
 
-function buildScanHistoryRow(parsed: any, productCacheId: string | null, userId: string | null) {
+function buildScanHistoryRow(
+  parsed: any,
+  productCacheId: string | null,
+  userId: string | null,
+  normalizedBarcode: string | null,
+) {
   return {
     user_id: userId,
+    barcode: normalizedBarcode,
     product_name: parsed?.product_name || "Unknown Product",
     brand: parsed?.brand ?? null,
     status: parsed?.status || "unknown",
@@ -579,6 +674,24 @@ function buildScanHistoryRow(parsed: any, productCacheId: string | null, userId:
     region: parsed?.region ?? null,
     ingredients_hash: parsed?.ingredients_hash ?? null,
     product_cache_id: productCacheId,
+  };
+}
+
+function buildResultFromScanHistory(scan: any, body: ScanRequest) {
+  const linkedCache = scan?.product_halal_cache;
+  return {
+    product_name: scan?.product_name || "Unknown Product",
+    brand: scan?.brand ?? null,
+    status: scan?.status || "unknown",
+    confidence: typeof scan?.confidence === "number" ? scan.confidence : null,
+    verdict: scan?.verdict ?? null,
+    category: scan?.category ?? null,
+    region: scan?.region ?? body.region ?? null,
+    ingredients: Array.isArray(linkedCache?.ingredients) ? linkedCache.ingredients : [],
+    ingredients_hash: scan?.ingredients_hash ?? linkedCache?.ingredients_hash ?? null,
+    source: "scan_history",
+    lookup: null,
+    deterministic: { status: scan?.status || "unknown", matched: [] },
   };
 }
 
@@ -653,7 +766,7 @@ serve(async (req) => {
 
           const { data: cachedScan, error: cachedScanError } = await supabase
             .from("scan_history")
-            .insert(buildScanHistoryRow(cachedResult, cached.id, userId))
+            .insert(buildScanHistoryRow(cachedResult, cached.id, userId, normalizedBarcode))
             .select()
             .single();
 
@@ -663,6 +776,54 @@ serve(async (req) => {
           }
 
           return jsonResponse({ scan: cachedScan, result: cachedResult });
+        }
+
+        const { data: historicalScan, error: historicalScanError } = await supabase
+          .from("scan_history")
+          .select(`
+            id,
+            product_name,
+            brand,
+            status,
+            confidence,
+            verdict,
+            category,
+            region,
+            ingredients_hash,
+            product_cache_id,
+            created_at,
+            product_halal_cache:product_cache_id (
+              ingredients,
+              ingredients_hash
+            )
+          `)
+          .eq("barcode", normalizedBarcode)
+          .neq("status", "unknown")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (historicalScanError) {
+          console.error("scan_history barcode lookup error:", historicalScanError);
+        } else if (historicalScan) {
+          const historicalResult = buildResultFromScanHistory(historicalScan, body);
+          const { data: repeatedScan, error: repeatedScanError } = await supabase
+            .from("scan_history")
+            .insert(buildScanHistoryRow(
+              historicalResult,
+              historicalScan.product_cache_id ?? null,
+              userId,
+              normalizedBarcode,
+            ))
+            .select()
+            .single();
+
+          if (repeatedScanError) {
+            console.error("scan_history insert error (history hit):", repeatedScanError);
+            return jsonResponse({ result: historicalResult });
+          }
+
+          return jsonResponse({ scan: repeatedScan, result: historicalResult });
         }
       } catch (e) {
         console.error("cache-hit error:", e);
@@ -676,30 +837,49 @@ serve(async (req) => {
       const deterministicResult = runDeterministicHalalCheck(productFacts, body);
 
       if (deterministicResult.status === "halal") {
-        try {
-          const aiResult = await callOpenAI(body, productFacts);
-          parsed = mergeAiWithDeterministic(aiResult, deterministicResult);
-        } catch (error) {
-          console.error("GPT-5 nano verification failed after deterministic halal result:", error);
-          parsed = {
-            ...deterministicResult,
-            verdict: `${deterministicResult.verdict} AI verification failed, so this result is based on deterministic rules only.`,
-            source: "openfoodfacts_deterministic_rules",
-          };
+        parsed = {
+          ...deterministicResult,
+          source: "openfoodfacts_deterministic_rules",
+        };
+      } else if (deterministicResult.status === "unknown") {
+        if (!body.imageBase64) {
+          parsed = runMetadataHalalHeuristic(productFacts, body);
+        } else {
+          try {
+            const aiResult = await callOpenAI(body, productFacts);
+            parsed = aiResult.status === "unknown"
+              ? runMetadataHalalHeuristic(productFacts, body, aiResult)
+              : {
+                  ...aiResult,
+                  product_name: productFacts.product_name,
+                  brand: productFacts.brand,
+                  category: aiResult.category ?? productFacts.category,
+                  region: aiResult.region ?? productFacts.region ?? body.region ?? null,
+                  source: "openfoodfacts_unknown_openrouter_ai",
+                  lookup: productFacts,
+                  deterministic: deterministicResult.deterministic,
+                  deterministic_verdict: deterministicResult.verdict,
+                };
+          } catch (error) {
+            console.error("AI fallback failed after unknown deterministic barcode result:", error);
+            parsed = runMetadataHalalHeuristic(productFacts, body);
+          }
         }
       } else {
         parsed = deterministicResult;
       }
-    } else if (body.imageBase64) {
-      try {
-        parsed = await callOpenAI(body, null);
-        parsed.source = "openai_gpt5nano_image";
-      } catch (error) {
-        console.error("GPT-5 nano image analysis failed after OpenFoodFacts miss:", error);
-        parsed = unknownBarcodeResult(body);
-      }
     } else {
-      parsed = unknownBarcodeResult(body);
+      if (!body.imageBase64) {
+        parsed = unknownBarcodeResult(body);
+      } else {
+        try {
+          parsed = await callOpenAI(body, null);
+          parsed.source = "openrouter_ai_image";
+        } catch (error) {
+          console.error("AI fallback failed after OpenFoodFacts miss:", error);
+          parsed = unknownBarcodeResult(body);
+        }
+      }
     }
 
     const cachedProduct = await writeProductCache(supabase, normalizedBarcode, parsed);
@@ -707,7 +887,7 @@ serve(async (req) => {
 
     const { data, error } = await supabase
       .from("scan_history")
-      .insert(buildScanHistoryRow(parsed, productCacheId, userId))
+      .insert(buildScanHistoryRow(parsed, productCacheId, userId, normalizedBarcode))
       .select()
       .single();
 

@@ -155,7 +155,7 @@ export const SellerOnboarding = () => {
 
       <div className="flex-1 px-6 pt-6 pb-28 overflow-y-auto">
         {step === 1 && <Step1 form={form} update={update} />}
-        {step === 2 && <Step2 form={form} update={update} />}
+        {step === 2 && <Step2 form={form} update={update} userId={user?.uid} />}
         {step === 3 && <Step3 form={form} update={update} />}
         {step === 4 && <Step4 />}
       </div>
@@ -352,19 +352,25 @@ const Step1 = ({
 const Step2 = ({
   form,
   update,
+  userId,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+  userId?: string;
 }) => {
   const bannerRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<'banner' | 'logo' | null>(null);
 
   const upload = async (file: File, kind: 'banner' | 'logo') => {
+    if (!userId) {
+      toast.error('You must be signed in to upload images');
+      return;
+    }
     setUploading(kind);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `seller-${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `${userId}/seller-${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error } = await supabase.storage.from('product-images').upload(path, file);
       if (error) throw error;
       const { data } = supabase.storage.from('product-images').getPublicUrl(path);

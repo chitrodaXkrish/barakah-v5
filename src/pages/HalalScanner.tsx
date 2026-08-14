@@ -106,10 +106,6 @@ export const HalalScanner = () => {
       if (invokeError) throw invokeError;
       const result = data?.result;
       if (!result) throw new Error('No scan result returned');
-      if (result.source === 'barcode_lookup_miss') {
-        throw new Error('This barcode was scanned, but no product details were found. Please scan the ingredient label or try another barcode.');
-      }
-
       if (!mountedRef.current) return;
       setScanResult({
         product_name: result.product_name || 'Unknown Product',

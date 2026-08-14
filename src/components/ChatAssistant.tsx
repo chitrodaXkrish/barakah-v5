@@ -49,6 +49,31 @@ const SUGGESTIONS = [
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
+const extractStreamText = (parsed: any): string => {
+  const choice = parsed?.choices?.[0];
+  const content =
+    choice?.delta?.content ??
+    choice?.message?.content ??
+    choice?.text ??
+    parsed?.content ??
+    parsed?.text;
+
+  if (typeof content === 'string') return content;
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (typeof part?.text === 'string') return part.text;
+        if (typeof part?.content === 'string') return part.content;
+        return '';
+      })
+      .join('');
+  }
+
+  return '';
+};
+
 async function streamChat({
   messages,
   onDelta,
@@ -99,6 +124,7 @@ async function streamChat({
 
     let buffer = '';
     let finished = false;
+    let currentEvent = 'message';
 
     const finish = () => {
       if (finished) return;
@@ -132,6 +158,11 @@ async function streamChat({
 
         if (!line) continue;
 
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim() || 'message';
+          continue;
+        }
+
         // Ignore SSE metadata/comments.
         if (!line.startsWith('data:')) continue;
 
@@ -146,9 +177,15 @@ async function streamChat({
 
         try {
           const parsed = JSON.parse(payload);
-          const content = parsed?.choices?.[0]?.delta?.content;
+          if (currentEvent === 'error' || parsed?.error) {
+            onError(parsed?.error || 'AI stream interrupted.');
+            finish();
+            break;
+          }
 
-          if (typeof content === 'string' && content.length > 0) {
+          const content = extractStreamText(parsed);
+
+          if (content.length > 0) {
             onDelta(content);
           }
         } catch (parseError) {
@@ -175,9 +212,15 @@ async function streamChat({
           } else if (payload) {
             try {
               const parsed = JSON.parse(payload);
-              const content = parsed?.choices?.[0]?.delta?.content;
+              if (parsed?.error) {
+                onError(parsed.error);
+                finish();
+                break;
+              }
 
-              if (typeof content === 'string' && content.length > 0) {
+              const content = extractStreamText(parsed);
+
+              if (content.length > 0) {
                 onDelta(content);
               }
             } catch (parseError) {
@@ -349,15 +392,40 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
     });
 
     let assistantSoFar = '';
-    const upsert = (chunk: string) => {
-      assistantSoFar += chunk;
+    let assistantDisplayed = '';
+    let pendingAssistantText = '';
+    let flushTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let streamHadError = false;
+
+    const renderAssistant = () => {
+      if (!pendingAssistantText) return;
+      assistantDisplayed += pendingAssistantText;
+      pendingAssistantText = '';
       setMessages(prev => {
         const last = prev[prev.length - 1];
         if (last?.role === 'assistant') {
-          return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
+          return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantDisplayed } : m);
         }
-        return [...prev, { role: 'assistant', content: assistantSoFar }];
+        return [...prev, { role: 'assistant', content: assistantDisplayed }];
       });
+    };
+
+    const flushAssistant = () => {
+      if (flushTimer) {
+        window.clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      renderAssistant();
+    };
+
+    const upsert = (chunk: string) => {
+      assistantSoFar += chunk;
+      pendingAssistantText += chunk;
+      if (flushTimer) return;
+      flushTimer = window.setTimeout(() => {
+        flushTimer = null;
+        renderAssistant();
+      }, 32);
     };
 
     try {
@@ -365,7 +433,18 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
         messages: newMessages,
         onDelta: upsert,
         onDone: async () => {
+          flushAssistant();
           setIsLoading(false);
+          if (!assistantSoFar && !streamHadError) {
+            setMessages(prev => [
+              ...prev,
+              {
+                role: 'assistant',
+                content: 'The AI service connected but did not return a response. Please try again.',
+              },
+            ]);
+            return;
+          }
           if (assistantSoFar && threadId) {
             await supabase.from('chat_messages').insert({
               thread_id: threadId,
@@ -386,6 +465,8 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
           }
         },
         onError: (err) => {
+          flushAssistant();
+          streamHadError = true;
           setMessages(prev => [...prev, { role: 'assistant', content: err }]);
           setIsLoading(false);
         },
@@ -736,7 +817,7 @@ const ChatView = ({
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className="max-w-[85%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed"
+                  className="max-w-[85%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed transition-colors duration-150"
                   style={
                     msg.role === 'user'
                       ? { backgroundColor: BROWN_BTN, color: '#FFF' }
@@ -746,6 +827,12 @@ const ChatView = ({
                   {msg.role === 'assistant' ? (
                     <div className="prose prose-sm max-w-none [&_p]:m-0" style={{ color: BROWN }}>
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      {isLoading && i === messages.length - 1 && (
+                        <span
+                          className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse rounded-full"
+                          style={{ backgroundColor: BROWN_BTN }}
+                        />
+                      )}
                     </div>
                   ) : (
                     msg.content
