@@ -55,6 +55,8 @@
 	<string>This app requires your location to calculate accurate prayer times.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>This app requires your location to calculate accurate prayer times.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app requires your location to calculate accurate prayer times even when the app is in the background.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>This app requires camera access to scan barcodes for the Halal Scanner.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

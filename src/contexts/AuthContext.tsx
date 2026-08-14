@@ -151,6 +151,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  // Listen for native push token events and attach token to user metadata
+  useEffect(() => {
+    const handler = async (e: any) => {
+      const token = e?.detail?.value || e?.detail || e;
+      if (!token) return;
+      try {
+        const session = await supabase.auth.getSession();
+        const user = session.data.session?.user;
+        if (!user) return;
+        // Update user metadata with push token; server should read this and send notifications
+        await supabase.auth.updateUser({ data: { push_token: token } });
+      } catch (err) {
+        console.warn('Failed to save push token to user metadata', err);
+      }
+    };
+
+    window.addEventListener('pushToken', handler as EventListener);
+    return () => { window.removeEventListener('pushToken', handler as EventListener); };
+  }, []);
+
   const fetchUserRole = async (userId: string) => {
     try {
       const role = await getUserRoleFromDatabase(userId);
