@@ -1,15 +1,20 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Capacitor owns WebView, deep-link and notification event delivery.
-        // Keeping this delegate minimal lets OAuth callbacks work on a cold
-        // launch as well as when the app is already in the foreground.
+        // Forward launch to Capacitor so plugins (Browser, App, LocalNotifications, etc.)
+        // receive lifecycle events and URL/open callbacks on cold launches.
+        ApplicationDelegateProxy.shared.application(application, didFinishLaunchingWithOptions: launchOptions)
+
+        // Ensure notification events are delivered to Capacitor plugins.
+        UNUserNotificationCenter.current().delegate = ApplicationDelegateProxy.shared
+
         return true
     }
 
@@ -46,6 +51,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Feel free to add additional processing here, but if you want the App API to support
         // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    }
+
+    // Remote notification registration callbacks
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        ApplicationDelegateProxy.shared.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        ApplicationDelegateProxy.shared.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+    }
+
+    // Forward UNUserNotificationCenter delegate events to Capacitor's proxy
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        ApplicationDelegateProxy.shared.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        ApplicationDelegateProxy.shared.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
     }
 
 }

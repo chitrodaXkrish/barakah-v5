@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +9,18 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LocationProvider } from "./contexts/LocationContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { PrayerTimesProvider } from "./contexts/PrayerTimesContext";
+import { Capacitor } from '@capacitor/core';
+import { registerForPush } from './integrations/push';
+
+const PushInitializer = () => {
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      registerForPush();
+    }
+  }, []);
+
+  return null;
+};
 
 // Eager — needed for first paint / auth flow
 import { Home } from "./pages/Home";
@@ -39,7 +51,7 @@ const ShippingAddresses = lazy(() => import("./pages/ShippingAddresses").then(m 
 const AddShippingAddress = lazy(() => import("./pages/AddShippingAddress").then(m => ({ default: m.AddShippingAddress })));
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation").then(m => ({ default: m.OrderConfirmation })));
 const SellerDashboard = lazy(() => import("./pages/SellerDashboard").then(m => ({ default: m.SellerDashboard })));
-const SellerOnboarding = lazy(() => import("./pages/SellerOnboarding").then(m => ({ default: m.SellerOnboarding })));
+const SellerOnboarding = lazy(() => import("./pages/SellerOnboarding"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts").then(m => ({ default: m.SellerProducts })));
 const SellerAddProduct = lazy(() => import("./pages/seller/SellerAddProduct").then(m => ({ default: m.SellerAddProduct })));
 const SellerOrdersPage = lazy(() => import("./pages/seller/SellerOrdersPage").then(m => ({ default: m.SellerOrdersPage })));
@@ -103,6 +115,7 @@ const App = () => (
             <LocationProvider>
               <PrayerTimesProvider>
                 <CartProvider>
+                  <PushInitializer />
                   <Toaster />
                   <Sonner />
                   <Suspense fallback={<RouteFallback />}>
