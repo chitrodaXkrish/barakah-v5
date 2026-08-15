@@ -3,9 +3,21 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
 import { useNavigate } from 'react-router-dom';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+
+interface AppleSignInResult {
+  identityToken: string;
+  rawNonce: string;
+  email?: string;
+  givenName?: string;
+  familyName?: string;
+}
+
+const AppleSignIn = registerPlugin<{
+  authorize(options?: { nonce?: string }): Promise<AppleSignInResult>;
+}>('AppleSignIn');
 
 // Custom URL scheme used by the native OAuth deep-link callback.
 // Must be added to Supabase Auth allowed redirect URLs.
@@ -124,10 +136,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isNative()) {
       const handleNativeAuthCallback = async (url?: string | null) => {
         try {
-          console.log('NATIVE AUTH CALLBACK URL:', url)
+          console.log('[DEBUG] 1. Full Callback URL:', url);
+          if (!url) return;
+
+          const u = new URL(url);
+
+          // Query params
+          const queryParams: Record<string, string> = {};
+          u.searchParams.forEach((value, key) => { queryParams[key] = value; });
+
+          // Hash params
+          const hashParams: Record<string, string> = {};
+          if (u.hash && u.hash.length > 1) {
+            const hashSearch = new URLSearchParams(u.hash.startsWith('#') ? u.hash.slice(1) : u.hash);
+            hashSearch.forEach((value, key) => { hashParams[key] = value; });
+          }
+
+          console.log('[DEBUG] 2. Parsed Query Parameters:', Object.keys(queryParams));
+          console.log('[DEBUG] 3. Parsed Hash Parameters:', Object.keys(hashParams));
+
+          const access_token = hashParams['access_token'] || queryParams['access_token'];
+          const refresh_token = hashParams['refresh_token'] || queryParams['refresh_token'];
+          const code = hashParams['code'] || queryParams['code'];
+          const error = hashParams['error_description'] || queryParams['error_description'] || hashParams['error'] || queryParams['error'];
+
+          console.log('[DEBUG] 4. access_token exists:', Boolean(access_token));
+          console.log('[DEBUG] 5. refresh_token exists:', Boolean(refresh_token));
+          console.log('[DEBUG] 6. code exists:', Boolean(code));
+          console.log('[DEBUG] 7. error / error_description:', error || 'none');
+
           if (!isNativeAuthCallback(url)) return;
-          const { access_token, refresh_token, error } = parseAuthUrl(url);
-          console.log('NATIVE AUTH CALLBACK PARSED:', { access_token, refresh_token, error })
+
           if (error) {
             console.error('OAuth callback error:', error);
           } else if (access_token && refresh_token) {
@@ -260,18 +299,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const handleAppleSignIn = async () => {
     try {
       if (isNative()) {
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'apple',
-          options: {
-            redirectTo: NATIVE_REDIRECT_URL,
-            skipBrowserRedirect: true,
-          },
-        });
-        if (error) return { error, role: undefined };
-        if (data?.url) {
-          await Browser.open({ url: data.url, presentationStyle: 'popover' });
+        const rawNonce = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+        const appleResult = await AppleSignIn.authorize({ nonce: rawNonce });
+
+        if (!appleResult.identityToken) {
+          return { error: { message: 'Apple Sign-In failed: No identity token returned' }, role: undefined };
         }
-        return { error: null, role: null };
+
+        const { data: authData, error } = await supabase.auth.signInWithIdToken({
+          provider: 'apple',
+          token: appleResult.identityToken,
+          nonce: appleResult.rawNonce || rawNonce,
+        });
+
+        if (error) return { error, role: undefined };
+        if (!authData.user) return { error: null, role: null };
+
+        const role = await getUserRoleFromDatabase(authData.user.id);
+        setUserRole(role);
+        return { error: null, role };
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -282,6 +328,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) return { error, role: undefined };
       return { error: null, role: null };
     } catch (error: any) {
+      if (error?.code === 'CANCELED' || error?.message?.includes('canceled') || error?.message?.includes('canceled')) {
+        return { error: { message: 'Apple Sign-In was canceled' }, role: undefined };
+      }
       return { error: { message: error.message || 'Apple sign in failed' }, role: undefined };
     }
   };
