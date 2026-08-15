@@ -1,5 +1,4 @@
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth as useClerkAuth } from '@clerk/clerk-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +16,6 @@ import { assetUrl } from '@/lib/assetUrl';
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
 
 export const Register = () => {
-  const { isSignedIn: isClerkSignedIn } = useClerkAuth();
   const [view, setView] = useState<'welcome' | 'profile' | 'details'>('welcome');
   const step = view;
   const setStep = setView;
@@ -30,12 +28,6 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (isClerkSignedIn) {
-      navigate('/', { replace: true });
-    }
-  }, [isClerkSignedIn, navigate]);
   const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup } = useAuth();
   const { t } = useLanguage();
 
@@ -280,34 +272,22 @@ export const Register = () => {
       >
         {view === 'welcome' && (
           <div className="space-y-3">
-            {/* Authentication Buttons */}
-            <div className="text-center space-y-2">
-              <SignedOut>
-                <div className="flex flex-col gap-2">
-                  <SignInButton mode="modal">
-                    <Button className="w-full h-12 rounded-full bg-[#A35233] hover:bg-[#8b4328] text-white">
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <Button variant="outline" className="w-full h-12 rounded-full border-[#A35233] text-[#A35233]">
-                      Sign Up
-                    </Button>
-                  </SignUpButton>
-                </div>
-              </SignedOut>
-              <SignedIn>
-                <div className="flex flex-col items-center justify-center space-y-2 py-1">
-                  <UserButton showName />
-                  <Button 
-                    onClick={() => navigate('/', { replace: true })}
-                    className="w-full h-10 rounded-full bg-[#A35233] text-white text-sm"
-                  >
-                    Continue to Barakah
-                  </Button>
-                </div>
-              </SignedIn>
-            </div>
+
+            {/* Google */}
+            <Button
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              variant="outline"
+              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+            >
+              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC04" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Continue with Google
+            </Button>
 
             {/* OR */}
             <div className="flex items-center gap-3 py-2">
@@ -375,108 +355,136 @@ export const Register = () => {
                 Privacy Policy.
               </Link>
             </p>
-          </div>
+          </div >
         )}
 
-        {view === 'profile' && (
-          <div className="space-y-3">
-            <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-2">
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-            <div className="text-center mb-3">
-              <h2 className="text-xl font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                {t('login.choose_profile')}
-              </h2>
-              <p className="text-sm text-[#7c6a4f]">{t('login.select_account_type')}</p>
-            </div>
-            {profileOptions.map(({ role, icon: Icon, titleKey, descKey }) => (
-              <Card
-                key={role}
-                onClick={() => handleRoleSelect(role)}
-                className="p-4 rounded-2xl cursor-pointer hover:shadow-md transition border bg-white/70 border-[#EADFC9]"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 rounded-xl" style={{ background: '#A35334' }}>
-                    <Icon className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1a1a1a]">{t(titleKey)}</h3>
-                    <p className="text-xs text-[#6b5a40]">{t(descKey)}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {view === 'details' && (
-          <div className="space-y-3">
-            <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-1">
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-            <div className="text-center mb-2">
-              <h2 className="text-lg font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                {isSignIn ? t('login.welcome_back') : t('login.create_your_account')}
-              </h2>
-              <p className="text-sm text-[#7c6a4f]">
-                {isSignIn ? t('login.enter_credentials') : `${t('login.sign_up_as')} ${getSelectedRoleTitle()}`}
-              </p>
-            </div>
-
-            {!isSignIn && (
-              <Input
-                type="text"
-                placeholder={t('login.full_name')}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-            )}
-            {!needsSetup && (
-              <>
-                <Input
-                  type="email"
-                  placeholder={t('login.email_placeholder')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <Input
-                  type="password"
-                  placeholder={t('login.password')}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-              </>
-            )}
-
-            <Button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="w-full h-14 rounded-full text-white text-base font-medium hover:opacity-90"
-              style={{ backgroundColor: '#A35334' }}
-            >
-              {loading ? t('login.please_wait') : needsSetup ? 'Finish setup' : isSignIn ? t('login.sign_in') : t('login.create_account_btn')}
-            </Button>
-
-            {isSignIn && (
-              <p className="text-sm text-center text-[#7c6a4f] pt-2">
-                {t('login.dont_have_account')}{' '}
-                <button
-                  onClick={() => {
-                    setIsSignIn(false);
-                    setView('profile');
-                  }}
-                  className="text-[#A35334] font-semibold underline"
+        {
+          view === 'profile' && (
+            <div className="space-y-3">
+              <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-2">
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
+              <div className="text-center mb-3">
+                <h2 className="text-xl font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                  {t('login.choose_profile')}
+                </h2>
+                <p className="text-sm text-[#7c6a4f]">{t('login.select_account_type')}</p>
+              </div>
+              {profileOptions.map(({ role, icon: Icon, titleKey, descKey }) => (
+                <Card
+                  key={role}
+                  onClick={() => handleRoleSelect(role)}
+                  className="p-4 rounded-2xl cursor-pointer hover:shadow-md transition border bg-white/70 border-[#EADFC9]"
                 >
-                  {t('login.sign_up')}
-                </button>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 rounded-xl" style={{ background: '#A35334' }}>
+                      <Icon className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-[#1a1a1a]">{t(titleKey)}</h3>
+                      <p className="text-xs text-[#6b5a40]">{t(descKey)}</p>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )
+        }
+
+        {
+          view === 'details' && (
+            <div className="space-y-3">
+              <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-1">
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
+              <div className="text-center mb-2">
+                <h2 className="text-lg font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                  {isSignIn ? t('login.welcome_back') : t('login.create_your_account')}
+                </h2>
+                <p className="text-sm text-[#7c6a4f]">
+                  {isSignIn ? t('login.enter_credentials') : `${t('login.sign_up_as')} ${getSelectedRoleTitle()}`}
+                </p>
+              </div>
+
+              {!isSignIn && (
+                <Input
+                  type="text"
+                  placeholder={t('login.full_name')}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              )}
+              {!needsSetup && (
+                <>
+                  <Input
+                    type="email"
+                    placeholder={t('login.email_placeholder')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                  <Input
+                    type="password"
+                    placeholder={t('login.password')}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </>
+              )}
+
+              <Button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="w-full h-14 rounded-full text-white text-base font-medium hover:opacity-90"
+                style={{ backgroundColor: '#A35334' }}
+              >
+                {loading ? t('login.please_wait') : needsSetup ? 'Finish setup' : isSignIn ? t('login.sign_in') : t('login.create_account_btn')}
+              </Button>
+
+              {!needsSetup && (
+                <>
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-[#D9C9A8]" />
+                    <span className="text-xs text-[#7c6a4f] tracking-widest">OR</span>
+                    <div className="flex-1 h-px bg-[#D9C9A8]" />
+                  </div>
+                  <Button
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    variant="outline"
+                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+                  >
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC04" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    {isSignIn ? 'Sign in with Google' : 'Sign up with Google'}
+                  </Button>
+                </>
+              )}
+
+              {isSignIn && (
+                <p className="text-sm text-center text-[#7c6a4f] pt-2">
+                  {t('login.dont_have_account')}{' '}
+                  <button
+                    onClick={() => {
+                      setIsSignIn(false);
+                      setView('profile');
+                    }}
+                    className="text-[#A35334] font-semibold underline"
+                  >
+                    {t('login.sign_up')}
+                  </button>
+                </p>
+              )}
+            </div>
+          )
+        }
+      </div >
+    </div >
   );
 };
