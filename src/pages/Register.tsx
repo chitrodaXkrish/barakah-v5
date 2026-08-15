@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
 import loginFullBg from '@/assets/login-full-bg.png.asset.json';
+import appleLogo from '@/assets/AppleLogo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
@@ -289,6 +290,17 @@ export const Register = () => {
               Continue with Google
             </Button>
 
+            {/* Apple */}
+            <Button
+              onClick={handleAppleSignIn}
+              disabled={loading}
+              variant="outline"
+              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+            >
+              <img src={assetUrl(appleLogo)} alt="Apple" className="w-5 h-5 mr-2 object-contain" />
+              {t('login.apple')}
+            </Button>
+
             {/* OR */}
             <div className="flex items-center gap-3 py-2">
               <div className="flex-1 h-px bg-[#D9C9A8]" />
@@ -463,6 +475,15 @@ export const Register = () => {
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
                     {isSignIn ? 'Sign in with Google' : 'Sign up with Google'}
+                  </Button>
+                  <Button
+                    onClick={handleAppleSignIn}
+                    disabled={loading}
+                    variant="outline"
+                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+                  >
+                    <img src={assetUrl(appleLogo)} alt="Apple" className="w-5 h-5 mr-2 object-contain" />
+                    {t('login.apple')}
                   </Button>
                 </>
               )}
