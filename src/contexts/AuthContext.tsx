@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { useClerk } from '@clerk/clerk-react';
 
 // Custom URL scheme used by the native OAuth deep-link callback.
 // Must be added to Supabase Auth allowed redirect URLs.
@@ -91,7 +90,6 @@ const getUserRoleFromDatabase = async (userId: string): Promise<UserRole> => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { signOut: signOutClerk } = useClerk();
   const [user, setUser] = useState<AppUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
@@ -309,10 +307,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const handleSignOut = async () => {
-    await Promise.allSettled([
-      supabase.auth.signOut(),
-      signOutClerk(),
-    ]);
+    await supabase.auth.signOut();
     setUser(null);
     setUserRole(null);
     navigate('/login');
