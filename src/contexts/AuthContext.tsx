@@ -56,16 +56,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const toAppUser = (u: SupabaseUser | null | undefined): AppUser | null =>
   u
     ? (Object.assign({}, u, {
-        uid: u.id,
-        displayName:
-          (u.user_metadata?.full_name as string | undefined) ??
-          (u.user_metadata?.name as string | undefined) ??
-          null,
-        photoURL:
-          (u.user_metadata?.avatar_url as string | undefined) ??
-          (u.user_metadata?.picture as string | undefined) ??
-          null,
-      }) as AppUser)
+      uid: u.id,
+      displayName:
+        (u.user_metadata?.full_name as string | undefined) ??
+        (u.user_metadata?.name as string | undefined) ??
+        null,
+      photoURL:
+        (u.user_metadata?.avatar_url as string | undefined) ??
+        (u.user_metadata?.picture as string | undefined) ??
+        null,
+    }) as AppUser)
     : null;
 
 const getUserRoleFromDatabase = async (userId: string): Promise<UserRole> => {
@@ -126,8 +126,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isNative()) {
       const handleNativeAuthCallback = async (url?: string | null) => {
         try {
+          console.log('NATIVE AUTH CALLBACK URL:', url)
           if (!isNativeAuthCallback(url)) return;
           const { access_token, refresh_token, error } = parseAuthUrl(url);
+          console.log('NATIVE AUTH CALLBACK PARSED:', { access_token, refresh_token, error })
           if (error) {
             console.error('OAuth callback error:', error);
           } else if (access_token && refresh_token) {
@@ -136,7 +138,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (e) {
           console.error('appUrlOpen handler failed:', e);
         } finally {
-          try { await Browser.close(); } catch {}
+          try { await Browser.close(); } catch { }
         }
       };
 
@@ -319,16 +321,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      userRole, 
-      loading, 
-      signUp, 
-      signIn, 
+    <AuthContext.Provider value={{
+      user,
+      userRole,
+      loading,
+      signUp,
+      signIn,
       signInWithGoogle: handleGoogleSignIn,
       signInWithApple: handleAppleSignIn,
       completeAccountSetup,
-      signOut: handleSignOut 
+      signOut: handleSignOut
     }}>
       {children}
     </AuthContext.Provider>
