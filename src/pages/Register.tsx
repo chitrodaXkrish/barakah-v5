@@ -1,3 +1,4 @@
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -272,6 +273,30 @@ export const Register = () => {
       >
         {view === 'welcome' && (
           <div className="space-y-3">
+            {/* Clerk Authentication Buttons */}
+            <div className="bg-[#FFF8F3] p-4 rounded-2xl border border-[#E8D5C4] text-center space-y-2">
+              <p className="text-sm font-medium text-[#3A1E12]">Clerk Quick Sign In</p>
+              <SignedOut>
+                <div className="flex gap-2">
+                  <SignInButton mode="modal">
+                    <Button className="flex-1 h-11 rounded-full bg-[#A35233] hover:bg-[#8b4328] text-white">
+                      Sign In with Clerk
+                    </Button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <Button variant="outline" className="flex-1 h-11 rounded-full border-[#A35233] text-[#A35233]">
+                      Sign Up with Clerk
+                    </Button>
+                  </SignUpButton>
+                </div>
+              </SignedOut>
+              <SignedIn>
+                <div className="flex items-center justify-center space-x-2 py-1">
+                  <UserButton showName />
+                </div>
+              </SignedIn>
+            </div>
+
             {/* Google */}
             <Button
               onClick={handleGoogleSignIn}
