@@ -246,15 +246,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         return { error: null, role: null };
       }
-      const result: any = await lovable.auth.signInWithOAuth('google', {
-        redirect_uri: `${window.location.origin}/`,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
       });
-      if (result?.error) return { error: result.error, role: undefined };
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return { error: null, role: null };
-      const role = await getUserRoleFromDatabase(authData.user.id);
-      setUserRole(role);
-      return { error: null, role };
+      if (error) return { error, role: undefined };
+      return { error: null, role: null };
     } catch (error: any) {
       return { error: { message: error.message || 'Google sign in failed' }, role: undefined };
     }
@@ -276,15 +275,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         return { error: null, role: null };
       }
-      const result: any = await lovable.auth.signInWithOAuth('apple', {
-        redirect_uri: `${window.location.origin}/`,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: window.location.origin,
+        },
       });
-      if (result?.error) return { error: result.error, role: undefined };
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return { error: null, role: null };
-      const role = await getUserRoleFromDatabase(authData.user.id);
-      setUserRole(role);
-      return { error: null, role };
+      if (error) return { error, role: undefined };
+      return { error: null, role: null };
     } catch (error: any) {
       return { error: { message: error.message || 'Apple sign in failed' }, role: undefined };
     }
