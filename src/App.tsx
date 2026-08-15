@@ -79,14 +79,17 @@ const queryClient = new QueryClient({
   },
 });
 
+import { useAuth as useClerkAuth } from "@clerk/clerk-react";
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const { isSignedIn: isClerkSignedIn, isLoaded: isClerkLoaded } = useClerkAuth();
 
-  if (loading) {
+  if (loading || !isClerkLoaded) {
     return <LoadingScreen />;
   }
 
-  if (!user) {
+  if (!user && !isClerkSignedIn) {
     return <Navigate to="/login" replace />;
   }
 

@@ -1,5 +1,5 @@
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
-import { useState } from 'react';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,7 @@ import { assetUrl } from '@/lib/assetUrl';
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
 
 export const Register = () => {
+  const { isSignedIn: isClerkSignedIn } = useClerkAuth();
   const [view, setView] = useState<'welcome' | 'profile' | 'details'>('welcome');
   const step = view;
   const setStep = setView;
@@ -29,6 +30,12 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isClerkSignedIn) {
+      navigate('/', { replace: true });
+    }
+  }, [isClerkSignedIn, navigate]);
   const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup } = useAuth();
   const { t } = useLanguage();
 
@@ -291,8 +298,14 @@ export const Register = () => {
                 </div>
               </SignedOut>
               <SignedIn>
-                <div className="flex items-center justify-center space-x-2 py-1">
+                <div className="flex flex-col items-center justify-center space-y-2 py-1">
                   <UserButton showName />
+                  <Button 
+                    onClick={() => navigate('/', { replace: true })}
+                    className="w-full h-10 rounded-full bg-[#A35233] text-white text-sm"
+                  >
+                    Continue to Barakah
+                  </Button>
                 </div>
               </SignedIn>
             </div>
