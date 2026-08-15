@@ -13,7 +13,6 @@ import {
   Save,
   X
 } from 'lucide-react';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
@@ -158,31 +157,6 @@ export const Account = () => {
     <Layout pageBackgroundColor={CREAM}>
       <div className="min-h-screen px-4 py-6 space-y-6" style={{ backgroundColor: CREAM }}>
         <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>Account</h1>
-
-        {/* Clerk Auth Controls */}
-        <Card className="p-4 rounded-2xl shadow-sm flex items-center justify-between" style={{ backgroundColor: CARD, borderColor: BORDER }}>
-          <div>
-            <h2 className="font-semibold" style={{ color: BROWN_DARK }}>Clerk Account Management</h2>
-            <p className="text-xs" style={{ color: MUTED }}>Sign in, sign up, or manage user profile with Clerk</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <SignedOut>
-              <SignInButton mode="modal">
-                <Button size="sm" style={{ backgroundColor: BROWN, color: '#FFF' }}>
-                  Sign In
-                </Button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <Button size="sm" variant="outline" style={{ borderColor: BROWN, color: BROWN }}>
-                  Sign Up
-                </Button>
-              </SignUpButton>
-            </SignedOut>
-            <SignedIn>
-              <UserButton showName />
-            </SignedIn>
-          </div>
-        </Card>
 
         {/* User Info */}
         <Card className="p-4 rounded-2xl shadow-sm" style={{ backgroundColor: CARD, borderColor: BORDER }}>

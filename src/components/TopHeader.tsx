@@ -1,7 +1,6 @@
 import { Menu, Bell, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LanguageSelector } from '@/components/LanguageSelector';
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -41,16 +40,6 @@ export const TopHeader = ({ onMenuClick, title, rightContent, onSearchClick, sho
       <div className="flex items-center gap-2">
         {rightContent ? rightContent : (
           <>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <Button size="sm" variant="ghost" className="text-xs px-2 h-8 rounded-lg border border-primary/20">
-                  Sign In
-                </Button>
-              </SignInButton>
-            </SignedOut>
             <LanguageSelector />
             {showSearch ? (
               <Button 
