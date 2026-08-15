@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, MapPin, ChevronDown, Newspaper, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUser as useClerkUser } from '@clerk/clerk-react';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatAssistant } from '@/components/ChatAssistant';
@@ -54,6 +55,7 @@ const timeAgo = (iso?: string | null) => {
 export const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { user: clerkUser } = useClerkUser();
   const { location, loading: locationLoading } = useGlobalLocation();
   const {
     prayers: apiPrayers,
@@ -91,6 +93,15 @@ export const Home = () => {
   }, []);
 
   useEffect(() => {
+    const clerkName =
+      clerkUser?.firstName ||
+      clerkUser?.fullName ||
+      clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+      '';
+    if (clerkName) {
+      setUserName(clerkName.split(' ')[0]);
+      return;
+    }
     if (!user) return;
     const display = user.displayName;
     if (display) {
@@ -105,7 +116,7 @@ export const Home = () => {
         .single();
       if (data?.full_name) setUserName(data.full_name.split(' ')[0]);
     })();
-  }, [user]);
+  }, [clerkUser?.firstName, clerkUser?.fullName, clerkUser?.primaryEmailAddress?.emailAddress, user]);
 
   useEffect(() => {
     (async () => {

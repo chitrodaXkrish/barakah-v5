@@ -14,7 +14,8 @@ import { registerForPush } from './integrations/push';
 
 const PushInitializer = () => {
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
+    const pushEnabled = import.meta.env.VITE_ENABLE_PUSH_NOTIFICATIONS === 'true';
+    if (pushEnabled && Capacitor.isNativePlatform()) {
       registerForPush();
     }
   }, []);

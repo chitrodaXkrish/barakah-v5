@@ -22,16 +22,12 @@ const DEFAULT_SOURCES: NewsSource[] = [
   { name: "Al Jazeera", rss_url: "https://www.aljazeera.com/xml/rss/all.xml", category: "world" },
   { name: "Middle East Eye", rss_url: "https://www.middleeasteye.net/rss", category: "world" },
   { name: "TRT World", rss_url: "https://www.trtworld.com/rss", category: "world" },
-  { name: "BBC World", rss_url: "https://feeds.bbci.co.uk/news/world/rss.xml", category: "world" },
   { name: "Islamic Relief Worldwide", rss_url: "https://islamic-relief.org/feed/", category: "charity" },
   { name: "Islamic Relief Press Releases", rss_url: "https://islamic-relief.org/news_category/press-releases/feed/", category: "charity" },
   { name: "Muslim Matters", rss_url: "https://muslimmatters.org/feed/", category: "education" },
-  { name: "BBC Education", rss_url: "https://feeds.bbci.co.uk/news/education/rss.xml", category: "education" },
   { name: "About Islam", rss_url: "https://aboutislam.net/feed/", category: "community" },
   { name: "The Muslim Vibe", rss_url: "https://themuslimvibe.com/feed/", category: "community" },
   { name: "Islamic Finance Guru", rss_url: "https://www.islamicfinanceguru.com/feed/", category: "business" },
-  { name: "BBC Business", rss_url: "https://feeds.bbci.co.uk/news/business/rss.xml", category: "business" },
-  { name: "BBC Politics", rss_url: "https://feeds.bbci.co.uk/news/politics/rss.xml", category: "politics" },
   { name: "Middle East Eye Politics", rss_url: "https://www.middleeasteye.net/rss", category: "politics" },
 ];
 
