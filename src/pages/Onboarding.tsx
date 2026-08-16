@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 import onboarding1Full from '@/assets/onboarding-1-full.png';
 import onboarding2Full from '@/assets/onboarding-2-full.png';
 import onboarding3Full from '@/assets/onboarding-3-full.png';
@@ -32,6 +33,7 @@ const slides: Slide[] = [
 
 export const Onboarding = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [current, setCurrent] = useState(0);
   const isLast = current === slides.length - 1;
 
@@ -78,7 +80,7 @@ export const Onboarding = () => {
         )}
         <div className="flex justify-end px-6 pt-6 relative z-10">
           <button onClick={finish} className="text-white/95 text-base font-medium">
-            Skip
+            {t('onboarding.skip')}
           </button>
         </div>
         <div className="flex-1" />
@@ -91,7 +93,7 @@ export const Onboarding = () => {
             className="w-full h-14 rounded-full text-white text-base font-semibold hover:opacity-90"
             style={{ backgroundColor: '#A35233' }}
           >
-            {isLast ? 'Get Started' : 'Next'}
+            {isLast ? t('onboarding.get_started') : t('onboarding.next')}
           </Button>
         </div>
       </div>
@@ -109,7 +111,7 @@ export const Onboarding = () => {
           onClick={finish}
           className="text-white/95 text-base font-medium"
         >
-          Skip
+          {t('onboarding.skip')}
         </button>
       </div>
 
@@ -159,7 +161,7 @@ export const Onboarding = () => {
           className="w-full h-14 rounded-full text-white text-base font-semibold hover:opacity-90"
           style={{ backgroundColor: '#A35233' }}
         >
-          {isLast ? 'Get Started' : 'Next'}
+          {isLast ? t('onboarding.get_started') : t('onboarding.next')}
         </Button>
       </div>
     </div>

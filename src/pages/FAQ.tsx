@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const CARD = '#FFF8F3';
@@ -42,6 +43,7 @@ const faqs = [
 ];
 
 export const FAQ = () => {
+  const { t } = useLanguage();
   const [openItems, setOpenItems] = useState<number[]>([]);
 
   const toggleItem = (id: number) => {
@@ -55,7 +57,7 @@ export const FAQ = () => {
   return (
     <Layout pageBackgroundColor={CREAM}>
       <div className="min-h-screen px-4 py-6 space-y-6" style={{ backgroundColor: CREAM }}>
-        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>FAQ's</h1>
+        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>{t('faq.title')}</h1>
 
         {/* Search */}
         <div className="relative">
@@ -64,7 +66,7 @@ export const FAQ = () => {
             style={{ color: MUTED }}
           />
           <Input 
-            placeholder="Search" 
+            placeholder={t('faq.search_placeholder')} 
             className="pl-10 rounded-full shadow-sm focus-visible:ring-1 focus-visible:ring-offset-0"
             style={{
               backgroundColor: CARD,
@@ -95,7 +97,7 @@ export const FAQ = () => {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium" style={{ color: BROWN_DARK }}>
-                      {faq.id}. {faq.question}
+                      {faq.id}. {t('faq.q' + faq.id)}
                     </span>
                     <Plus 
                       className={`h-5 w-5 transition-transform ${
@@ -107,7 +109,7 @@ export const FAQ = () => {
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-4 pb-4 pt-3">
                   <p className="text-sm leading-relaxed" style={{ color: MUTED }}>
-                    {faq.answer}
+                    {t('faq.a' + faq.id)}
                   </p>
                 </CollapsibleContent>
               </Collapsible>

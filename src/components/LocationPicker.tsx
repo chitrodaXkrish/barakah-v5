@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Search, X, Loader2, Navigation } from 'lucide-react';
 import { useGlobalLocation } from '@/contexts/LocationContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface NominatimResult {
   place_id: number;
@@ -30,6 +31,7 @@ interface LocationPickerProps {
 
 export const LocationPicker = ({ isOpen, onClose }: LocationPickerProps) => {
   const { setManualLocation, clearManualLocation, location } = useGlobalLocation();
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,7 +116,7 @@ export const LocationPicker = ({ isOpen, onClose }: LocationPickerProps) => {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search city, country..."
+            placeholder={t('location.search_placeholder')}
             className="flex-1 bg-transparent outline-none text-[14px]"
             style={{ color: '#2C1309' }}
           />

@@ -1,5 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { ArrowLeft, Loader2, ExternalLink, Clock, Share2 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -105,6 +106,7 @@ function isHtmlContent(value: string | null): boolean {
 export const NewsDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshingArticle, setRefreshingArticle] = useState(false);
@@ -266,7 +268,7 @@ export const NewsDetail = () => {
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: BROWN }} />
           </div>
         ) : !article ? (
-          <p className="text-center py-20 text-sm" style={{ color: BROWN }}>Article not found.</p>
+          <p className="text-center py-20 text-sm" style={{ color: BROWN }}>{t('news.article_not_found')}</p>
         ) : (
           <article className="pb-16">
             {/* Hero image */}
@@ -333,14 +335,14 @@ export const NewsDetail = () => {
                 />
               ) : (
                 <p className="text-[15px] leading-relaxed text-neutral-500 italic">
-                  No content available for this article.
+                  {t('news.no_content')}
                 </p>
               )}
 
               {refreshingArticle && (
                 <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: '#F5D9C4', color: BROWN_DARK }}>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Fetching more article content
+                  {t('news.fetching_content')}
                 </div>
               )}
 
@@ -357,7 +359,7 @@ export const NewsDetail = () => {
                 className="inline-flex items-center gap-1.5 text-sm font-semibold pt-2"
                 style={{ color: BROWN }}
               >
-                View source <ExternalLink className="h-3.5 w-3.5" />
+                {t('news.view_source')} <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
           </article>

@@ -275,7 +275,7 @@ export const News = () => {
                   autoFocus
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search news"
+                  placeholder={t('news.search_placeholder')}
                   className="h-10 rounded-full bg-neutral-100 border-0 pl-4 pr-10 text-sm"
                 />
                 {search && (
@@ -346,7 +346,7 @@ export const News = () => {
             <div className="text-center py-12 space-y-3">
               <Sparkles className="h-8 w-8 mx-auto" style={{ color: BROWN }} />
               <p className="text-sm" style={{ color: BROWN }}>
-                No articles yet. Tap refresh to load the latest news.
+                {t('news.no_articles')}
               </p>
               <Button
                 onClick={refresh}
@@ -355,7 +355,7 @@ export const News = () => {
                 style={{ backgroundColor: BROWN, color: '#fff' }}
               >
                 {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Fetch news
+                {t('news.fetch_news')}
               </Button>
             </div>
           ) : (
@@ -364,14 +364,14 @@ export const News = () => {
               {latest.length > 0 && (
                 <section className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold" style={{ color: BROWN }}>Latest News</h2>
+                    <h2 className="text-lg font-bold" style={{ color: BROWN }}>{t('news.latest')}</h2>
                     <button
                       type="button"
                       onClick={refresh}
                       className="text-sm font-medium opacity-70"
                       style={{ color: BROWN }}
                     >
-                      {refreshing ? 'Refreshing…' : 'See all'}
+                      {refreshing ? t('news.refreshing') : t('news.see_all')}
                     </button>
                   </div>
                   <div className="flex gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2 snap-x snap-mandatory">
@@ -425,9 +425,9 @@ export const News = () => {
               {topStories.length > 0 && (
                 <section className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold" style={{ color: BROWN }}>Top Stories</h2>
+                    <h2 className="text-lg font-bold" style={{ color: BROWN }}>{t('news.top_stories')}</h2>
                     <button type="button" className="text-sm font-medium opacity-70" style={{ color: BROWN }}>
-                      See all
+                      {t('news.see_all')}
                     </button>
                   </div>
                   <div className="space-y-3">

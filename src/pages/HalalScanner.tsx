@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import scannerProduct from '@/assets/scanner-product.jpg';
 import { supabase } from '@/integrations/supabase/client';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM_BG = '#FFF5E5';
 const CARD_CREAM = '#FBE6C8';
@@ -254,6 +255,8 @@ export const HalalScanner = () => {
     reader.readAsDataURL(file);
   };
 
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen max-w-md mx-auto font-arabic" style={{ backgroundColor: CREAM_BG, color: BROWN }}>
       {view === 'scan' ? (
@@ -270,6 +273,7 @@ export const HalalScanner = () => {
           setManualOpen={setManualOpen}
           setManualBarcode={setManualBarcode}
           onManualSubmit={handleManualSubmit}
+          t={t}
         />
       ) : (
         <ResultView
@@ -277,6 +281,7 @@ export const HalalScanner = () => {
           onScanAnother={handleScanAnother}
           result={scanResult}
           barcode={lastBarcode}
+          t={t}
         />
       )}
 
@@ -316,6 +321,7 @@ const ScanView = ({
   setManualOpen,
   setManualBarcode,
   onManualSubmit,
+  t,
 }: {
   onBack: () => void;
   scannerDivRef: React.RefObject<HTMLDivElement>;
@@ -329,6 +335,7 @@ const ScanView = ({
   setManualOpen: (open: boolean) => void;
   setManualBarcode: (barcode: string) => void;
   onManualSubmit: () => void;
+  t: (key: string) => string;
 }) => {
   useEffect(() => {
     startScanning();
@@ -342,7 +349,7 @@ const ScanView = ({
           <ArrowLeft className="h-5 w-5" strokeWidth={1.75} style={{ color: BROWN }} />
         </button>
         <h1 className="italic text-[17px] tracking-tight" style={{ fontFamily: SERIF, color: BROWN }}>
-          Ingredient Scanner
+          {t('scanner.title')}
         </h1>
         <button className="h-9 w-9 flex items-center justify-center" aria-label="Scan">
           <ScanBarcode className="h-5 w-5" strokeWidth={1.75} style={{ color: BROWN }} />
@@ -374,10 +381,10 @@ const ScanView = ({
 
       {/* Captions */}
       <p className="text-center text-[15px] leading-snug" style={{ color: BROWN }}>
-        Point camera at any barcode or ingredient list
+        {t('scanner.point_camera')}
       </p>
       <p className="text-center text-[13px] mt-1" style={{ color: MUTED }}>
-        {analyzing ? 'Analyzing barcode with Barakah AI...' : 'Processing requires a clear, steady view'}
+        {analyzing ? t('scanner.analyzing') : t('scanner.steady_view')}
       </p>
 
       {/* Scan button */}
@@ -404,7 +411,7 @@ const ScanView = ({
         style={{ color: BROWN_BTN, backgroundColor: '#FFF8EC', borderColor: '#D8B991' }}
       >
         <Keyboard className="h-4 w-4" strokeWidth={1.9} />
-        Enter barcode manually
+        {t('scanner.manual_entry')}
       </button>
 
       {error && (
@@ -417,22 +424,22 @@ const ScanView = ({
         style={{ backgroundColor: CARD_CREAM }}
       >
         <h3 className="italic text-[15px] mb-4" style={{ fontFamily: SERIF, color: BROWN }}>
-          How it works
+          {t('scanner.how_it_works')}
         </h3>
         <div className="flex items-start justify-between gap-2">
-          <Step n={1} label="Point" />
+          <Step n={1} label={t('scanner.step_point')} />
           <Dashes />
-          <Step n={2} label="Scan" />
+          <Step n={2} label={t('scanner.step_scan')} />
           <Dashes />
-          <Step n={3} label={'See\nresult'} />
+          <Step n={3} label={t('scanner.step_result')} />
         </div>
       </div>
 
       {/* Footer links */}
       <div className="mt-6 flex items-center justify-center gap-3 text-[13px]" style={{ color: MUTED }}>
-        <button>Report an issue</button>
+        <button>{t('scanner.report_issue')}</button>
         <span className="opacity-50">•</span>
-        <button>Help Center</button>
+        <button>{t('scanner.help_center')}</button>
       </div>
 
       {manualOpen && (
@@ -452,8 +459,8 @@ const ScanView = ({
                   <Keyboard className="h-5 w-5" style={{ color: BROWN_BTN }} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-[18px] font-semibold" style={{ color: BROWN }}>Enter barcode number</h2>
-                  <p className="text-[12px] leading-tight mt-0.5" style={{ color: MUTED }}>Use the digits printed below the barcode.</p>
+                  <h2 className="text-[18px] font-semibold" style={{ color: BROWN }}>{t('scanner.enter_barcode_number')}</h2>
+                  <p className="text-[12px] leading-tight mt-0.5" style={{ color: MUTED }}>{t('scanner.barcode_digits')}</p>
                 </div>
               </div>
               <button
@@ -467,7 +474,7 @@ const ScanView = ({
               </button>
             </div>
             <label className="block text-[12px] font-semibold mb-2 px-1" style={{ color: BROWN }}>
-              Barcode
+              {t('scanner.barcode_label')}
             </label>
             <div
               className="flex items-center gap-2 rounded-2xl border px-4"
@@ -498,7 +505,7 @@ const ScanView = ({
               )}
             </div>
             <div className="mt-2 px-1 text-[11px]" style={{ color: MUTED }}>
-              Usually 8 to 14 digits.
+              {t('scanner.barcode_hint')}
             </div>
             <Button
               type="button"
@@ -507,7 +514,7 @@ const ScanView = ({
               className="mt-5 h-14 w-full rounded-full text-white font-semibold disabled:opacity-60"
               style={{ backgroundColor: BROWN_BTN }}
             >
-              {analyzing ? 'Analyzing...' : 'Analyze Barcode'}
+              {analyzing ? t('scanner.analyzing') : t('scanner.analyze_barcode')}
             </Button>
           </div>
         </div>
@@ -557,36 +564,8 @@ const Dashes = () => (
 
 /* ---------------- Result View ---------------- */
 
-const statusCopy: Record<HalalStatus, { label: string; title: string; subtitle: string; color: string; bg: string }> = {
-  halal: {
-    label: 'HALAL',
-    title: 'Halal Verified',
-    subtitle: 'COMPLIANT WITH ISLAMIC STANDARDS',
-    color: '#2A8049',
-    bg: '#E5F4EA',
-  },
-  haram: {
-    label: 'HARAM',
-    title: 'Haram Detected',
-    subtitle: 'CONTAINS PROHIBITED OR HIGH-RISK INGREDIENTS',
-    color: '#B3261E',
-    bg: '#FCE8E6',
-  },
-  mushbooh: {
-    label: 'MUSHBOOH',
-    title: 'Needs Review',
-    subtitle: 'SOME INGREDIENTS REQUIRE VERIFICATION',
-    color: '#B07A00',
-    bg: '#FFF2CC',
-  },
-  unknown: {
-    label: 'UNKNOWN',
-    title: 'Unknown Status',
-    subtitle: 'BARAKAH AI COULD NOT VERIFY THIS PRODUCT',
-    color: '#7C6A4F',
-    bg: '#EFE4D6',
-  },
-};
+
+
 
 const StatusIcon = ({ status }: { status: HalalStatus }) => {
   if (status === 'halal') return <Check className="h-6 w-6 text-white" strokeWidth={2.5} />;
@@ -600,13 +579,21 @@ const ResultView = ({
   onScanAnother,
   result,
   barcode,
+  t,
 }: {
   onBack: () => void;
   onScanAnother: () => void;
   result: ScanResult | null;
   barcode: string | null;
+  t: (key: string) => string;
 }) => {
   const status = result?.status || 'unknown';
+  const statusCopy: Record<HalalStatus, { label: string; title: string; subtitle: string; color: string; bg: string }> = {
+    halal: { label: t('scanner.label_halal'), title: t('scanner.result_halal_title'), subtitle: t('scanner.result_halal_subtitle'), color: '#2A8049', bg: '#E5F4EA' },
+    haram: { label: t('scanner.label_haram'), title: t('scanner.result_haram_title'), subtitle: t('scanner.result_haram_subtitle'), color: '#B3261E', bg: '#FCE8E6' },
+    mushbooh: { label: t('scanner.label_mushbooh'), title: t('scanner.result_mushbooh_title'), subtitle: t('scanner.result_mushbooh_subtitle'), color: '#B07A00', bg: '#FFF2CC' },
+    unknown: { label: t('scanner.label_unknown'), title: t('scanner.result_unknown_title'), subtitle: t('scanner.result_unknown_subtitle'), color: '#7C6A4F', bg: '#EFE4D6' },
+  };
   const copy = statusCopy[status] || statusCopy.unknown;
   const ingredients = result?.ingredients ?? [];
 
@@ -646,7 +633,7 @@ const ResultView = ({
           </div>
           {typeof result?.confidence === 'number' && (
             <div className="text-[12px] mt-2" style={{ color: MUTED }}>
-              Confidence {result.confidence}%
+              {t('scanner.confidence')} {result.confidence}%
             </div>
           )}
         </div>
@@ -659,7 +646,7 @@ const ResultView = ({
           style={{ backgroundColor: BROWN_BTN }}
         >
           <ScanBarcode className="h-4 w-4" strokeWidth={2} />
-          SCAN ANOTHER PRODUCT
+          {t('scanner.scan_another')}
         </button>
       </div>
 
@@ -683,7 +670,7 @@ const ResultView = ({
           style={{ backgroundColor: '#F2E2A6', color: '#5C4710' }}
         >
           <Shield className="h-3.5 w-3.5" strokeWidth={2} />
-          Verified by Barakah
+          {t('scanner.verified_by')}
         </div>
       </div>
 
@@ -696,11 +683,11 @@ const ResultView = ({
       {/* Detailed ingredients header */}
       <div className="px-5 mt-7 flex items-end justify-between">
         <h3 className="italic text-[22px] leading-tight" style={{ fontFamily: SERIF, color: BROWN }}>
-          Detailed<br />Ingredients
+          {t('scanner.detailed_ingredients')}
         </h3>
         <div className="text-right">
           <div className="text-[18px] font-semibold" style={{ color: BROWN }}>{ingredients.length}</div>
-          <div className="text-[10px] tracking-[0.2em]" style={{ color: MUTED }}>INGREDIENTS<br />SCANNED</div>
+          <div className="text-[10px] tracking-[0.2em]" style={{ color: MUTED }}>{t('scanner.ingredients_scanned')}</div>
         </div>
       </div>
 
@@ -715,10 +702,10 @@ const ResultView = ({
             <Sparkles className="h-4 w-4" style={{ color: BROWN_BTN }} strokeWidth={2} />
             <div className="flex-1">
               <div className="text-[10px] tracking-[0.18em] font-semibold" style={{ color: BROWN_BTN }}>
-                KEY INGREDIENT
+                {t('scanner.key_ingredient')}
               </div>
               <div className="italic text-[15px]" style={{ fontFamily: SERIF, color: BROWN }}>
-                {ingredients[0]?.name || 'Barcode analysis'}
+                {ingredients[0]?.name || t('scanner.barcode_analysis')}
               </div>
             </div>
             <div className="h-6 w-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#A35233' }}>
@@ -730,7 +717,7 @@ const ResultView = ({
           <ul className="divide-y" style={{ borderColor: 'rgba(139,90,43,0.15)' }}>
             {ingredients.length === 0 && (
               <li className="py-3 text-[14px]" style={{ color: MUTED }}>
-                No ingredient list was returned for this barcode.
+                {t('scanner.no_ingredients')}
               </li>
             )}
             {ingredients.map((ing) => (

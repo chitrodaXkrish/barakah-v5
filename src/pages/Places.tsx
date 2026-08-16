@@ -10,6 +10,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useLanguage } from '@/contexts/LanguageContext';
 import restaurantImg from '@/assets/place-restaurant.jpg';
 import mosqueImg from '@/assets/place-mosque.jpg';
 import { openExternalUrl } from '@/lib/externalUrl';
@@ -59,6 +60,7 @@ type PlacesCacheEntry = {
 };
 
 export const Places = () => {
+  const { t } = useLanguage();
   const { location: userLocation, loading: locationLoading, error: locationError, refresh: refreshLocation, setManualLocation, clearManualLocation } = useGlobalLocation();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
@@ -900,7 +902,7 @@ export const Places = () => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
               <Marker position={[userLocation.latitude, userLocation.longitude]}>
-                <Popup>Your Location</Popup>
+                <Popup>{t('places.your_location')}</Popup>
               </Marker>
               {chippedPlaces.map((place) => (
                 <Marker key={place.id} position={[place.lat, place.lon]}>

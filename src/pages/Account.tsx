@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF1DD';
 const CARD = '#FFF8F3';
@@ -33,6 +34,7 @@ const DANGER = '#D63A1F';
 export const Account = () => {
   const { signOut, user, userRole } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const fallbackName = useMemo(
     () => user?.displayName || user?.email?.split('@')[0] || '',
     [user?.displayName, user?.email],
@@ -75,16 +77,16 @@ export const Account = () => {
 
   const getAccountOptions = () => {
     const baseOptions = [
-      { icon: Lock, label: 'Change Password', action: () => navigate('/change-password') },
-      { icon: TrendingUp, label: 'My Progress', action: () => navigate('/progress') },
-      { icon: ShoppingBag, label: 'My Orders', action: () => navigate('/orders') },
-      { icon: MapPin, label: 'Location', action: () => navigate('/location') },
+      { icon: Lock, label: t('account.change_password'), action: () => navigate('/change-password') },
+      { icon: TrendingUp, label: t('account.profile'), action: () => navigate('/progress') },
+      { icon: ShoppingBag, label: t('account.orders'), action: () => navigate('/orders') },
+      { icon: MapPin, label: t('menu.location'), action: () => navigate('/location') },
     ];
 
     if (userRole === 'seller') {
       baseOptions.unshift({
         icon: Store,
-        label: 'Seller Dashboard',
+        label: t('menu.seller_dashboard'),
         action: () => navigate('/seller-dashboard')
       });
     }
@@ -156,7 +158,7 @@ export const Account = () => {
   return (
     <Layout pageBackgroundColor={CREAM}>
       <div className="min-h-screen px-4 py-6 space-y-6" style={{ backgroundColor: CREAM }}>
-        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>Account</h1>
+        <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>{t('account.title')}</h1>
 
         {/* User Info */}
         <Card className="p-4 rounded-2xl shadow-sm" style={{ backgroundColor: CARD, borderColor: BORDER }}>
@@ -168,7 +170,7 @@ export const Account = () => {
               {isEditingProfile ? (
                 <div className="space-y-2">
                   <label className="text-sm font-semibold" style={{ color: BROWN_DARK }} htmlFor="profile-name">
-                    Full name
+                    {t('account.edit_profile')}
                   </label>
                   <Input
                     id="profile-name"
@@ -210,7 +212,7 @@ export const Account = () => {
                 style={{ backgroundColor: BROWN }}
               >
                 <Save className="h-4 w-4" />
-                {savingProfile ? 'Saving...' : 'Save'}
+                {savingProfile ? t('cart.processing') : t('account.edit_profile')}
               </Button>
               <Button
                 type="button"
@@ -221,7 +223,7 @@ export const Account = () => {
                 style={{ borderColor: BORDER, color: BROWN_DARK }}
               >
                 <X className="h-4 w-4" />
-                Cancel
+                {t('login.back')}
               </Button>
             </div>
           )}
@@ -256,7 +258,7 @@ export const Account = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <LogOut className="h-5 w-5" style={{ color: DANGER }} />
-                <span className="font-semibold" style={{ color: DANGER }}>Logout</span>
+                <span className="font-semibold" style={{ color: DANGER }}>{t('account.log_out')}</span>
               </div>
               <ChevronRight className="h-5 w-5" style={{ color: DANGER, opacity: 0.5 }} />
             </div>

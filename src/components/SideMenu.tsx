@@ -127,7 +127,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const handleShare = async () => {
     const shareData = {
       title: t('app.name'),
-      text: 'Discover Barakah — your Islamic lifestyle companion.',
+      text: t('menu.share_text'),
       url: window.location.origin,
     };
     try {

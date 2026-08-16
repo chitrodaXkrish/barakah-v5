@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { ArrowLeft, CheckCircle2, XCircle, TrendingUp, Wallet, Gem, Briefcase, Landmark, BarChart3, ArrowRight, RotateCcw } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const CARD_CREAM = '#FFF8F0';
@@ -57,6 +58,7 @@ const BreakdownRow = ({ label, value, icon }: { label: string; value: string; ic
 
 export const ZakatResult = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const location = useLocation();
   const data = (location.state as ResultState | null);
 
@@ -77,12 +79,12 @@ export const ZakatResult = () => {
   const percentageOfNisab = useMemo(() => ((total / nisab) * 100).toFixed(1), [total, nisab]);
 
   const breakdown = [
-    { label: 'Cash & Savings', value: fmt(cash, symbol), icon: <Wallet className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
-    { label: 'Gold Value', value: fmt(goldValue, symbol), icon: <Gem className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
-    { label: 'Silver Value', value: fmt(silver, symbol), icon: <Gem className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
-    { label: 'Business Assets', value: fmt(business, symbol), icon: <Briefcase className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
-    { label: 'Money Owed to You', value: fmt(moneyOwed, symbol), icon: <Landmark className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
-    { label: 'Investments & Stocks', value: fmt(investments, symbol), icon: <BarChart3 className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.cash_savings'), value: fmt(cash, symbol), icon: <Wallet className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.gold_value'), value: fmt(goldValue, symbol), icon: <Gem className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.silver_value'), value: fmt(silver, symbol), icon: <Gem className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.business_assets'), value: fmt(business, symbol), icon: <Briefcase className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.money_owed'), value: fmt(moneyOwed, symbol), icon: <Landmark className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
+    { label: t('zakat.investments_stocks'), value: fmt(investments, symbol), icon: <BarChart3 className="h-4 w-4" style={{ color: BROWN_DEEP }} /> },
   ];
 
   return (
@@ -99,7 +101,7 @@ export const ZakatResult = () => {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="font-serif italic text-xl font-bold" style={{ color: BROWN_DARK, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            Zakat Result
+            {t('zakat.result_title')}
           </h1>
           <div className="w-9" />
         </div>
@@ -121,42 +123,42 @@ export const ZakatResult = () => {
                 <XCircle className="h-5 w-5 text-white/90" />
               )}
               <span className="text-white/90 text-sm font-semibold tracking-wider">
-                {isNisabMet ? 'NISAB THRESHOLD MET' : 'BELOW NISAB THRESHOLD'}
+                {isNisabMet ? t('zakat.nisab_met') : t('zakat.nisab_not_met')}
               </span>
             </div>
             <p className="mt-2 text-white text-5xl font-bold italic" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               {fmt(zakatPayable, symbol)}
             </p>
             <p className="mt-2 text-white/80 text-sm">
-              {isNisabMet ? 'Zakat payable (2.5% of zakatable wealth)' : 'No zakat due this year'}
+              {isNisabMet ? t('zakat.payable_desc') : t('zakat.no_zakat_due')}
             </p>
           </div>
 
           {/* Key Stats Grid */}
           <div className="grid grid-cols-2 gap-3 mt-5">
             <StatCard
-              label="TOTAL WEALTH"
+              label={t('zakat.total_wealth')}
               value={fmt(total, symbol)}
               icon={<TrendingUp className="h-5 w-5 text-white" />}
               color={BROWN_DEEP}
               bg={CARD_CREAM}
             />
             <StatCard
-              label="ZAKATABLE"
+              label={t('zakat.zakatable')}
               value={fmt(zakatable, symbol)}
               icon={<Wallet className="h-5 w-5 text-white" />}
               color={ORANGE}
               bg={CARD_CREAM}
             />
             <StatCard
-              label="NISAB VALUE"
+              label={t('zakat.nisab_value')}
               value={fmt(nisab, symbol)}
               icon={<CheckCircle2 className="h-5 w-5 text-white" />}
               color={isNisabMet ? '#2B5E2B' : '#8a4a3a'}
               bg={CARD_CREAM}
             />
             <StatCard
-              label="% OF NISAB"
+              label={t('zakat.pct_of_nisab')}
               value={`${percentageOfNisab}%`}
               icon={<BarChart3 className="h-5 w-5 text-white" />}
               color={BROWN}
@@ -167,13 +169,13 @@ export const ZakatResult = () => {
           {/* Breakdown Card */}
           <div className="mt-5 rounded-[24px] p-5" style={{ backgroundColor: '#FFF5E5' }}>
             <h3 className="text-sm font-bold tracking-wider mb-3" style={{ color: BROWN_DARK }}>
-              WEALTH BREAKDOWN
+              {t('zakat.wealth_breakdown')}
             </h3>
             {breakdown.map((item) => (
               <BreakdownRow key={item.label} {...item} />
             ))}
             <div className="flex items-center justify-between pt-4 mt-1">
-              <span className="text-sm font-bold" style={{ color: BROWN_DARK }}>Total Wealth</span>
+              <span className="text-sm font-bold" style={{ color: BROWN_DARK }}>{t('zakat.total_wealth')}</span>
               <span className="text-lg font-bold italic" style={{ color: BROWN_DEEP, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 {fmt(total, symbol)}
               </span>
@@ -187,11 +189,11 @@ export const ZakatResult = () => {
                 <TrendingUp className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="font-bold mb-1" style={{ color: '#5C2A14' }}>Understanding Your Zakat</p>
+                <p className="font-bold mb-1" style={{ color: '#5C2A14' }}>{t('zakat.understanding_title')}</p>
                 <p className="text-sm leading-relaxed" style={{ color: '#5C2A14', opacity: 0.9 }}>
                   {isNisabMet
-                    ? `Your total wealth of ${fmt(total, symbol)} exceeds the Nisab threshold of ${fmt(nisab, symbol)}. You are required to pay 2.5% of your zakatable wealth (${fmt(zakatable, symbol)}) as Zakat, which equals ${fmt(zakatPayable, symbol)}.`
-                    : `Your total wealth of ${fmt(total, symbol)} is below the Nisab threshold of ${fmt(nisab, symbol)}. You are not required to pay Zakat this year. Consider revisiting when your wealth grows.`}
+                    ? `${t('zakat.your_total_wealth_of')} ${fmt(total, symbol)} ${t('zakat.exceeds_nisab')} ${fmt(nisab, symbol)}${t('zakat.required_to_pay_2_5')} (${fmt(zakatable, symbol)}${t('zakat.as_zakat_equals')} ${fmt(zakatPayable, symbol)}.`
+                    : `${t('zakat.your_total_wealth_of')} ${fmt(total, symbol)} ${t('zakat.is_below_nisab')} ${fmt(nisab, symbol)}${t('zakat.not_required_to_pay')}`}
                 </p>
               </div>
             </div>
@@ -200,19 +202,19 @@ export const ZakatResult = () => {
           {/* Calculation Formula */}
           <div className="mt-5 rounded-[24px] p-5" style={{ backgroundColor: CARD_CREAM }}>
             <h3 className="text-sm font-bold tracking-wider mb-3" style={{ color: BROWN_DARK }}>
-              CALCULATION
+              {t('zakat.calculation')}
             </h3>
             <div className="space-y-2 text-sm" style={{ color: BROWN_DARK }}>
               <div className="flex justify-between">
-                <span>Zakatable Wealth</span>
+                <span>{t('zakat.zakatable_wealth')}</span>
                 <span className="font-bold">{fmt(zakatable, symbol)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Zakat Rate</span>
+                <span>{t('zakat.zakat_rate')}</span>
                 <span className="font-bold">2.5%</span>
               </div>
               <div className="pt-2 border-t flex justify-between" style={{ borderColor: `${BROWN_DARK}20` }}>
-                <span className="font-bold">Zakat Payable</span>
+                <span className="font-bold">{t('zakat.zakat_payable')}</span>
                 <span className="font-bold italic text-lg" style={{ color: BROWN_DEEP, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                   {fmt(zakatPayable, symbol)}
                 </span>
@@ -231,14 +233,14 @@ export const ZakatResult = () => {
             className="w-full h-14 rounded-full text-white font-bold tracking-wider flex items-center justify-center gap-3 mb-3"
             style={{ backgroundColor: BROWN_DEEP }}
           >
-            <RotateCcw className="h-4 w-4" /> RECALCULATE ZAKAT
+            <RotateCcw className="h-4 w-4" /> {t('zakat.recalculate_btn')}
           </button>
           <button
             onClick={() => navigate('/dashboard')}
             className="w-full h-12 rounded-full font-bold tracking-wider flex items-center justify-center gap-2"
             style={{ backgroundColor: 'transparent', border: `2px solid ${BROWN_DEEP}`, color: BROWN_DEEP }}
           >
-            BACK TO HOME <ArrowRight className="h-4 w-4" />
+            {t('zakat.back_to_home_btn')} <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </div>

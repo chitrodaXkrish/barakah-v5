@@ -6,6 +6,7 @@ import { useSalahTracker } from '@/hooks/useSalahTracker';
 import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const CREAM_CARD = '#FFF5E5';
@@ -38,6 +39,7 @@ function timeToMinutes(t: string) {
 
 export const Progress = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const { loading, prayerStatus, streak, togglePrayer, quranReadCompleted, toggleQuranRead, progressPercentage, weeklyData } = useSalahTracker();
   const [showMonth, setShowMonth] = useState(false);
@@ -108,12 +110,12 @@ export const Progress = () => {
           onClick={() => navigate('/prayer-times')}
           className="h-10 w-10 rounded-full border flex items-center justify-center"
           style={{ borderColor: BROWN, color: BROWN }}
-          aria-label="Back to Prayer"
+          aria-label={t('progress.back_to_prayer', 'Back to Prayer')}
         >
           <ArrowLeft className="h-5 w-5" strokeWidth={2} />
         </button>
         <h1 className="text-xl font-bold tracking-tight" style={{ color: BROWN, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-          Back to Prayer
+          {t('progress.back_to_prayer', 'Back to Prayer')}
         </h1>
       </header>
 
@@ -125,10 +127,10 @@ export const Progress = () => {
         >
           <div className="flex items-center justify-between mb-5">
             <span className="text-[13px] font-semibold tracking-[0.14em]" style={{ color: BROWN }}>
-              WEEKLY OVERVIEW
+              {t('progress.weekly_overview')}
             </span>
             <span className="text-[15px] font-bold tracking-wide" style={{ color: BROWN_ACCENT }}>
-              {weekPercent}% COMPLETE
+              {weekPercent}% {t('progress.complete')}
             </span>
           </div>
           <div className="grid grid-cols-7 gap-1.5">
@@ -209,20 +211,20 @@ export const Progress = () => {
           style={{ background: CREAM_CARD }}
         >
           <span className="text-[15px] font-semibold" style={{ color: BROWN }}>
-            See Whole Month Streak
+            {t('progress.see_month_streak')}
           </span>
           <span
             className="rounded-full px-6 py-2.5 text-white text-[14px] font-semibold"
             style={{ background: OLIVE }}
           >
-            See
+            {t('progress.see')}
           </span>
         </button>
 
         {/* Today header */}
         <div className="pt-2">
           <h2 className="text-[28px] font-bold leading-none" style={{ color: BROWN, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Today
+            {t('progress.today')}
           </h2>
         </div>
 
@@ -236,7 +238,13 @@ export const Progress = () => {
             const minutes = timeToMinutes(meta.time);
             const upcoming = !completed && minutes > nowMin && !isActive;
 
-            const status = completed ? 'Completed' : isActive ? 'Time to Pray' : upcoming ? 'Upcoming' : 'Missed';
+            const status = completed
+              ? t('progress.status_completed')
+              : isActive
+                ? t('progress.status_time_to_pray')
+                : upcoming
+                  ? t('progress.status_upcoming')
+                  : t('progress.status_missed');
 
             const rowStyle: React.CSSProperties = completed
               ? { background: PEACH_SOFT }
@@ -261,7 +269,7 @@ export const Progress = () => {
                     className="text-[18px] font-bold leading-tight"
                     style={{ color: isActive ? BROWN_ACCENT : BROWN }}
                   >
-                    {meta.label}
+                    {t(`prayer.${key}`).toUpperCase()}
                   </div>
                   <div className="text-[13px] mt-0.5" style={{ color: MUTED }}>
                     {meta.time} · {status}
@@ -282,7 +290,7 @@ export const Progress = () => {
                     className="rounded-full px-5 py-2.5 text-white text-[14px] font-semibold"
                     style={{ background: BROWN_ACCENT }}
                   >
-                    Mark Done
+                    {t('progress.mark_done')}
                   </button>
                 ) : (
                   <button
@@ -290,7 +298,7 @@ export const Progress = () => {
                     className="rounded-full px-5 py-2.5 text-[14px] font-medium"
                     style={{ border: `1px solid ${MUTED}`, color: MUTED, background: 'transparent' }}
                   >
-                    Mark Done
+                    {t('progress.mark_done')}
                   </button>
                 )}
               </div>
@@ -311,10 +319,10 @@ export const Progress = () => {
                 className="text-[18px] font-bold leading-tight"
                 style={{ color: BROWN }}
               >
-                READ QURAN
+                {t('progress.read_quran')}
               </div>
               <div className="text-[13px] mt-0.5" style={{ color: MUTED }}>
-                Daily reading · {quranReadCompleted ? 'Completed' : 'Not marked'}
+                {t('progress.daily_reading')} · {quranReadCompleted ? t('progress.status_completed') : t('progress.not_marked')}
               </div>
             </div>
             {quranReadCompleted ? (
@@ -332,7 +340,7 @@ export const Progress = () => {
                 className="rounded-full px-5 py-2.5 text-[14px] font-medium"
                 style={{ border: `1px solid ${MUTED}`, color: MUTED, background: 'transparent' }}
               >
-                Mark Done
+                {t('progress.mark_done')}
               </button>
             )}
           </div>
@@ -346,7 +354,7 @@ export const Progress = () => {
             </div>
             <div>
               <div className="text-[20px] font-bold leading-none" style={{ color: BROWN }}>{streak.current_streak}</div>
-              <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>Day Streak</div>
+              <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>{t('progress.day_streak')}</div>
             </div>
           </div>
           <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: CREAM_CARD }}>
@@ -355,7 +363,7 @@ export const Progress = () => {
             </div>
             <div>
               <div className="text-[20px] font-bold leading-none" style={{ color: BROWN }}>{streak.longest_streak}</div>
-              <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>Best Streak</div>
+              <div className="text-[11px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>{t('progress.best_streak')}</div>
             </div>
           </div>
         </div>
@@ -372,7 +380,7 @@ export const Progress = () => {
           <DialogHeader className="px-5 pt-5">
             <DialogTitle className="flex items-center gap-2" style={{ color: BROWN }}>
               <CalendarIcon className="h-5 w-5" style={{ color: BROWN_ACCENT }} />
-              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>This Month</span>
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{t('progress.this_month')}</span>
             </DialogTitle>
           </DialogHeader>
           <MonthGrid completedMap={completedMap} weeklyData={weeklyData} />
@@ -426,8 +434,8 @@ const MonthGrid = ({ completedMap, weeklyData }: { completedMap: Record<string, 
         })}
       </div>
       <div className="flex items-center justify-center gap-4 mt-4 text-[11px]" style={{ color: MUTED }}>
-        <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ background: BROWN_DARK }} /> Complete</div>
-        <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ background: BROWN_ACCENT }} /> Today</div>
+        <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ background: BROWN_DARK }} /> {t('progress.legend_complete')}</div>
+        <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ background: BROWN_ACCENT }} /> {t('progress.legend_today')}</div>
       </div>
     </div>
   );

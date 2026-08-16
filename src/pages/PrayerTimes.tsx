@@ -6,6 +6,7 @@ import { SideMenu } from '@/components/SideMenu';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { LocationPicker } from '@/components/LocationPicker';
 import { useGlobalLocation } from '@/contexts/LocationContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
 import prayerArcLogo from '@/assets/prayer-arc-logo.png.asset.json';
 import hadithIcon from '@/assets/hadith-icon-v2.png.asset.json';
@@ -69,14 +70,14 @@ const PRAYER_ICONS: Record<PrayerKey, LucideIcon> = {
 };
 
 const essentials = [
-  { label: 'Hadith', img: assetUrl(hadithIcon), icon: null, path: '/hadith' },
-  { label: 'Quran', img: assetUrl(qaQuranAsset), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
-  { label: 'Hajj Packages', img: assetUrl(hajjIcon), icon: null, path: '/hajj' },
-  { label: 'Nearby', img: assetUrl(placesIcon), icon: null, path: '/places' },
-  { label: 'Zakat Calc.', img: assetUrl(zakatIcon), icon: null, path: '/zakat' },
-  { label: "Dua's", img: assetUrl(duaIcon), icon: null, path: '/mood' },
-  { label: 'Qibla', img: assetUrl(qiblaIcon), icon: null, path: '/qibla' },
-  { label: 'Prayer Mark', img: assetUrl(prayerMarkIcon), icon: null, path: '/progress' },
+  { key: 'action.hadith', img: assetUrl(hadithIcon), icon: null, path: '/hadith' },
+  { key: 'action.quran', img: assetUrl(qaQuranAsset), fallbackImg: quranIconFallback, icon: null, path: '/quran' },
+  { key: 'action.hajj_packages', img: assetUrl(hajjIcon), icon: null, path: '/hajj' },
+  { key: 'action.nearby', img: assetUrl(placesIcon), icon: null, path: '/places' },
+  { key: 'action.zakat_calc', img: assetUrl(zakatIcon), icon: null, path: '/zakat' },
+  { key: 'action.mood', img: assetUrl(duaIcon), icon: null, path: '/mood' },
+  { key: 'action.qibla', img: assetUrl(qiblaIcon), icon: null, path: '/qibla' },
+  { key: 'action.prayer_mark', img: assetUrl(prayerMarkIcon), icon: null, path: '/progress' },
 ];
 
 const hadithBooks = [
@@ -108,6 +109,7 @@ const hadithBooks = [
 
 export const PrayerTimes = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { location, loading: locationLoading } = useGlobalLocation();
   const {
     prayers: apiPrayers,
@@ -351,12 +353,12 @@ export const PrayerTimes = () => {
           className="text-[20px] mb-3"
           style={{ color: BROWN, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}
         >
-          Essentials
+          {t('prayer.essentials')}
         </h2>
         <div className="grid grid-cols-4 gap-2.5">
           {essentials.map((e) => (
             <button
-              key={e.label}
+              key={e.key}
               onClick={() => navigate(e.path)}
               className="flex flex-col items-center justify-end pt-2 pb-2 rounded-2xl border transition-transform active:scale-95"
               style={{
@@ -368,7 +370,7 @@ export const PrayerTimes = () => {
               {e.img ? (
                 <img
                   src={e.img}
-                  alt={e.label}
+                  alt={t(e.key)}
                   className="h-11 w-auto object-contain"
                   onError={(event) => {
                     if (e.fallbackImg && event.currentTarget.src !== e.fallbackImg) {
@@ -385,7 +387,7 @@ export const PrayerTimes = () => {
                 </div>
               )}
               <span className="text-[10px] mt-1.5 text-center px-1" style={{ color: BROWN, fontWeight: 600 }}>
-                {e.label}
+                {t(e.key)}
               </span>
             </button>
           ))}

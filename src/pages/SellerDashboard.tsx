@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   ArrowLeft,
   Store,
@@ -63,6 +64,7 @@ interface ProductRow {
 export const SellerDashboard: React.FC = () => {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [loading, setLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<SellerProfileData | null>(null);
@@ -211,7 +213,7 @@ export const SellerDashboard: React.FC = () => {
       <div className="min-h-screen max-w-md mx-auto bg-[#FFF1DD] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw className="h-7 w-7 text-[#A35233] animate-spin" />
-          <p className="text-sm font-semibold text-[#1a1a1a]">Loading Seller Dashboard...</p>
+          <p className="text-sm font-semibold text-[#1a1a1a]">{t('seller.loading_dashboard')}</p>
         </div>
       </div>
     );
@@ -226,14 +228,14 @@ export const SellerDashboard: React.FC = () => {
           className="flex items-center gap-2 text-[#1a1a1a] font-bold text-sm hover:opacity-80 transition-opacity"
         >
           <ArrowLeft className="h-5 w-5" />
-          Marketplace
+          {t('seller.marketplace')}
         </button>
-        <span className="text-sm font-extrabold text-[#A35233]">Seller Portal</span>
+        <span className="text-sm font-extrabold text-[#A35233]">{t('seller.seller_portal')}</span>
         <button
           onClick={() => navigate('/seller-onboarding')}
           className="text-xs font-semibold text-[#A35233] underline"
         >
-          Settings
+          {t('seller.settings')}
         </button>
       </div>
 
@@ -257,14 +259,14 @@ export const SellerDashboard: React.FC = () => {
                 <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
               ) : null}
             </div>
-            <p className="text-xs text-gray-500 line-clamp-1">{profile?.about_us || 'Marketplace Seller'}</p>
+            <p className="text-xs text-gray-500 line-clamp-1">{profile?.about_us || t('seller.marketplace_seller')}</p>
           </div>
           <Button
             size="sm"
             onClick={() => navigate('/seller-onboarding')}
             className="bg-[#FFF1DD] text-[#A35233] hover:bg-[#FFE5C4] border border-[#E8D5C4] font-bold text-xs rounded-xl h-9 px-3"
           >
-            Edit
+            {t('seller.edit')}
           </Button>
         </div>
 
@@ -272,7 +274,7 @@ export const SellerDashboard: React.FC = () => {
         <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-[#1a1a1a] flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-[#A35233]" /> Verification Status
+              <ShieldCheck className="h-4 w-4 text-[#A35233]" /> {t('seller.verification_status_label')}
             </span>
             <span
               className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
@@ -284,30 +286,30 @@ export const SellerDashboard: React.FC = () => {
               }`}
             >
               {kycStatus === 'ACTIVE' || kycStatus === 'APPROVED'
-                ? 'VERIFIED'
+                ? t('seller.status_verified')
                 : kycStatus === 'UNDER_REVIEW'
-                ? 'UNDER REVIEW'
-                : 'PENDING'}
+                ? t('seller.status_under_review')
+                : t('seller.status_pending')}
             </span>
           </div>
 
           {kycStatus === 'UNDER_REVIEW' ? (
             <p className="text-xs text-gray-600">
-              Your seller verification is currently under review by the Barakah compliance team.
+              {t('seller.under_review_msg')}
             </p>
           ) : kycStatus === 'ACTIVE' || kycStatus === 'APPROVED' ? (
             <p className="text-xs text-green-700 font-medium">
-              ✓ Verified Seller — Your store and products are fully active on Barakah.
+              {t('seller.verified_msg')}
             </p>
           ) : (
             <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-gray-600">Complete verification to list items.</p>
+              <p className="text-xs text-gray-600">{t('seller.complete_verification_msg')}</p>
               <Button
                 size="sm"
                 onClick={() => navigate('/seller-onboarding')}
                 className="bg-[#A35233] text-white hover:bg-[#8B4226] text-xs font-bold rounded-xl h-8"
               >
-                Complete Verification
+                {t('seller.complete_verification_btn')}
               </Button>
             </div>
           )}
@@ -317,100 +319,67 @@ export const SellerDashboard: React.FC = () => {
         <div className="bg-gradient-to-r from-[#FFF5E5] to-[#FFE8D6] rounded-2xl p-3.5 border border-[#E8D5C4] text-xs text-[#1a1a1a] space-y-1.5">
           <div className="flex items-center gap-2 text-[#A35233] font-bold">
             <Percent className="h-4 w-4" />
-            Marketplace Commission: 12%
+            {t('seller.commission_title')}
           </div>
           <p className="text-[11px] text-gray-600 leading-snug">
-            Barakah charges a transparent 12% marketplace commission per completed sale.
+            {t('seller.commission_desc')}
           </p>
           <div className="bg-white/80 rounded-xl p-2 font-mono text-[10px] text-gray-700 space-y-0.5 border border-[#E8D5C4]">
-            <div className="flex justify-between"><span>Gross Sale:</span><span>₹10,000</span></div>
-            <div className="flex justify-between text-red-600"><span>Barakah Commission (12%):</span><span>-₹1,200</span></div>
-            <div className="flex justify-between font-bold text-green-800 border-t border-gray-200 pt-0.5"><span>Net Seller Payout:</span><span>₹8,800</span></div>
+            <div className="flex justify-between"><span>{t('seller.gross_sale')}</span><span>₹10,000</span></div>
+            <div className="flex justify-between text-red-600"><span>{t('seller.commission_amount')}</span><span>-₹1,200</span></div>
+            <div className="flex justify-between font-bold text-green-800 border-t border-gray-200 pt-0.5"><span>{t('seller.net_payout')}</span><span>₹8,800</span></div>
           </div>
         </div>
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard
-            title="Total Sales"
-            value={`₹${metrics.totalSales.toLocaleString('en-IN')}`}
-            icon={<TrendingUp className="h-5 w-5 text-[#A35233]" />}
-          />
-          <MetricCard
-            title="Total Orders"
-            value={metrics.totalOrders.toString()}
-            icon={<ClipboardList className="h-5 w-5 text-[#A35233]" />}
-          />
-          <MetricCard
-            title="Pending Orders"
-            value={metrics.pendingOrdersCount.toString()}
-            icon={<Clock className="h-5 w-5 text-amber-600" />}
-            badge={metrics.pendingOrdersCount > 0 ? 'Action Needed' : undefined}
-          />
-          <MetricCard
-            title="Products Live"
-            value={metrics.totalProductsCount.toString()}
-            icon={<Package className="h-5 w-5 text-[#A35233]" />}
-          />
+          <MetricCard title={t('seller.total_sales')} value={`₹${metrics.totalSales.toLocaleString('en-IN')}`} icon={<TrendingUp className="h-5 w-5 text-[#A35233]" />} />
+          <MetricCard title={t('seller.total_orders')} value={metrics.totalOrders.toString()} icon={<ClipboardList className="h-5 w-5 text-[#A35233]" />} />
+          <MetricCard title={t('seller.pending_orders')} value={metrics.pendingOrdersCount.toString()} icon={<Clock className="h-5 w-5 text-amber-600" />} badge={metrics.pendingOrdersCount > 0 ? t('seller.action_needed') : undefined} />
+          <MetricCard title={t('seller.products_live')} value={metrics.totalProductsCount.toString()} icon={<Package className="h-5 w-5 text-[#A35233]" />} />
         </div>
 
         {/* Earnings Summary Grid */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-xl p-3 border border-[#E8D5C4] text-center space-y-1">
-            <p className="text-[10px] font-bold text-gray-500 uppercase">Available</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase">{t('seller.available_earnings')}</p>
             <p className="text-sm font-extrabold text-green-700">₹{metrics.availableEarnings.toLocaleString('en-IN')}</p>
           </div>
           <div className="bg-white rounded-xl p-3 border border-[#E8D5C4] text-center space-y-1">
-            <p className="text-[10px] font-bold text-gray-500 uppercase">Pending</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase">{t('seller.pending_earnings')}</p>
             <p className="text-sm font-extrabold text-amber-700">₹{metrics.pendingEarnings.toLocaleString('en-IN')}</p>
           </div>
           <div className="bg-white rounded-xl p-3 border border-[#E8D5C4] text-center space-y-1">
-            <p className="text-[10px] font-bold text-gray-500 uppercase">Paid Out</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase">{t('seller.paid_out')}</p>
             <p className="text-sm font-extrabold text-[#A35233]">₹{metrics.totalPaidOut.toLocaleString('en-IN')}</p>
           </div>
         </div>
 
         {/* Quick Action Navigation Grid */}
         <div className="grid grid-cols-2 gap-3">
-          <ActionBtn
-            icon={<Plus className="h-6 w-6" />}
-            label="Add / View Products"
-            onClick={() => navigate('/seller/products')}
-          />
-          <ActionBtn
-            icon={<ClipboardList className="h-6 w-6" />}
-            label="View Orders"
-            onClick={() => navigate('/seller/orders')}
-          />
-          <ActionBtn
-            icon={<Wallet className="h-6 w-6" />}
-            label="Earnings & Payouts"
-            onClick={() => navigate('/seller/earnings')}
-          />
-          <ActionBtn
-            icon={<Store className="h-6 w-6" />}
-            label="Manage Store"
-            onClick={() => navigate('/seller-onboarding')}
-          />
+          <ActionBtn icon={<Plus className="h-6 w-6" />} label={t('seller.add_view_products')} onClick={() => navigate('/seller/products')} />
+          <ActionBtn icon={<ClipboardList className="h-6 w-6" />} label={t('seller.view_orders')} onClick={() => navigate('/seller/orders')} />
+          <ActionBtn icon={<Wallet className="h-6 w-6" />} label={t('seller.earnings_payouts')} onClick={() => navigate('/seller/earnings')} />
+          <ActionBtn icon={<Store className="h-6 w-6" />} label={t('seller.manage_store')} onClick={() => navigate('/seller-onboarding')} />
         </div>
 
         {/* Recent Orders Section */}
         <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[#1a1a1a]">Recent Orders</h3>
+            <h3 className="text-sm font-bold text-[#1a1a1a]">{t('seller.recent_orders')}</h3>
             <button
               onClick={() => navigate('/seller/orders')}
               className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1"
             >
-              View All <ChevronRight className="h-3 w-3" />
+              {t('seller.view_all')} <ChevronRight className="h-3 w-3" />
             </button>
           </div>
 
           {recentOrders.length === 0 ? (
             <div className="text-center py-6 border border-dashed border-[#E8D5C4] rounded-xl text-gray-500 space-y-1">
               <Package className="h-8 w-8 text-[#A35233]/40 mx-auto" />
-              <p className="text-xs font-semibold text-[#1a1a1a]">No orders received yet</p>
-              <p className="text-[11px] text-gray-400">Your customer orders will appear here once placed.</p>
+              <p className="text-xs font-semibold text-[#1a1a1a]">{t('seller.no_orders')}</p>
+              <p className="text-[11px] text-gray-400">{t('seller.no_orders_desc')}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -437,21 +406,21 @@ export const SellerDashboard: React.FC = () => {
         {/* Top Products Section */}
         <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[#1a1a1a]">Top Products</h3>
+            <h3 className="text-sm font-bold text-[#1a1a1a]">{t('seller.top_products')}</h3>
             <button
               onClick={() => navigate('/seller/products')}
               className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1"
             >
-              Manage Products <ChevronRight className="h-3 w-3" />
+              {t('seller.manage_products')} <ChevronRight className="h-3 w-3" />
             </button>
           </div>
 
           {topProducts.length === 0 ? (
             <div className="text-center py-6 border border-dashed border-[#E8D5C4] rounded-xl text-gray-500 space-y-1">
               <Store className="h-8 w-8 text-[#A35233]/40 mx-auto" />
-              <p className="text-xs font-semibold text-[#1a1a1a]">No products listed</p>
+              <p className="text-xs font-semibold text-[#1a1a1a]">{t('seller.no_products')}</p>
               <p className="text-[11px] text-gray-400">
-                Your best-selling products will appear here once you start receiving orders.
+                {t('seller.no_products_desc')}
               </p>
             </div>
           ) : (

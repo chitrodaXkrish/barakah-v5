@@ -5,6 +5,7 @@ import { BottomNavigation } from '@/components/BottomNavigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 /* ---------------- Theme ---------------- */
 const CREAM_BG = '#FFF5E5';
@@ -211,26 +212,30 @@ const StarBadge = ({ n }: { n: number }) => (
   </div>
 );
 
-const TopBar = ({ onBack }: { onBack: () => void }) => (
-  <div className="px-5 pt-4 pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM_BG }}>
-    <div className="flex items-center gap-3">
-      <button onClick={onBack} aria-label="Back" className="-ml-1">
-        <ArrowLeft className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
+const TopBar = ({ onBack }: { onBack: () => void }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="px-5 pt-4 pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM_BG }}>
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} aria-label="Back" className="-ml-1">
+          <ArrowLeft className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
+        </button>
+        <h1 className="text-[22px] font-bold" style={{ color: BROWN_ACCENT, fontFamily: SERIF }}>
+          {t('quran.title')}
+        </h1>
+      </div>
+      <button aria-label="Search">
+        <Search className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
       </button>
-      <h1 className="text-[22px] font-bold" style={{ color: BROWN_ACCENT, fontFamily: SERIF }}>
-        Quran
-      </h1>
     </div>
-    <button aria-label="Search">
-      <Search className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
-    </button>
-  </div>
-);
+  );
+};
 
 /* ---------------- Page ---------------- */
 
 export const Quran = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [surahs, setSurahs] = useState<Surah[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSurah, setSelectedSurah] = useState<SurahDetail | null>(null);
@@ -475,12 +480,12 @@ export const Quran = () => {
             style={{ backgroundColor: OLIVE }}
           >
             <h2 className="text-[32px] font-bold leading-tight" style={{ fontFamily: SERIF }}>
-              Para {selectedPara.paraNo}
+              {t('quran.para')} {selectedPara.paraNo}
             </h2>
-            <p className="text-[16px] mt-1 opacity-95">Juz {selectedPara.paraNo}</p>
+            <p className="text-[16px] mt-1 opacity-95">{t('quran.juz')} {selectedPara.paraNo}</p>
             <div className="my-3 h-px mx-auto w-2/3" style={{ backgroundColor: 'rgba(255,255,255,0.35)' }} />
             <p className="text-[11px] tracking-[0.22em] font-medium opacity-95">
-              SURAH {range.start.surah}:{range.start.ayah} TO {range.end.surah}:{range.end.ayah}
+              {t('quran.surah').toUpperCase()} {range.start.surah}:{range.start.ayah} {t('quran.to')} {range.end.surah}:{range.end.ayah}
             </p>
           </div>
         </div>
@@ -496,7 +501,7 @@ export const Quran = () => {
                   className="pb-2 text-[15px] font-semibold relative"
                   style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
                 >
-                  {t === 'translation' ? 'With Translation' : 'Arabic'}
+                  {t === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
                   <span
                     className="absolute left-0 right-0 -bottom-px h-[2px]"
                     style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
@@ -513,7 +518,7 @@ export const Quran = () => {
               className="w-full rounded-full text-[13px]"
               style={{ backgroundColor: CREAM_CARD, borderColor: BORDER, color: BROWN }}
             >
-              <SelectValue placeholder="Reciter" />
+              <SelectValue placeholder={t('quran.reciter')} />
             </SelectTrigger>
             <SelectContent>
               {Object.entries(RECITERS).map(([id, name]) => (
@@ -636,7 +641,7 @@ export const Quran = () => {
             <p className="text-[16px] mt-1 opacity-95">{selectedSurah.surahNameTranslation}</p>
             <div className="my-3 h-px mx-auto w-2/3" style={{ backgroundColor: 'rgba(255,255,255,0.35)' }} />
             <p className="text-[11px] tracking-[0.22em] font-medium opacity-95">
-              {selectedSurah.revelationPlace?.toUpperCase()} • {selectedSurah.totalAyah} VERSES
+              {selectedSurah.revelationPlace?.toUpperCase()} • {selectedSurah.totalAyah} {t('quran.verses')}
             </p>
             <p
               className="mt-4 text-[28px] leading-none"
@@ -660,7 +665,7 @@ export const Quran = () => {
                   className="pb-2 text-[15px] font-semibold relative"
                   style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
                 >
-                  {t === 'translation' ? 'With Translation' : 'Arabic'}
+                  {t === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
                   <span
                     className="absolute left-0 right-0 -bottom-px h-[2px]"
                     style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
@@ -678,7 +683,7 @@ export const Quran = () => {
               className="w-full rounded-full text-[13px]"
               style={{ backgroundColor: CREAM_CARD, borderColor: BORDER, color: BROWN }}
             >
-              <SelectValue placeholder="Reciter" />
+              <SelectValue placeholder={t('quran.reciter')} />
             </SelectTrigger>
             <SelectContent>
               {Object.entries(RECITERS).map(([id, name]) => (
@@ -800,7 +805,7 @@ export const Quran = () => {
             <ArrowLeft className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
           </button>
           <h1 className="text-[22px] font-bold" style={{ color: BROWN_ACCENT, fontFamily: SERIF }}>
-            Quran
+            {t('quran.title')}
           </h1>
         </div>
         <button aria-label="Search" onClick={() => setShowSearch((s) => !s)}>
@@ -817,16 +822,16 @@ export const Quran = () => {
         >
           <div className="flex items-center gap-2 text-[13px] opacity-95">
             <BookOpen className="h-4 w-4" strokeWidth={2} />
-            Last Read
+            {t('quran.last_read')}
           </div>
           <div className="mt-3 text-[22px] font-bold leading-tight" style={{ fontFamily: SERIF }}>
             {bookmark?.title || 'Al-Fatiha'}
           </div>
           <div className="text-[13px] opacity-90 mt-1">
-            {bookmark ? `Ayah No: ${bookmark.ayahNo}` : 'Ayah No: 1'}
+            {bookmark ? `${t('quran.ayah_no')}: ${bookmark.ayahNo}` : `${t('quran.ayah_no')}: 1`}
           </div>
           <div className="mt-4 inline-flex rounded-full px-4 py-2 text-[13px] font-semibold" style={{ backgroundColor: '#FFF5E5', color: BROWN_ACCENT }}>
-            Continue Reading
+            {t('quran.continue_reading')}
           </div>
         </button>
       </div>
@@ -835,7 +840,7 @@ export const Quran = () => {
       {showSearch && (
         <div className="px-5 mt-4">
           <Input
-            placeholder="Search chapters..."
+            placeholder={t('quran.search_placeholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="rounded-full"
@@ -856,7 +861,7 @@ export const Quran = () => {
                 className="pb-2 text-[16px] font-semibold relative capitalize"
                 style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
               >
-                {t === 'surah' ? 'Surah' : 'Para'}
+                {t === 'surah' ? t('quran.surah') : t('quran.para')}
                 <span
                   className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full"
                   style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
@@ -891,7 +896,7 @@ export const Quran = () => {
                         {normalizeSurahName(s.surahName)}
                       </div>
                       <div className="text-[11px] tracking-[0.18em] font-medium mt-0.5" style={{ color: MUTED }}>
-                        {s.revelationPlace?.toUpperCase()} • {s.totalAyah} VERSES
+                        {s.revelationPlace?.toUpperCase()} • {s.totalAyah} {t('quran.verses')}
                       </div>
                     </div>
                     <div
@@ -920,10 +925,10 @@ export const Quran = () => {
                   <StarBadge n={i + 1} />
                   <div className="flex-1">
                     <div className="text-[16px] font-semibold" style={{ color: BROWN }}>
-                      Para {i + 1}
+                      {t('quran.para')} {i + 1}
                     </div>
                     <div className="text-[11px] tracking-[0.18em] font-medium mt-0.5" style={{ color: MUTED }}>
-                      JUZ {i + 1}
+                      {t('quran.juz').toUpperCase()} {i + 1}
                     </div>
                   </div>
                   <div

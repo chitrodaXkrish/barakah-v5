@@ -4,6 +4,7 @@ import { ArrowLeft, Search, User as UserIcon, ImageIcon } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type Tab = 'new' | 'processing' | 'shipped';
 
@@ -18,6 +19,7 @@ const SOFT_ACCENT = '#F5E6D0';
 export const SellerOrdersPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>('new');
   const [query, setQuery] = useState('');
@@ -66,15 +68,15 @@ export const SellerOrdersPage = () => {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-bold" style={{ color: BROWN_DARK }}>View Orders</h1>
+        <h1 className="text-xl font-bold" style={{ color: BROWN_DARK }}>{t('seller.view_orders')}</h1>
       </div>
 
       <div className="px-4 py-4 space-y-4 pb-20">
         <div className="flex gap-2 overflow-x-auto">
           {([
-            ['new', 'New', counts.new],
-            ['processing', 'Processing', counts.processing],
-            ['shipped', 'Shipped', counts.shipped],
+            ['new', t('seller.status_pending'), counts.new],
+            ['processing', t('seller.status_under_review'), counts.processing],
+            ['shipped', t('seller.status_verified'), counts.shipped],
           ] as const).map(([id, label, n]) => {
             const active = tab === id;
             return (
@@ -101,7 +103,7 @@ export const SellerOrdersPage = () => {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search orders..."
+            placeholder={t('seller.search_orders')}
             className="flex-1 outline-none bg-transparent text-sm"
             style={{ color: BROWN_DARK }}
           />
@@ -141,10 +143,10 @@ export const SellerOrdersPage = () => {
 
                 {(o.status === 'new' || o.status === 'pending') && (
                   <>
-                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFF6C9', color: '#7A5A00' }}>NEW</span>
+                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFF6C9', color: '#7A5A00' }}>{t('seller.status_pending')}</span>
                     <div className="flex gap-3 pt-1">
-                      <button type="button" onClick={() => update(o.id, { status: 'processing' })} className="flex-1 py-3 rounded-full text-white font-semibold" style={{ background: BROWN }}>Accept</button>
-                      <button type="button" onClick={() => update(o.id, { status: 'declined' })} className="flex-1 py-3 rounded-full font-semibold border-2" style={{ borderColor: BROWN, color: BROWN }}>Decline</button>
+                      <button type="button" onClick={() => update(o.id, { status: 'processing' })} className="flex-1 py-3 rounded-full text-white font-semibold" style={{ background: BROWN }}>{t('seller.accept')}</button>
+                      <button type="button" onClick={() => update(o.id, { status: 'declined' })} className="flex-1 py-3 rounded-full font-semibold border-2" style={{ borderColor: BROWN, color: BROWN }}>{t('seller.decline')}</button>
                     </div>
                   </>
                 )}
@@ -155,21 +157,21 @@ export const SellerOrdersPage = () => {
 
                 {o.status === 'shipped' && (
                   <>
-                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFE3BD', color: '#B07A00' }}>SHIPPED</span>
-                    <button type="button" onClick={() => navigate(`/seller/orders/${o.id}`)} className="text-sm font-semibold underline block" style={{ color: BROWN }}>View Tracking</button>
+                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFE3BD', color: '#B07A00' }}>{t('seller.status_verified')}</span>
+                    <button type="button" onClick={() => navigate(`/seller/orders/${o.id}`)} className="text-sm font-semibold underline block" style={{ color: BROWN }}>{t('seller.view_tracking')}</button>
                   </>
                 )}
 
                 {o.status === 'completed' && (
                   <>
-                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#E1F0DA', color: '#3D7B2E' }}>COMPLETED</span>
-                    <button type="button" onClick={() => navigate(`/seller/orders/${o.id}`)} className="text-sm font-semibold underline block" style={{ color: BROWN }}>View Details</button>
+                    <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#E1F0DA', color: '#3D7B2E' }}>{t('seller.status_verified')}</span>
+                    <button type="button" onClick={() => navigate(`/seller/orders/${o.id}`)} className="text-sm font-semibold underline block" style={{ color: BROWN }}>{t('seller.view_details')}</button>
                   </>
                 )}
               </div>
             );
           })}
-          {visible.length === 0 && <div className="text-center py-12" style={{ color: MUTED }}>No orders</div>}
+          {visible.length === 0 && <div className="text-center py-12" style={{ color: MUTED }}>{t('seller.no_orders')}</div>}
         </div>
       </div>
     </div>
@@ -178,17 +180,18 @@ export const SellerOrdersPage = () => {
 
 const ProcessingActions = ({ order, onShip }: { order: any; onShip: (t: string) => void }) => {
   const [tracking, setTracking] = useState(order.tracking_id || '');
+  const { t } = useLanguage();
   return (
     <>
-      <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: SOFT_ACCENT, color: BROWN_DARK }}>PROCESSING</span>
+      <span className="inline-block text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: SOFT_ACCENT, color: BROWN_DARK }}>{t('seller.status_under_review')}</span>
       <input
         value={tracking}
         onChange={(e) => setTracking(e.target.value)}
-        placeholder="Enter tracking ID"
+        placeholder={t('seller.tracking_id_placeholder')}
         className="w-full rounded-full border px-4 py-2 text-sm outline-none"
         style={{ background: CARD, borderColor: BORDER, color: BROWN_DARK }}
       />
-      <button type="button" onClick={() => onShip(tracking)} className="w-full py-3 rounded-full text-white font-semibold" style={{ background: BROWN }}>Mark Shipped</button>
+      <button type="button" onClick={() => onShip(tracking)} className="w-full py-3 rounded-full text-white font-semibold" style={{ background: BROWN }}>{t('seller.mark_shipped')}</button>
     </>
   );
 };

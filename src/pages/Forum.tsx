@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // Post categories (limited to mockup set)
 const CATEGORIES = [
@@ -520,6 +521,7 @@ const CreateCommunityDialog = ({
   }) => void;
 }) => {
   const [name, setName] = useState('');
+  const { t } = useLanguage();
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
@@ -647,7 +649,7 @@ const CreateCommunityDialog = ({
               maxLength={50}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Al-Andalus Heritage Club"
+              placeholder={t('forum.circle_name_placeholder')}
               className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
               style={{ background: '#FBEFD8', borderBottom: '1px solid #E8D5C4', color: BROWN_DARK }}
             />
@@ -663,7 +665,7 @@ const CreateCommunityDialog = ({
               maxLength={200}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell the world about your circle..."
+              placeholder={t('forum.circle_desc_placeholder')}
               rows={3}
               className="w-full px-3 py-2.5 rounded-lg text-sm outline-none resize-none"
               style={{ background: '#FBEFD8', borderBottom: '1px solid #E8D5C4', color: BROWN_DARK }}
@@ -678,7 +680,7 @@ const CreateCommunityDialog = ({
                 className="w-full rounded-lg text-sm"
                 style={{ background: '#FBEFD8', border: 'none', borderBottom: '1px solid #E8D5C4', color: BROWN_DARK }}
               >
-                <SelectValue placeholder="Select Category" />
+                <SelectValue placeholder={t('forum.select_category')} />
               </SelectTrigger>
               <SelectContent>
                 {CREATE_CATEGORIES.map((c) => (
@@ -734,6 +736,7 @@ const CreateCommunityDialog = ({
 
 export const Forum = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1526,7 +1529,7 @@ export const Forum = () => {
                 className="rounded-xl bg-white"
                 style={{ borderColor: SOFT_BORDER, color: BROWN_DARK }}
               >
-                <SelectValue placeholder="Select a reason" />
+                <SelectValue placeholder={t('forum.select_reason')} />
               </SelectTrigger>
               <SelectContent>
                 {REPORT_REASONS.map((reason) => (
@@ -1545,7 +1548,7 @@ export const Forum = () => {
             <Textarea
               value={reportDetails}
               onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
-              placeholder="Add a short note for the review team..."
+              placeholder={t('forum.note_placeholder')}
               className="min-h-[96px] resize-none rounded-xl"
               style={{ background: '#FFFFFF', color: BROWN_DARK, border: `1px solid ${SOFT_BORDER}` }}
             />
@@ -1635,7 +1638,7 @@ export const Forum = () => {
               style={{ borderBottom: `1px solid ${SOFT_BORDER}` }}
             >
               <span style={{ color: '#9C8569' }}>
-                Posted in{' '}
+                {t('forum.posted_in')}{' '}
                 <span className="font-semibold" style={{ color: BROWN_LIGHT }}>
                   {post.community}
                 </span>
@@ -1931,7 +1934,7 @@ export const Forum = () => {
                     <Textarea
                       value={newReply}
                       onChange={(e) => handleContentChange(e.target.value, 'reply')}
-                      placeholder="Write a reply..."
+                      placeholder={t('forum.reply_placeholder')}
                       className="min-h-[48px] max-h-[120px] resize-none rounded-xl border-0"
                       style={{ background: '#FFFFFF', color: BROWN_DARK, border: `1px solid ${SOFT_BORDER}` }}
                     />
@@ -2296,7 +2299,7 @@ export const Forum = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search posts..."
+                  placeholder={t('forum.search_placeholder')}
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
                   style={{ background: '#FFFFFF', border: `1px solid ${SOFT_BORDER}`, color: BROWN_DARK }}
                   autoFocus
@@ -2513,7 +2516,7 @@ export const Forum = () => {
                   <Textarea
                     value={newPostContent}
                     onChange={(e) => handleContentChange(e.target.value, 'post')}
-                    placeholder="What's on your mind..."
+                    placeholder={t('forum.post_placeholder')}
                     className="min-h-[120px] resize-none rounded-xl"
                     style={{ background: '#FFFFFF', color: BROWN_DARK, border: `1px solid ${SOFT_BORDER}` }}
                     maxLength={500}

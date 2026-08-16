@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { getSelectedAddress, ShippingAddress } from '@/lib/addresses';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#A35233';
@@ -28,6 +29,7 @@ export const Checkout = () => {
   const { items, getTotalPrice, clearCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [processing, setProcessing] = useState(false);
   const [selectedCard, setSelectedCard] = useState<string>(DEFAULT_CARDS[0].id);
   const [changingCard, setChangingCard] = useState(false);
@@ -92,7 +94,7 @@ export const Checkout = () => {
             <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
               <ArrowLeft className="h-4 w-4" />
             </span>
-            <span className="text-base font-bold">Checkout</span>
+            <span className="text-base font-bold">{t('checkout.title')}</span>
           </button>
           <button className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK, color: BROWN_DARK }}>
             <HelpCircle className="h-4 w-4" />
@@ -103,21 +105,21 @@ export const Checkout = () => {
           {/* Expected Delivery */}
           <div>
             <div className="flex items-center justify-between pb-2">
-              <span className="font-semibold" style={{ color: BROWN_DARK }}>Expected Delivery</span>
-              <span className="italic text-sm" style={{ color: BROWN_DARK, opacity: 0.7 }}>4–5 Business Days…</span>
+              <span className="font-semibold" style={{ color: BROWN_DARK }}>{t('checkout.expected_delivery')}</span>
+              <span className="italic text-sm" style={{ color: BROWN_DARK, opacity: 0.7 }}>{t('checkout.delivery_estimate')}…</span>
             </div>
             <div className="h-[2px] w-full" style={{ backgroundColor: BROWN_DARK }} />
           </div>
 
           {/* Shipping address */}
           <div>
-            <h3 className="text-base font-bold mb-3" style={{ color: BROWN_DARK }}>Shipping address</h3>
+            <h3 className="text-base font-bold mb-3" style={{ color: BROWN_DARK }}>{t('checkout.shipping_address')}</h3>
             {address ? (
               <div className="bg-white rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-bold" style={{ color: BROWN_DARK }}>{address.fullName}</p>
                   <button onClick={() => navigate('/shipping-address')} className="font-semibold text-sm" style={{ color: BROWN }}>
-                    Change
+                    {t('checkout.change')}
                   </button>
                 </div>
                 <p className="text-sm mt-1" style={{ color: BROWN_DARK, opacity: 0.85 }}>{address.address}</p>
@@ -131,9 +133,9 @@ export const Checkout = () => {
                 className="w-full bg-white rounded-2xl p-4 text-left"
                 style={{ color: BROWN }}
               >
-                <p className="font-bold">+ Add shipping address</p>
+                <p className="font-bold">{t('checkout.add_address')}</p>
                 <p className="text-xs mt-1" style={{ color: BROWN_DARK, opacity: 0.7 }}>
-                  You haven't added an address yet.
+                  {t('checkout.no_address_yet')}
                 </p>
               </button>
             )}
@@ -142,9 +144,9 @@ export const Checkout = () => {
           {/* Payment */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold" style={{ color: BROWN_DARK }}>Payment</h3>
+              <h3 className="text-base font-bold" style={{ color: BROWN_DARK }}>{t('checkout.payment')}</h3>
               <button onClick={() => setChangingCard(v => !v)} className="font-semibold text-sm" style={{ color: BROWN }}>
-                Change
+                {t('checkout.change')}
               </button>
             </div>
             <div className="space-y-3">
@@ -180,7 +182,7 @@ export const Checkout = () => {
           {/* Summary */}
           <div className="bg-white rounded-3xl overflow-hidden">
             <div className="p-5 space-y-4">
-              <h3 className="text-lg font-bold" style={{ color: BROWN_DARK }}>Summary</h3>
+              <h3 className="text-lg font-bold" style={{ color: BROWN_DARK }}>{t('checkout.summary')}</h3>
 
               {items.map(item => (
                 <div key={item.id} className="flex items-center gap-3">
@@ -203,15 +205,15 @@ export const Checkout = () => {
 
               <div className="border-t pt-3 space-y-2" style={{ borderColor: `${BROWN_DARK}15` }}>
                 <div className="flex justify-between text-sm" style={{ color: BROWN_DARK, opacity: 0.85 }}>
-                  <span>Subtotal</span>
+                  <span>{t('cart.subtotal')}</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm" style={{ color: BROWN_DARK, opacity: 0.85 }}>
-                  <span>Shipping (Premium Express)</span>
+                  <span>{t('checkout.shipping_express')}</span>
                   <span>${shipping.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between pt-2">
-                  <span className="font-bold text-lg" style={{ color: BROWN_DARK }}>Total</span>
+                  <span className="font-bold text-lg" style={{ color: BROWN_DARK }}>{t('cart.total')}</span>
                   <span className="font-bold text-lg" style={{ color: BROWN }}>${total.toFixed(2)}</span>
                 </div>
               </div>
@@ -219,7 +221,7 @@ export const Checkout = () => {
             <div className="px-5 py-3 flex items-center justify-center gap-2" style={{ backgroundColor: '#FFF3C4' }}>
               <ShieldCheck className="h-4 w-4" style={{ color: BROWN }} />
               <span className="text-xs font-bold tracking-wider" style={{ color: BROWN }}>
-                SECURED BY BARAKAH-SHIELD ENCRYPTION
+                {t('checkout.secured_by')}
               </span>
             </div>
           </div>
@@ -236,11 +238,11 @@ export const Checkout = () => {
             {processing ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Processing...
+                {t('cart.processing')}
               </>
             ) : (
               <>
-                <span>Place Order</span>
+                <span>{t('checkout.place_order')}</span>
                 <span className="opacity-70">•</span>
                 <span>${total.toFixed(2)}</span>
               </>

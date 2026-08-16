@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#A35233';
@@ -16,6 +17,7 @@ export const Cart = () => {
   const { items, updateQuantity, removeFromCart, getTotalPrice, clearCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [processing, setProcessing] = useState(false);
   const [promoCode, setPromoCode] = useState('');
 
@@ -44,7 +46,7 @@ export const Cart = () => {
               <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
                 <ArrowLeft className="h-4 w-4" />
               </span>
-              <span className="text-base font-bold">Cart</span>
+              <span className="text-base font-bold">{t('cart.title')}</span>
             </button>
             <button className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK, color: BROWN_DARK }}>
               <HelpCircle className="h-4 w-4" />
@@ -53,14 +55,14 @@ export const Cart = () => {
           
           <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
             <ShoppingBag className="h-16 w-16 mb-4" style={{ color: BROWN, opacity: 0.4 }} />
-            <h2 className="text-xl font-semibold mb-2" style={{ color: BROWN_DARK }}>Your cart is empty</h2>
-            <p className="mb-6" style={{ color: BROWN_DARK, opacity: 0.7 }}>Add some items to your cart to get started</p>
+            <h2 className="text-xl font-semibold mb-2" style={{ color: BROWN_DARK }}>{t('cart.empty')}</h2>
+            <p className="mb-6" style={{ color: BROWN_DARK, opacity: 0.7 }}>{t('cart.empty_desc')}</p>
             <button 
               onClick={() => navigate('/shop')}
               className="h-12 px-8 rounded-full text-white text-base font-bold"
               style={{ backgroundColor: BROWN }}
             >
-              Continue Shopping
+              {t('cart.continue_shopping')}
             </button>
           </div>
         </div>
@@ -77,7 +79,7 @@ export const Cart = () => {
             <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
               <ArrowLeft className="h-4 w-4" />
             </span>
-            <span className="text-base font-bold">Cart</span>
+            <span className="text-base font-bold">{t('cart.title')}</span>
           </button>
           <button className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK, color: BROWN_DARK }}>
             <HelpCircle className="h-4 w-4" />
@@ -105,7 +107,7 @@ export const Cart = () => {
                     <h3 className="font-bold text-base leading-tight" style={{ color: BROWN_DARK }}>{item.name}</h3>
                     <p className="font-bold text-base whitespace-nowrap" style={{ color: BROWN }}>${item.price.toFixed(2)}</p>
                   </div>
-                  <p className="text-sm mt-0.5" style={{ color: BROWN_DARK, opacity: 0.6 }}>Qty: {item.quantity}</p>
+                  <p className="text-sm mt-0.5" style={{ color: BROWN_DARK, opacity: 0.6 }}>{t('cart.qty')}: {item.quantity}</p>
                 </div>
               </div>
               
@@ -135,7 +137,7 @@ export const Cart = () => {
                   style={{ color: BROWN_DARK, opacity: 0.7 }}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Remove
+                  {t('cart.remove')}
                 </button>
               </div>
             </div>
@@ -143,11 +145,11 @@ export const Cart = () => {
 
           {/* Promotional Offer */}
           <div className="pt-2">
-            <h3 className="text-base font-bold mb-3" style={{ color: BROWN_DARK }}>Promotional Offer</h3>
+            <h3 className="text-base font-bold mb-3" style={{ color: BROWN_DARK }}>{t('cart.promo_offer')}</h3>
             <div className="bg-white rounded-2xl flex items-center px-4 py-3 gap-3">
               <input
                 type="text"
-                placeholder="Enter code"
+                placeholder={t('cart.enter_code')}
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-sm placeholder:text-neutral-400"
@@ -157,31 +159,31 @@ export const Cart = () => {
                 className="px-6 py-2 rounded-full text-sm font-bold tracking-wider border"
                 style={{ borderColor: BROWN, color: BROWN }}
               >
-                APPLY
+                {t('cart.apply')}
               </button>
             </div>
           </div>
 
           {/* Summary */}
           <div className="bg-white rounded-3xl p-5 space-y-3">
-            <h3 className="text-base font-bold" style={{ color: BROWN_DARK }}>Summary</h3>
+            <h3 className="text-base font-bold" style={{ color: BROWN_DARK }}>{t('cart.summary')}</h3>
             <div className="flex justify-between text-sm" style={{ color: BROWN_DARK, opacity: 0.8 }}>
-              <span>Subtotal</span>
+              <span>{t('cart.subtotal')}</span>
               <span className="font-medium">${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm" style={{ color: BROWN_DARK, opacity: 0.8 }}>
-              <span>Tax</span>
+              <span>{t('cart.tax')}</span>
               <span className="font-medium">${tax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span style={{ color: BROWN_DARK, opacity: 0.8 }}>Shipping</span>
+              <span style={{ color: BROWN_DARK, opacity: 0.8 }}>{t('cart.shipping')}</span>
               <span className="font-bold tracking-wider" style={{ color: shipping === 0 ? '#6a8b74' : BROWN }}>
-                {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                {shipping === 0 ? t('cart.free') : `$${shipping.toFixed(2)}`}
               </span>
             </div>
             <div className="border-t pt-3 mt-1" style={{ borderColor: `${BROWN_DARK}20` }}>
               <div className="flex justify-between">
-                <span className="font-bold text-base" style={{ color: BROWN_DARK }}>Total Amount</span>
+                <span className="font-bold text-base" style={{ color: BROWN_DARK }}>{t('cart.total')}</span>
                 <span className="font-bold text-base" style={{ color: BROWN_DARK }}>${total.toFixed(2)}</span>
               </div>
             </div>
@@ -199,11 +201,11 @@ export const Cart = () => {
             {processing ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Processing...
+                {t('cart.processing')}
               </>
             ) : (
               <>
-                Proceed to Checkout
+                {t('cart.checkout')}
                 <ArrowLeft className="h-5 w-5 rotate-180" />
               </>
             )}

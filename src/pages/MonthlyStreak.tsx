@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const CREAM_CARD = '#FFF5E5';
@@ -35,9 +36,14 @@ export const MonthlyStreak = () => {
   const [allLogs, setAllLogs] = useState<SalahLog[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { t, language } = useLanguage();
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const monthName = cursor.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const localeMap: Record<string, string> = {
+    en: 'en-US', ur: 'ur-PK', ar: 'ar-SA', tr: 'tr-TR', id: 'id-ID', ms: 'ms-MY', ta: 'ta-IN', bn: 'bn-BD'
+  };
+  const monthName = cursor.toLocaleString(localeMap[language] || 'en-US', { month: 'long', year: 'numeric' });
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -141,11 +147,11 @@ export const MonthlyStreak = () => {
           onClick={() => navigate('/progress')}
           className="h-10 w-10 rounded-full border flex items-center justify-center"
           style={{ borderColor: BROWN, color: BROWN }}
-          aria-label="Back"
+          aria-label={t('login.back')}
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-bold" style={{ color: BROWN }}>Back to Prayer Mark</h1>
+        <h1 className="text-xl font-bold" style={{ color: BROWN }}>{t('monthly.back_to_mark')}</h1>
       </header>
 
       {loading ? (
@@ -205,18 +211,18 @@ export const MonthlyStreak = () => {
               })}
             </div>
             <div className="border-t mt-5 pt-4 flex items-center justify-center gap-5 text-[13px]" style={{ borderColor: '#F0E0CB', color: BROWN }}>
-              <Legend color={FULL} label="Full" />
-              <Legend color={PARTIAL} label="Partial" />
-              <Legend color={MISSED} label="Missed" />
+              <Legend color={FULL} label={t('monthly.legend_full')} />
+              <Legend color={PARTIAL} label={t('monthly.legend_partial')} />
+              <Legend color={MISSED} label={t('monthly.legend_missed')} />
             </div>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3">
-            <StatCard label="THIS MONTH %" value={`${monthPct}%`} color={BROWN_ACCENT} />
-            <StatCard label="BEST STREAK" value={`${bestStreak} Days`} color={PARTIAL} />
-            <StatCard label="TOTAL COMPLETE" value={`${totalComplete}`} color={BROWN_ACCENT} />
-            <StatCard label="QADA COUNT" value={`${qadaCount}`} color={MISSED} />
+            <StatCard label={t('monthly.this_month_percent')} value={`${monthPct}%`} color={BROWN_ACCENT} />
+            <StatCard label={t('progress.best_streak').toUpperCase()} value={`${bestStreak} ${t('monthly.days')}`} color={PARTIAL} />
+            <StatCard label={t('progress.read_quran')} value={`${totalComplete}`} color={BROWN_ACCENT} />
+            <StatCard label={t('monthly.qada_count')} value={`${qadaCount}`} color={MISSED} />
           </div>
         </main>
       )}

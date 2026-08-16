@@ -4,6 +4,7 @@ import { ChevronLeft, Search, Loader2, ExternalLink } from 'lucide-react';
 import { HADITH_BOOKS } from './Hadith';
 import { supabase } from '@/integrations/supabase/client';
 import { isIOSNative, openExternalUrl } from '@/lib/externalUrl';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#2C1309';
@@ -26,6 +27,7 @@ const PAGE_SIZE = 25;
 
 export const HadithBook = () => {
   const { slug } = useParams<{ slug: string }>();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const book = useMemo(() => {
@@ -191,7 +193,7 @@ export const HadithBook = () => {
         {loading && (
           <div className="flex items-center justify-center py-16" style={{ color: BROWN }}>
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            <span>Loading book…</span>
+            <span>{t('hadith.loading')}</span>
           </div>
         )}
 

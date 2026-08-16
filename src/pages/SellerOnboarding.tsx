@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export type StepNum = 1 | 2 | 3 | 4 | 5 | 6 | 7; // 1: Business, 2: KYC, 3: Store, 4: Bank, 5: Agreements, 6: Review, 7: Submitted
 
@@ -302,6 +303,7 @@ const FileUploaderCard: React.FC<FileUploaderProps> = React.memo(({
 export const SellerOnboarding = () => {
   const { user, userRole, refreshRoles } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [step, setStep] = useState<StepNum>(1);
   const [form, setForm] = useState<SellerFormData>(initialFormState);
@@ -701,7 +703,7 @@ export const SellerOnboarding = () => {
       <div className="min-h-screen flex items-center justify-center bg-[#FFF1DD]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 text-[#A35233] animate-spin" />
-          <p className="text-sm font-semibold text-[#1a1a1a]">Loading onboarding status...</p>
+          <p className="text-sm font-semibold text-[#1a1a1a]">{t('seller.loading')}</p>
         </div>
       </div>
     );
@@ -719,14 +721,14 @@ export const SellerOnboarding = () => {
           <ArrowLeft className="h-6 w-6 text-[#1a1a1a]" />
         </button>
         <div className="text-center flex-1">
-          <h1 className="text-base font-bold text-[#1a1a1a]">Seller Onboarding</h1>
+          <h1 className="text-base font-bold text-[#1a1a1a]">{t('seller.seller_onboarding')}</h1>
           <p className="text-[11px] text-[#1a1a1a]/60">
-            {step === 7 ? 'Application Submitted' : `Step ${step} of 5 — ${
-              step === 1 ? 'Business Info' :
-              step === 2 ? 'KYC Verification' :
-              step === 3 ? 'Store Profile' :
-              step === 4 ? 'Bank Account' :
-              step === 5 ? 'Agreements' : 'Review & Submit'
+            {step === 7 ? t('seller.submitted_title') : `${t('seller.step')} ${step} ${t('seller.of')} 5 — ${
+              step === 1 ? t('seller.business_info') :
+              step === 2 ? t('seller.kyc_title') :
+              step === 3 ? t('seller.store_profile') :
+              step === 4 ? t('seller.bank_account') :
+              step === 5 ? t('seller.agreements_title') : t('seller.review_title')
             }`}
           </p>
         </div>
@@ -737,11 +739,11 @@ export const SellerOnboarding = () => {
       {step >= 1 && step <= 5 && (
         <div className="bg-white px-4 py-3 border-b border-[#E8D5C4]">
           <div className="flex items-center justify-between text-[11px] font-bold text-[#1a1a1a]/70 mb-1.5">
-            <span className={step >= 1 ? 'text-[#A35233]' : ''}>Business</span>
-            <span className={step >= 2 ? 'text-[#A35233]' : ''}>KYC</span>
-            <span className={step >= 3 ? 'text-[#A35233]' : ''}>Store</span>
-            <span className={step >= 4 ? 'text-[#A35233]' : ''}>Bank</span>
-            <span className={step >= 5 ? 'text-[#A35233]' : ''}>Review</span>
+            <span className={step >= 1 ? 'text-[#A35233]' : ''}>{t('seller.progress_business')}</span>
+            <span className={step >= 2 ? 'text-[#A35233]' : ''}>{t('seller.progress_kyc')}</span>
+            <span className={step >= 3 ? 'text-[#A35233]' : ''}>{t('seller.progress_store')}</span>
+            <span className={step >= 4 ? 'text-[#A35233]' : ''}>{t('seller.progress_bank')}</span>
+            <span className={step >= 5 ? 'text-[#A35233]' : ''}>{t('seller.progress_review')}</span>
           </div>
           <div className="h-2 w-full bg-[#EADFC9] rounded-full overflow-hidden">
             <div
@@ -764,13 +766,13 @@ export const SellerOnboarding = () => {
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[#1a1a1a]">Business Information</h2>
-                <p className="text-xs text-gray-500">Provide legal details of your business entity</p>
+                <h2 className="text-base font-bold text-[#1a1a1a]">{t('seller.business_info')}</h2>
+                <p className="text-xs text-gray-500">{t('seller.business_info_desc')}</p>
               </div>
             </div>
 
             <FormInputField
-              label="Business / Store Name"
+              label={t('seller.business_name')}
               value={form.business_name}
               onChange={(val) => updateField('business_name', val)}
               error={errors.business_name}
@@ -778,7 +780,7 @@ export const SellerOnboarding = () => {
             />
 
             <FormInputField
-              label="Legal Business Name"
+              label={t('seller.legal_name')}
               value={form.legal_name}
               onChange={(val) => updateField('legal_name', val)}
               error={errors.legal_name}
@@ -786,7 +788,7 @@ export const SellerOnboarding = () => {
             />
 
             <FormSelectField
-              label="Business Type"
+              label={t('seller.business_type')}
               value={form.business_type}
               options={BUSINESS_TYPES}
               onChange={(val) => updateField('business_type', val)}
@@ -794,7 +796,7 @@ export const SellerOnboarding = () => {
             />
 
             <FormSelectField
-              label="Primary Category"
+              label={t('seller.primary_category')}
               value={form.business_category}
               options={BUSINESS_CATEGORIES}
               onChange={(val) => updateField('business_category', val)}
@@ -802,7 +804,7 @@ export const SellerOnboarding = () => {
             />
 
             <FormInputField
-              label="Owner / Authorized Person"
+              label={t('seller.owner_name')}
               value={form.contact_person}
               onChange={(val) => updateField('contact_person', val)}
               error={errors.contact_person}
@@ -811,7 +813,7 @@ export const SellerOnboarding = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <FormInputField
-                label="Email"
+                label={t('seller.email')}
                 type="email"
                 value={form.email}
                 onChange={(val) => updateField('email', val)}
@@ -819,7 +821,7 @@ export const SellerOnboarding = () => {
                 placeholder="seller@example.com"
               />
               <FormInputField
-                label="Phone Number"
+                label={t('seller.phone')}
                 type="tel"
                 value={form.phone_number}
                 onChange={(val) => updateField('phone_number', val)}
@@ -829,7 +831,7 @@ export const SellerOnboarding = () => {
             </div>
 
             <FormInputField
-              label="Business Address"
+              label={t('seller.address')}
               value={form.business_address}
               onChange={(val) => updateField('business_address', val)}
               error={errors.business_address}
@@ -838,14 +840,14 @@ export const SellerOnboarding = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <FormInputField
-                label="City"
+                label={t('seller.city')}
                 value={form.city}
                 onChange={(val) => updateField('city', val)}
                 error={errors.city}
                 placeholder="City"
               />
               <FormInputField
-                label="State"
+                label={t('seller.state')}
                 value={form.state}
                 onChange={(val) => updateField('state', val)}
                 error={errors.state}
@@ -855,14 +857,14 @@ export const SellerOnboarding = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <FormInputField
-                label="Country"
+                label={t('seller.country')}
                 value={form.country}
                 onChange={(val) => updateField('country', val)}
                 error={errors.country}
                 placeholder="India"
               />
               <FormInputField
-                label="PIN / Postal Code"
+                label={t('seller.postal_code')}
                 value={form.postal_code}
                 onChange={(val) => updateField('postal_code', val)}
                 error={errors.postal_code}
@@ -872,7 +874,7 @@ export const SellerOnboarding = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <FormInputField
-                label="PAN Number"
+                label={t('seller.pan')}
                 value={form.pan}
                 onChange={(val) => updateField('pan', val.toUpperCase())}
                 error={errors.pan}
@@ -880,7 +882,7 @@ export const SellerOnboarding = () => {
                 maxLength={10}
               />
               <FormInputField
-                label="GSTIN (Optional)"
+                label={t('seller.gstin')}
                 required={false}
                 value={form.gstin}
                 onChange={(val) => updateField('gstin', val.toUpperCase())}
@@ -900,8 +902,8 @@ export const SellerOnboarding = () => {
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[#1a1a1a]">Verify your business</h2>
-                <p className="text-xs text-gray-500">Complete your verification to start selling on Barakah.</p>
+                <h2 className="text-base font-bold text-[#1a1a1a]">{t('seller.kyc_title')}</h2>
+                <p className="text-xs text-gray-500">{t('seller.kyc_desc')}</p>
               </div>
             </div>
 
@@ -988,13 +990,13 @@ export const SellerOnboarding = () => {
                 <Store className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[#1a1a1a]">Store Profile</h2>
-                <p className="text-xs text-gray-500">Customize how your store appears to customers</p>
+                <h2 className="text-base font-bold text-[#1a1a1a]">{t('seller.store_profile')}</h2>
+                <p className="text-xs text-gray-500">{t('seller.store_profile_desc')}</p>
               </div>
             </div>
 
             <FormInputField
-              label="Store Display Name"
+              label={t('seller.store_display_name')}
               value={form.store_name}
               onChange={(val) => updateField('store_name', val)}
               error={errors.store_name}
@@ -1002,7 +1004,7 @@ export const SellerOnboarding = () => {
             />
 
             <FileUploaderCard
-              label="Store Logo"
+              label={t('seller.store_logo')}
               currentUrl={form.logo_url}
               loading={uploadingDoc === 'logo'}
               onUpload={async (file) => {
@@ -1017,12 +1019,12 @@ export const SellerOnboarding = () => {
             {form.logo_url && (
               <div className="flex items-center gap-3 p-2 bg-[#FFF1DD] rounded-xl">
                 <img src={form.logo_url} alt="Logo preview" className="w-12 h-12 rounded-full object-cover border border-[#A35233]" />
-                <span className="text-xs font-semibold text-[#1a1a1a]">Logo Preview</span>
+                <span className="text-xs font-semibold text-[#1a1a1a]">{t('seller.logo_preview')}</span>
               </div>
             )}
 
             <FileUploaderCard
-              label="Store Banner Image"
+              label={t('seller.store_banner')}
               currentUrl={form.banner_url}
               loading={uploadingDoc === 'banner'}
               onUpload={async (file) => {
@@ -1036,14 +1038,14 @@ export const SellerOnboarding = () => {
 
             {form.banner_url && (
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-[#1a1a1a]">Banner Preview</p>
+                <p className="text-xs font-semibold text-[#1a1a1a]">{t('seller.banner_preview')}</p>
                 <img src={form.banner_url} alt="Banner preview" className="w-full h-24 rounded-xl object-cover border border-[#E8D5C4]" />
               </div>
             )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
-                Store Bio / Description <span className="text-red-500">*</span>
+                {t('seller.store_bio')} <span className="text-red-500">*</span>
               </label>
               <Textarea
                 value={form.about_us}
@@ -1068,13 +1070,13 @@ export const SellerOnboarding = () => {
                 <CreditCard className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[#1a1a1a]">Payout Account</h2>
-                <p className="text-xs text-gray-500">Specify bank account for marketplace sales earnings</p>
+                <h2 className="text-base font-bold text-[#1a1a1a]">{t('seller.bank_account')}</h2>
+                <p className="text-xs text-gray-500">{t('seller.bank_account_desc')}</p>
               </div>
             </div>
 
             <FormInputField
-              label="Account Holder Name"
+              label={t('seller.account_holder')}
               value={form.bank_account_name}
               onChange={(val) => updateField('bank_account_name', val)}
               error={errors.bank_account_name}
@@ -1082,7 +1084,7 @@ export const SellerOnboarding = () => {
             />
 
             <FormInputField
-              label="Bank Name"
+              label={t('seller.bank_name')}
               value={form.bank_name}
               onChange={(val) => updateField('bank_name', val)}
               error={errors.bank_name}
@@ -1091,7 +1093,7 @@ export const SellerOnboarding = () => {
 
             <div className="relative">
               <FormInputField
-                label="Account Number"
+                label={t('seller.account_number')}
                 type={showMaskedAccount ? 'password' : 'text'}
                 value={form.bank_account_number}
                 onChange={(val) => updateField('bank_account_number', val)}
@@ -1108,7 +1110,7 @@ export const SellerOnboarding = () => {
             </div>
 
             <FormInputField
-              label="Confirm Account Number"
+              label={t('seller.confirm_account')}
               type="text"
               value={form.confirm_account_number}
               onChange={(val) => updateField('confirm_account_number', val)}
@@ -1118,7 +1120,7 @@ export const SellerOnboarding = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <FormInputField
-                label="IFSC / Swift Code"
+                label={t('seller.ifsc')}
                 value={form.ifsc}
                 onChange={(val) => updateField('ifsc', val.toUpperCase())}
                 error={errors.ifsc}
@@ -1126,16 +1128,16 @@ export const SellerOnboarding = () => {
               />
 
               <FormSelectField
-                label="Account Type"
+                label={t('seller.account_type')}
                 value={form.account_type}
-                options={['Savings', 'Current']}
+                options={[t('seller.cat_savings'), t('seller.cat_current')]}
                 onChange={(val) => updateField('account_type', val)}
               />
             </div>
 
             {form.bank_account_number && (
               <div className="bg-[#FFF5E5] p-3 rounded-xl border border-[#E8D5C4] text-xs flex items-center justify-between">
-                <span className="font-semibold text-[#1a1a1a]/70">Masked Display:</span>
+                <span className="font-semibold text-[#1a1a1a]/70">{t('seller.masked_display')}:</span>
                 <span className="font-mono font-bold text-[#A35233]">
                   {maskAccountNumber(form.bank_account_number)}
                 </span>
@@ -1297,14 +1299,14 @@ export const SellerOnboarding = () => {
             <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-green-600" /> Agreements Accepted
+                  <Check className="h-4 w-4 text-green-600" /> {t('seller.agreements_accepted')}
                 </span>
                 <button onClick={() => setStep(5)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
                   <Edit3 className="h-3 w-3" /> Edit
                 </button>
               </div>
               <p className="text-xs text-gray-700">
-                Seller Terms, Marketplace 12% Commission Policy, and Return Policy accepted.
+                {t('seller.agreements_review_desc')}
               </p>
             </div>
           </div>
@@ -1319,16 +1321,16 @@ export const SellerOnboarding = () => {
               <CheckCircle2 className="h-10 w-10 text-[#A35233]" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-[#1a1a1a]">You&apos;re ready to sell!</h2>
+              <h2 className="text-xl font-bold text-[#1a1a1a]">{t('seller.submitted_title')}</h2>
               <p className="text-xs text-gray-600 leading-relaxed max-w-xs mx-auto">
-                Your Barakah seller account has been submitted for verification. We&apos;ll review your information and notify you once your account is approved.
+                {t('seller.submitted_desc')}
               </p>
             </div>
 
             <div className="bg-[#FFF1DD] p-3 rounded-xl border border-[#E8D5C4] text-xs text-[#1a1a1a]/80 flex items-center justify-between">
-              <span className="font-medium">Verification Status:</span>
+              <span className="font-medium">{t('seller.verification_status')}:</span>
               <span className="font-bold px-2.5 py-1 rounded-full bg-amber-200 text-amber-900">
-                UNDER REVIEW
+                {t('seller.under_review_badge')}
               </span>
             </div>
 
@@ -1336,7 +1338,7 @@ export const SellerOnboarding = () => {
               onClick={() => navigate('/seller-dashboard')}
               className="w-full h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm"
             >
-              Go to Seller Dashboard
+              {t('seller.go_to_dashboard')}
             </Button>
           </div>
         )}
@@ -1352,7 +1354,7 @@ export const SellerOnboarding = () => {
               disabled={saving}
               className="flex-1 h-12 border-[#E8D5C4] text-[#1a1a1a] font-semibold rounded-xl"
             >
-              Back
+              {t('seller.back')}
             </Button>
           )}
 
@@ -1362,7 +1364,7 @@ export const SellerOnboarding = () => {
               disabled={saving}
               className="flex-1 h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Next'}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('seller.next')}
               {!saving && <ChevronRight className="h-4 w-4" />}
             </Button>
           ) : (
@@ -1371,7 +1373,7 @@ export const SellerOnboarding = () => {
               disabled={saving}
               className="w-full h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit for Verification'}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('seller.submit_verification')}
             </Button>
           )}
         </div>

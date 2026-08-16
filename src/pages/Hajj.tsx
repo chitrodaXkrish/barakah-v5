@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search } from 'lucide-react';
 import { BottomNavigation } from '@/components/BottomNavigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import hajjImage from '@/assets/hajj-coming-soon-user.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 
@@ -11,6 +12,7 @@ const BORDER = '#E8D5C4';
 
 export const Hajj = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   return (
     <div
@@ -40,7 +42,7 @@ export const Hajj = () => {
             fontFamily: "'Plus Jakarta Sans', sans-serif",
           }}
         >
-          Hajj & Umrah
+          {t('hajj.title')}
         </h1>
         <button
           className="p-2 -mr-2"
@@ -70,7 +72,7 @@ export const Hajj = () => {
             fontFamily: "'Plus Jakarta Sans', sans-serif",
           }}
         >
-          Explore Prayer
+          {t('hajj.explore_prayer')}
         </button>
       </div>
 

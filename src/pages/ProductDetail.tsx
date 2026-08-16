@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ShoppingCart, Star, ShieldCheck, ChevronDown, Loader2 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#A35233';
@@ -28,6 +29,7 @@ export const ProductDetail = () => {
   const navigate = useNavigate();
   const { addToCart, getTotalItems, items } = useCart();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -62,9 +64,12 @@ export const ProductDetail = () => {
 
   if (loading) {
     return (
-      <Layout showHeader={false} showNavigation={false}>
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: CREAM }}>
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: BROWN }} />
+      <Layout showHeader={false} pageBackgroundColor={CREAM}>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-7 w-7 text-[#A35233] animate-spin" />
+            <p className="text-sm font-semibold text-gray-700">{t('seller.loading')}</p>
+          </div>
         </div>
       </Layout>
     );
@@ -72,10 +77,12 @@ export const ProductDetail = () => {
 
   if (!product) {
     return (
-      <Layout showHeader={false} showNavigation={false}>
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: CREAM, color: BROWN_DARK }}>
-          <p>Product not found.</p>
-          <button onClick={() => navigate('/shop')} className="underline">Back to Marketplace</button>
+      <Layout showHeader={false} pageBackgroundColor={CREAM}>
+        <div className="min-h-screen flex flex-col items-center justify-center p-5 text-center">
+          <p className="text-lg font-bold text-gray-800">{t('shop.product_not_found')}</p>
+          <button onClick={() => navigate('/shop')} className="mt-4 text-sm font-bold text-[#A35233] underline">
+            {t('cart.continue_shopping')}
+          </button>
         </div>
       </Layout>
     );
@@ -137,7 +144,7 @@ export const ProductDetail = () => {
             <p className="text-3xl font-bold" style={{ color: BROWN }}>${product.price.toFixed(2)}</p>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide" style={{ backgroundColor: CERT_BG, color: CERT_FG }}>
               <ShieldCheck className="h-3.5 w-3.5" />
-              BARKAH CERTIFIED
+              {t('product.certified')}
             </span>
           </div>
 
@@ -151,13 +158,13 @@ export const ProductDetail = () => {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-bold tracking-widest" style={{ color: BROWN_DARK }}>DESCRIPTION</p>
+            <p className="text-xs font-bold tracking-widest" style={{ color: BROWN_DARK }}>{t('product.description')}</p>
             <p className="text-base leading-relaxed" style={{ color: BROWN_DARK, opacity: 0.85 }}>
               {expanded ? description : shortDesc}
             </p>
             {description.length > 160 && (
               <button onClick={() => setExpanded((v) => !v)} className="text-sm font-bold" style={{ color: BROWN }}>
-                {expanded ? 'Read Less' : 'Read More'}
+                {expanded ? t('product.read_less') : t('product.read_more')}
               </button>
             )}
           </div>
@@ -170,7 +177,7 @@ export const ProductDetail = () => {
             className="w-full h-14 rounded-full text-white text-lg font-bold shadow-lg"
             style={{ backgroundColor: BROWN }}
           >
-            {inCart ? 'Go to Cart' : 'Add to Cart'}
+            {inCart ? t('cart.go_to_cart') : t('cart.add_to_cart')}
           </button>
         </div>
       </div>

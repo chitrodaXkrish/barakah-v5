@@ -4,6 +4,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { SideMenu } from '@/components/SideMenu';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#A35233';
@@ -15,6 +16,7 @@ const BORDER = '#E8D3AE';
 export const Shop = () => {
   const { getTotalItems } = useCart();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleCartClick = () => {
@@ -39,7 +41,7 @@ export const Shop = () => {
             >
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>Marketplace</h1>
+            <h1 className="text-2xl font-bold" style={{ color: BROWN_DARK }}>{t('shop.title')}</h1>
           </div>
           <button type="button" onClick={handleCartClick} className="relative" style={{ color: BROWN_DARK }}>
             <ShoppingCart className="h-6 w-6" />
@@ -77,10 +79,10 @@ export const Shop = () => {
             </div>
 
             <h2 className="text-3xl font-bold leading-tight mt-6">
-              Start your journey by selling products
+              {t('shop.start_selling_title')}
             </h2>
             <p className="text-sm mt-3 leading-relaxed" style={{ color: BROWN_DARK, opacity: 0.75 }}>
-              Create your seller account and list your first product in the Barakah marketplace.
+              {t('shop.start_selling_desc')}
             </p>
 
             <div
@@ -88,7 +90,7 @@ export const Shop = () => {
               style={{ backgroundColor: ACCENT_BROWN }}
             >
               <PackagePlus className="h-4 w-4" />
-              Start Selling
+              {t('shop.start_selling_btn')}
             </div>
           </button>
         </div>

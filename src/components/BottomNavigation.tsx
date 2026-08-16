@@ -67,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'home', labelKey: 'nav.home', path: '/', render: (a) => <HomeIconImg isActive={a} /> },
   { key: 'shop', labelKey: 'nav.store', path: '/shop', render: (a) => <MarketplaceIconImg isActive={a} /> },
   { key: 'prayer', labelKey: 'nav.prayer', path: '/prayer-times', render: (a) => <PrayerIconImg isActive={a} /> },
-  { key: 'scan', labelKey: 'nav.scanner', customLabel: 'Halal Scan', path: '/halal-scanner', render: (a) => <ScanBarcode size={22} color={a ? TEXT_ACTIVE : TEXT_INACTIVE} strokeWidth={1.8} /> },
+  { key: 'scan', labelKey: 'nav.scanner', path: '/halal-scanner', render: (a) => <ScanBarcode size={22} color={a ? TEXT_ACTIVE : TEXT_INACTIVE} strokeWidth={1.8} /> },
 ];
 
 export const BottomNavigation = () => {

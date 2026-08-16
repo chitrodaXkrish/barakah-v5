@@ -3,6 +3,7 @@ import { X, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Props {
   open: boolean;
@@ -14,6 +15,7 @@ const ACCENT = '#CE5728';
 
 export const FeedbackForm = ({ open, onClose }: Props) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     user_email: '',
@@ -37,11 +39,11 @@ export const FeedbackForm = ({ open, onClose }: Props) => {
 
   const submit = async () => {
     if (!form.overall_rating) {
-      toast({ title: 'Please rate Barakah overall', variant: 'destructive' });
+      toast({ title: t('feedback.toast_rate'), variant: 'destructive' });
       return;
     }
     if (form.user_email && !/^\S+@\S+\.\S+$/.test(form.user_email)) {
-      toast({ title: 'Please enter a valid email', variant: 'destructive' });
+      toast({ title: t('feedback.toast_email'), variant: 'destructive' });
       return;
     }
     setSubmitting(true);
@@ -50,12 +52,12 @@ export const FeedbackForm = ({ open, onClose }: Props) => {
       user_id: user?.uid ?? null,
       ease_of_use: form.ease_of_use || null,
     } as any);
-    setSubmitting(false);
+    setSubmitting(true);
     if (error) {
-      toast({ title: 'Could not submit', description: error.message, variant: 'destructive' });
+      toast({ title: t('feedback.toast_fail'), description: error.message, variant: 'destructive' });
       return;
     }
-    toast({ title: 'JazakAllah khair!', description: 'Thanks for your feedback.' });
+    toast({ title: t('feedback.toast_success'), description: t('feedback.toast_success_desc') });
     onClose();
   };
 
@@ -67,12 +69,12 @@ export const FeedbackForm = ({ open, onClose }: Props) => {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 flex items-center justify-between px-5 py-4 border-b" style={{ background: '#FFF5E5', borderColor: '#E8D5C4' }}>
-          <h2 className="text-[17px] font-bold" style={{ color: BROWN }}>Share your feedback</h2>
-          <button onClick={onClose} aria-label="Close" className="p-1"><X className="h-5 w-5" style={{ color: BROWN }} /></button>
+          <h2 className="text-[17px] font-bold" style={{ color: BROWN }}>{t('feedback.title')}</h2>
+          <button onClick={onClose} aria-label={t('login.back')} className="p-1"><X className="h-5 w-5" style={{ color: BROWN }} /></button>
         </div>
 
         <div className="px-5 py-4 space-y-5">
-          <Field label="Enter your E-mail to get access to perks!">
+          <Field label={t('feedback.email_label')}>
             <input
               type="email"
               value={form.user_email}
@@ -83,61 +85,61 @@ export const FeedbackForm = ({ open, onClose }: Props) => {
             />
           </Field>
 
-          <Field label="Overall, how would you rate Barakah?" required>
+          <Field label={t('feedback.rate_overall')} required>
             <Stars value={form.overall_rating} onChange={(v) => set('overall_rating', v)} />
           </Field>
 
-          <Field label="How easy is the app to use?">
+          <Field label={t('feedback.ease_of_use')}>
             <Stars value={form.ease_of_use} onChange={(v) => set('ease_of_use', v)} />
           </Field>
 
-          <TextField label="Which feature do you use the most?" placeholder="e.g., Prayer Times, Quran, Qibla…"
+          <TextField label={t('feedback.most_used')} placeholder={t('feedback.placeholder_features')}
             value={form.most_used_feature} onChange={(v) => set('most_used_feature', v)} />
 
-          <TextField label="What do you mainly use Barakah for?" placeholder="e.g., Prayer Times, Quran, Qibla…"
+          <TextField label={t('feedback.main_use')} placeholder={t('feedback.placeholder_features')}
             value={form.main_use} onChange={(v) => set('main_use', v)} />
 
-          <TextField label="What is the one thing you would improve about Barakah?"
+          <TextField label={t('feedback.one_improvement')}
             value={form.one_improvement} onChange={(v) => set('one_improvement', v)} multiline />
 
-          <TextField label="Was anything confusing when you first opened the app?"
+          <TextField label={t('feedback.first_confusion')}
             value={form.first_open_confusion} onChange={(v) => set('first_open_confusion', v)} multiline />
 
-          <Field label="Are notifications arriving at the correct time?">
+          <Field label={t('feedback.notifications_timing')}>
             <Radio
               value={form.notifications_timing}
               onChange={(v) => set('notifications_timing', v)}
               options={[
-                { v: 'yes', l: 'Yes' },
-                { v: 'a_bit_late', l: 'A bit late' },
-                { v: 'no', l: 'No' },
-                { v: 'not_tested', l: 'Not tested' },
+                { v: 'yes', l: t('feedback.opt_yes') },
+                { v: 'a_bit_late', l: t('feedback.opt_late') },
+                { v: 'no', l: t('feedback.opt_no') },
+                { v: 'not_tested', l: t('feedback.opt_not_tested') },
               ]}
             />
           </Field>
 
-          <TextField label="Which state and country are you from?" placeholder="e.g., Maharashtra, India"
+          <TextField label={t('feedback.location')} placeholder={t('feedback.placeholder_location')}
             value={form.state_country} onChange={(v) => set('state_country', v)} />
 
-          <TextField label="What features would you like us to add?"
+          <TextField label={t('feedback.missing_features')}
             value={form.missing_features} onChange={(v) => set('missing_features', v)} multiline />
 
-          <TextField label="Have you encountered any bugs or issues?"
+          <TextField label={t('feedback.bugs')}
             value={form.bugs_encountered} onChange={(v) => set('bugs_encountered', v)} multiline />
 
-          <Field label="Would you recommend Barakah to friends or family?">
+          <Field label={t('feedback.recommend')}>
             <Radio
               value={form.would_recommend}
               onChange={(v) => set('would_recommend', v)}
               options={[
-                { v: 'yes', l: 'Yes' },
-                { v: 'maybe', l: 'Maybe' },
-                { v: 'no', l: 'No' },
+                { v: 'yes', l: t('feedback.opt_yes') },
+                { v: 'maybe', l: t('feedback.opt_maybe') },
+                { v: 'no', l: t('feedback.opt_no') },
               ]}
             />
           </Field>
 
-          <TextField label="Anything else you'd like to share?"
+          <TextField label={t('feedback.additional')}
             value={form.additional_comments} onChange={(v) => set('additional_comments', v)} multiline />
 
           <button
@@ -146,7 +148,7 @@ export const FeedbackForm = ({ open, onClose }: Props) => {
             className="w-full rounded-xl py-3 text-white text-[15px] font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(90deg, ${BROWN}, ${ACCENT})` }}
           >
-            {submitting ? 'Submitting…' : 'Submit feedback'}
+            {submitting ? t('feedback.submitting') : t('feedback.submit')}
           </button>
         </div>
       </div>

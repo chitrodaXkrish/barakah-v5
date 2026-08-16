@@ -287,7 +287,7 @@ export const Register = () => {
                 <path fill="#FBBC04" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              Continue with Google
+              {t('login.google')}
             </Button>
 
             {/* Apple */}
@@ -313,7 +313,7 @@ export const Register = () => {
               <Star className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-[#A8A8A8]" />
               <Input
                 type="email"
-                placeholder="Continue with Email"
+                placeholder={t('login.enter_email')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-14 rounded-full bg-[#FFF5E5] border border-[#EADFC9] pl-12 pr-4 text-[15px] text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -331,7 +331,7 @@ export const Register = () => {
                 color: email ? '#fff' : '#8a8170',
               }}
             >
-              Continue
+              {t('login.continue')}
             </Button>
 
             {/* Divider */}
@@ -346,25 +346,25 @@ export const Register = () => {
               }}
               className="w-full text-center text-[15px] font-semibold text-[#1a1a1a]"
             >
-              Create a Business Account
+              {t('login.create_business')}
             </button>
 
             {/* Terms */}
             <p className="text-[11px] text-[#7c6a4f] text-center px-6 leading-relaxed pt-6">
-              By continuing, you agree to Barakah{' '}
+              {t('login.terms_agreement')}{' '}
               <Link
                 to="/terms-of-service"
                 className="underline font-semibold text-[#3a2a18] cursor-pointer"
               >
-                Terms of Service
+                {t('login.terms_of_service')}
               </Link>
               <br />
-              and{' '}
+              {t('login.and')}{' '}
               <Link
                 to="/privacy-policy"
                 className="underline font-semibold text-[#3a2a18] cursor-pointer"
               >
-                Privacy Policy.
+                {t('login.privacy_policy')}.
               </Link>
             </p>
           </div >
@@ -374,7 +374,7 @@ export const Register = () => {
           view === 'profile' && (
             <div className="space-y-3">
               <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-2">
-                <ArrowLeft className="h-4 w-4" /> Back
+                <ArrowLeft className="h-4 w-4" /> {t('login.back')}
               </button>
               <div className="text-center mb-3">
                 <h2 className="text-xl font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
@@ -407,7 +407,7 @@ export const Register = () => {
           view === 'details' && (
             <div className="space-y-3">
               <button onClick={handleBack} className="flex items-center gap-1 text-[#5a3a20] text-sm mb-1">
-                <ArrowLeft className="h-4 w-4" /> Back
+                <ArrowLeft className="h-4 w-4" /> {t('login.back')}
               </button>
               <div className="text-center mb-2">
                 <h2 className="text-lg font-semibold" style={{ color: '#A35334', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
@@ -452,7 +452,7 @@ export const Register = () => {
                 className="w-full h-14 rounded-full text-white text-base font-medium hover:opacity-90"
                 style={{ backgroundColor: '#A35334' }}
               >
-                {loading ? t('login.please_wait') : needsSetup ? 'Finish setup' : isSignIn ? t('login.sign_in') : t('login.create_account_btn')}
+                {loading ? t('login.please_wait') : needsSetup ? t('login.finish_setup') : isSignIn ? t('login.sign_in') : t('login.create_account_btn')}
               </Button>
 
               {!needsSetup && (
@@ -474,7 +474,7 @@ export const Register = () => {
                       <path fill="#FBBC04" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
-                    {isSignIn ? 'Sign in with Google' : 'Sign up with Google'}
+                    {isSignIn ? t('login.google_signin') : t('login.google_signup')}
                   </Button>
                   <Button
                     onClick={handleAppleSignIn}

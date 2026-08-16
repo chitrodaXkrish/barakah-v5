@@ -2,6 +2,7 @@ import { Layout } from '@/components/Layout';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import { toast } from 'sonner';
 import mosqueIcon from '@/assets/qibla-mosque-icon.png.asset.json';
@@ -64,6 +65,7 @@ function cardinal(deg: number) {
 
 export const Qibla = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { location, loading: locLoading } = useGlobalLocation();
   const [heading, setHeading] = useState<number | null>(null);
   const [displayAngle, setDisplayAngle] = useState(0);
@@ -315,7 +317,7 @@ export const Qibla = () => {
           {/* Distance + location */}
           <div className="mt-6 text-center space-y-2">
             <div className="text-base" style={{ color: BROWN_DEEP }}>
-              Distance:{' '}
+              {t('qibla.distance')}:{' '}
               <span className="font-bold" style={{ color: BROWN }}>
                 {locLoading ? '—' : `${distanceKm.toLocaleString()} km`}
               </span>
@@ -326,7 +328,7 @@ export const Qibla = () => {
             >
               <MapPin className="h-4 w-4" />
               <span>
-                Current Location:{' '}
+                {t('qibla.current_location')}:{' '}
                 {location
                   ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}`
                   : locLoading

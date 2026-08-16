@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Plus, ImageIcon, MoreVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type Filter = 'all' | 'active' | 'under_review';
 
 export const SellerProducts = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [products, setProducts] = useState<any[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -35,28 +37,28 @@ export const SellerProducts = () => {
 
   const statusBadge = (p: any) => {
     if (p.inventory_quantity === 0) {
-      return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FBE4E4', color: '#C0392B' }}>OUT OF STOCK</span>;
+      return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FBE4E4', color: '#C0392B' }}>{t('seller.out_of_stock')}</span>;
     }
     if (p.status === 'under_review') {
-      return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFF1C4', color: '#B07A00' }}>UNDER REVIEW</span>;
+      return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#FFF1C4', color: '#B07A00' }}>{t('seller.status_under_review')}</span>;
     }
-    return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#E1F0DA', color: '#3D7B2E' }}>ACTIVE</span>;
+    return <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: '#E1F0DA', color: '#3D7B2E' }}>{t('seller.status_verified')}</span>;
   };
 
   return (
     <div className="min-h-screen w-full max-w-md mx-auto" style={{ background: '#FFF1DD' }}>
       <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)}><ArrowLeft className="h-5 w-5" /></button>
-        <h1 className="text-xl font-bold">View Products</h1>
+        <h1 className="text-xl font-bold">{t('seller.view_products')}</h1>
       </div>
 
       <div className="px-4 py-4 space-y-4">
         {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto">
           {([
-            ['all', 'All', counts.all],
-            ['active', 'Active', counts.active],
-            ['under_review', 'Under Review', counts.under_review],
+            ['all', t('seller.all'), counts.all],
+            ['active', t('seller.active'), counts.active],
+            ['under_review', t('seller.under_review'), counts.under_review],
           ] as const).map(([id, label, n]) => {
             const active = filter === id;
             return (
@@ -79,12 +81,12 @@ export const SellerProducts = () => {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Products..."
+            placeholder={t('seller.search_products')}
             className="flex-1 outline-none bg-transparent text-sm"
           />
         </div>
 
-        <div className="text-sm text-[#1a1a1a]/70">Sort by: <span className="font-semibold text-[#1a1a1a]">Date Added ▾</span></div>
+        <div className="text-sm text-[#1a1a1a]/70">{t('seller.sort_by')}: <span className="font-semibold text-[#1a1a1a]">{t('seller.date_added')} ▾</span></div>
 
         {/* Product list */}
         <div className="space-y-3 pb-32">
@@ -100,17 +102,17 @@ export const SellerProducts = () => {
                 </div>
                 <div className="text-lg font-bold mt-1" style={{ color: '#A35233' }}>${Number(p.price).toFixed(2)}</div>
                 <div className={`text-sm mt-1 ${p.inventory_quantity === 0 ? 'text-red-600 font-semibold' : 'text-[#1a1a1a]/60'}`}>
-                  Stock: {p.inventory_quantity}
+                  {t('seller.stock')}: {p.inventory_quantity}
                 </div>
                 <div className="mt-2">{statusBadge(p)}</div>
                 {p.status === 'under_review' && (
-                  <div className="text-xs text-red-600 mt-1 flex items-center gap-1">ⓘ Flagged for compliance review</div>
+                  <div className="text-xs text-red-600 mt-1 flex items-center gap-1">ⓘ {t('seller.flagged_compliance')}</div>
                 )}
               </div>
             </div>
           ))}
           {visible.length === 0 && (
-            <div className="text-center text-[#1a1a1a]/50 py-12">No products found</div>
+            <div className="text-center text-[#1a1a1a]/50 py-12">{t('seller.no_products_found')}</div>
           )}
         </div>
       </div>
@@ -121,7 +123,7 @@ export const SellerProducts = () => {
         className="fixed bottom-8 right-6 px-6 py-4 rounded-full text-white font-bold flex items-center gap-2 shadow-lg"
         style={{ background: '#3D7B2E' }}
       >
-        <Plus className="h-5 w-5" /> Add Product
+        <Plus className="h-5 w-5" /> {t('seller.add_product')}
       </button>
     </div>
   );

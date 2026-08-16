@@ -264,17 +264,17 @@ export const Home = () => {
   const prayerTime = next ? formatPrayerTime12(next) : '';
 
   const cityLabel = location
-    ? `${location.area || location.city || 'Your area'}${location.country ? ', ' + location.country : ''}`
+    ? `${location.area || location.city || t('home.your_area')}${location.country ? ', ' + location.country : ''}`
     : locationLoading
-      ? 'Locating...'
-      : 'Set location';
+      ? t('home.locating')
+      : t('home.set_location');
   const prayerStatusLabel = next
     ? (t(`prayer.${next.key.toLowerCase()}`) !== `prayer.${next.key.toLowerCase()}` ? t(`prayer.${next.key.toLowerCase()}`) : next.label)
     : prayerTimesLoading
       ? t('home.getting_location')
       : location
-        ? 'Unavailable'
-        : 'Set location';
+        ? t('home.unavailable')
+        : t('home.set_location');
   const notificationItems = notificationsEnabled ? cachedNotifications : [];
   const displayedNews: Array<Partial<NewsItem>> =
     news.length ? news : Array.from({ length: 2 }, () => ({}));
@@ -288,7 +288,7 @@ export const Home = () => {
 
   const quickActions = [
     { label: t('action.quran'), img: assetUrl(qaQuranAsset), onClick: () => navigate('/quran') },
-    { label: 'Islamic AI', img: assetUrl(qaAiAsset), onClick: () => setIsChatOpen(true) },
+    { label: t('home.islamic_ai'), img: assetUrl(qaAiAsset), onClick: () => setIsChatOpen(true) },
     { label: t('nav.places'), img: assetUrl(qaPlacesAsset), onClick: () => navigate('/places') },
     { label: t('action.travel'), img: assetUrl(qaHajjAsset), onClick: () => navigate('/hajj') },
   ];
@@ -364,7 +364,7 @@ export const Home = () => {
               {t('home.greeting')}!
             </p>
             <p className="text-[18px] font-bold mt-0.5" style={{ color: '#E8D5C4' }}>
-              {userName || 'Friend'}
+              {userName || t('home.friend')}
             </p>
           </div>
           <button
@@ -394,10 +394,10 @@ export const Home = () => {
           style={{ background: '#FFF5E5', borderColor: '#E8D5C4' }}
         >
           <span className="text-[13px] font-semibold" style={{ color: '#2C1309' }}>
-            Help Us Improve With Your Feedback!
+            {t('home.feedback_improve')}
           </span>
           <span className="text-[13px] font-semibold flex items-center gap-0.5" style={{ color: '#CE5728' }}>
-            Start <span aria-hidden>›</span>
+            {t('home.start')} <span aria-hidden>›</span>
           </span>
         </button>
 
@@ -434,10 +434,10 @@ export const Home = () => {
           <div className="flex items-center justify-between px-4 py-3" style={{ background: '#F1E0C8' }}>
             <div>
               <p className="text-[15px] font-bold" style={{ color: '#2C1309' }}>
-                Notifications
+                {t('prayer.notifications_title')}
               </p>
               <p className="text-[11px]" style={{ color: '#8B6F5C' }}>
-                Prayer time alerts
+                {t('prayer.alerts_subtitle')}
               </p>
             </div>
             <button
@@ -478,10 +478,10 @@ export const Home = () => {
             ) : (
               <div className="px-4 py-8 text-center">
                 <p className="text-[14px] font-semibold" style={{ color: '#2C1309' }}>
-                  No new notifications
+                  {t('prayer.no_notifications')}
                 </p>
                 <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
-                  New alerts will appear here for 24 hours after they arrive.
+                  {t('prayer.alerts_desc')}
                 </p>
               </div>
             )}

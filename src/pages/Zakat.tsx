@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Info, Lightbulb, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const CREAM = '#FFF5E5';
 const CARD_CREAM = '#FFF8F0';
@@ -132,6 +133,7 @@ const FieldRow = ({
 
 export const Zakat = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [currency, setCurrency] = useState<CurrencyCode>('GBP');
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [currencySearch, setCurrencySearch] = useState('');
@@ -189,9 +191,9 @@ export const Zakat = () => {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="font-serif italic text-xl font-bold" style={{ color: BROWN_DARK, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            Checkout
+            {t('menu.zakat')}
           </h1>
-          <span className="text-sm" style={{ color: BROWN_DARK, opacity: 0.75 }}>Step 1 of 2</span>
+          <span className="text-sm" style={{ color: BROWN_DARK, opacity: 0.75 }}>{t('zakat.step_1_of_2')}</span>
         </div>
 
         <div className="flex-1 px-5 pb-40 overflow-y-auto">
@@ -210,14 +212,14 @@ export const Zakat = () => {
               <span>{active.code}</span>
               <ChevronDown className="h-3.5 w-3.5 text-white" />
             </button>
-            <p className="mt-5 text-white/85 text-xs tracking-[0.18em] font-semibold">CURRENT NISAB VALUE</p>
+            <p className="mt-5 text-white/85 text-xs tracking-[0.18em] font-semibold">{t('zakat.nisab_value_title')}</p>
             <p
               className="mt-2 text-white text-5xl font-bold italic"
               style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
             >
               {fmt(activeNisab, active.symbol)}
             </p>
-            <p className="mt-3 text-white/80 text-sm">Based on Today's Gold Price</p>
+            <p className="mt-3 text-white/80 text-sm">{t('zakat.based_on_gold_price')}</p>
           </div>
 
           <div className="mt-5 rounded-full p-1.5 flex" style={{ backgroundColor: CARD_CREAM }}>
@@ -243,14 +245,14 @@ export const Zakat = () => {
             className="text-center mt-8 mb-5 italic text-3xl"
             style={{ color: BROWN_DEEP, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
           >
-            Your Wealth
+            {t('zakat.your_wealth')}
           </h2>
 
           <div className="space-y-5">
-            <FieldRow label="Cash & Savings" symbol={active.symbol} value={cash} onChange={setCash} />
+            <FieldRow label={t('zakat.cash_savings')} symbol={active.symbol} value={cash} onChange={setCash} />
 
             <FieldRow
-              label="Gold Value"
+              label={t('zakat.gold_value')}
               symbol={goldMode === 'VALUE' ? active.symbol : undefined}
               value={gold}
               onChange={setGold}
@@ -277,10 +279,10 @@ export const Zakat = () => {
               }
             />
 
-            <FieldRow label="Silver Value" symbol={active.symbol} value={silver} onChange={setSilver} />
-            <FieldRow label="Business Assets" symbol={active.symbol} value={business} onChange={setBusiness} />
-            <FieldRow label="Money Owed to You" symbol={active.symbol} value={moneyOwed} onChange={setMoneyOwed} />
-            <FieldRow label="Investments & Stocks" symbol={active.symbol} value={investments} onChange={setInvestments} />
+            <FieldRow label={t('zakat.silver_value')} symbol={active.symbol} value={silver} onChange={setSilver} />
+            <FieldRow label={t('zakat.business_assets')} symbol={active.symbol} value={business} onChange={setBusiness} />
+            <FieldRow label={t('zakat.money_owed')} symbol={active.symbol} value={moneyOwed} onChange={setMoneyOwed} />
+            <FieldRow label={t('zakat.investments_stocks')} symbol={active.symbol} value={investments} onChange={setInvestments} />
           </div>
 
           <div className="mt-7 rounded-3xl p-5 flex items-start gap-4" style={{ backgroundColor: CARD_CREAM }}>
@@ -291,9 +293,9 @@ export const Zakat = () => {
               <Lightbulb className="h-5 w-5" style={{ color: '#2B5E2B' }} />
             </div>
             <div>
-              <p className="font-bold mb-1" style={{ color: BROWN_DARK }}>Did you know?</p>
+              <p className="font-bold mb-1" style={{ color: BROWN_DARK }}>{t('zakat.did_you_know')}</p>
               <p className="text-sm leading-relaxed" style={{ color: BROWN_DARK, opacity: 0.85 }}>
-                Zakat is 2.5% of your total zakatable wealth, provided it remains above the Nisab threshold for a full lunar year (Hawl).
+                {t('zakat.did_you_know_desc')}
               </p>
             </div>
           </div>
@@ -305,7 +307,7 @@ export const Zakat = () => {
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold tracking-[0.18em]" style={{ color: BROWN_DARK }}>
-              ZAKATABLE WEALTH
+              {t('zakat.zakatable_wealth')}
             </span>
             <span
               className="text-xl italic font-bold"
@@ -337,7 +339,7 @@ export const Zakat = () => {
             className="w-full h-14 rounded-full text-white font-bold tracking-wider flex items-center justify-center gap-3"
             style={{ backgroundColor: BROWN_DEEP }}
           >
-            CALCULATE ZAKAT <ArrowRight className="h-5 w-5" />
+            {t('zakat.calculate_btn')} <ArrowRight className="h-5 w-5" />
           </button>
         </div>
 
@@ -354,7 +356,7 @@ export const Zakat = () => {
               <div className="mx-auto mb-4 h-1 w-12 rounded-full" style={{ backgroundColor: '#D8B991' }} />
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <h2 className="text-lg font-bold" style={{ color: BROWN_DARK }}>Select currency</h2>
+                  <h2 className="text-lg font-bold" style={{ color: BROWN_DARK }}>{t('zakat.select_currency')}</h2>
                   <p className="text-xs mt-0.5" style={{ color: BROWN_DARK, opacity: 0.62 }}>
                     {active.code} - {active.name}
                   </p>
@@ -379,7 +381,7 @@ export const Zakat = () => {
                   autoFocus
                   value={currencySearch}
                   onChange={(event) => setCurrencySearch(event.target.value)}
-                  placeholder="Search currency"
+                  placeholder={t('zakat.search_currency')}
                   className="h-12 flex-1 bg-transparent outline-none text-sm font-medium placeholder:opacity-50"
                   style={{ color: BROWN_DARK }}
                 />
@@ -388,7 +390,7 @@ export const Zakat = () => {
               <div className="max-h-[48vh] overflow-y-auto rounded-2xl" style={{ backgroundColor: CARD_CREAM }}>
                 {filteredCurrencies.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm" style={{ color: BROWN_DARK, opacity: 0.65 }}>
-                    No currencies found
+                    {t('zakat.no_currencies_found')}
                   </div>
                 ) : (
                   filteredCurrencies.map((c) => {
@@ -416,7 +418,7 @@ export const Zakat = () => {
                             {c.name}
                           </span>
                           <span className="block text-xs" style={{ color: BROWN_DARK, opacity: 0.58 }}>
-                            Symbol: {c.symbol}
+                            {t('zakat.symbol')}: {c.symbol}
                           </span>
                         </span>
                         {selected && <Check className="h-4 w-4 shrink-0" style={{ color: BROWN_DEEP }} />}
