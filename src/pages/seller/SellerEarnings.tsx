@@ -51,7 +51,7 @@ export const SellerEarnings = () => {
 
   return (
     <div className="min-h-screen w-full max-w-md mx-auto" style={{ background: '#FFF1DD' }}>
-      <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3">
+      <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)}><ArrowLeft className="h-5 w-5" /></button>
         <h1 className="text-xl font-bold">Earnings</h1>
       </div>

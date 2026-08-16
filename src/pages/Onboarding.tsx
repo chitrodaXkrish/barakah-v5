@@ -78,7 +78,7 @@ export const Onboarding = () => {
             />
           ) : null
         )}
-        <div className="flex justify-end px-6 pt-6 relative z-10">
+        <div className="flex justify-end px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] relative z-10">
           <button onClick={finish} className="text-white/95 text-base font-medium">
             {t('onboarding.skip')}
           </button>
@@ -106,7 +106,7 @@ export const Onboarding = () => {
       style={{ background: slide.bg }}
     >
       {/* Skip */}
-      <div className="flex justify-end px-6 pt-6 relative z-10">
+      <div className="flex justify-end px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] relative z-10">
         <button
           onClick={finish}
           className="text-white/95 text-base font-medium"

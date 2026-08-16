@@ -95,7 +95,7 @@ export const ProductDetail = () => {
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
         {/* Top bar */}
-        <div className="bg-white px-4 pt-4 pb-3 flex items-center justify-between">
+        <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2" style={{ color: BROWN_DARK }}>
             <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
               <ArrowLeft className="h-4 w-4" />
@@ -171,7 +171,7 @@ export const ProductDetail = () => {
         </div>
 
         {/* Sticky CTA */}
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-6 pt-3 bg-gradient-to-t from-[#FFF5E5] via-[#FFF5E5]/95 to-transparent">
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 bg-gradient-to-t from-[#FFF5E5] via-[#FFF5E5]/95 to-transparent">
           <button
             onClick={handleAdd}
             className="w-full h-14 rounded-full text-white text-lg font-bold shadow-lg"

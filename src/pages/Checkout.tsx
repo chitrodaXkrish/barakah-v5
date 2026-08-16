@@ -89,7 +89,7 @@ export const Checkout = () => {
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
         {/* Header */}
-        <div className="bg-white px-4 pt-4 pb-3 flex items-center justify-between">
+        <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between">
           <button onClick={() => navigate('/cart')} className="flex items-center gap-2" style={{ color: BROWN_DARK }}>
             <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
               <ArrowLeft className="h-4 w-4" />
@@ -228,7 +228,7 @@ export const Checkout = () => {
         </div>
 
         {/* Place Order */}
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-4 pb-6 pt-3 bg-gradient-to-t from-[#FFF5E5] via-[#FFF5E5]/95 to-transparent">
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 bg-gradient-to-t from-[#FFF5E5] via-[#FFF5E5]/95 to-transparent">
           <button
             onClick={handlePlaceOrder}
             disabled={processing}

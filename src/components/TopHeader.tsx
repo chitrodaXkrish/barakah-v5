@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { Capacitor } from '@capacitor/core';
 
 interface TopHeaderProps {
   onMenuClick: () => void;
@@ -18,8 +19,15 @@ interface TopHeaderProps {
 }
 
 export const TopHeader = ({ onMenuClick, title, rightContent, onSearchClick, showSearch, className, titleClassName, titleStyle, buttonClassName, leftAlignTitle }: TopHeaderProps) => {
+  const isIos = Capacitor.getPlatform() === 'ios';
+
   return (
-    <header className={cn("relative z-20 px-5 py-4 flex items-center font-arabic", leftAlignTitle ? "justify-start gap-3" : "justify-between", className)}>
+    <header 
+      className={cn("relative z-20 px-5 py-4 flex items-center font-arabic", leftAlignTitle ? "justify-start gap-3" : "justify-between", className)}
+      style={{
+        paddingTop: isIos ? 'calc(env(safe-area-inset-top) + 1rem)' : undefined
+      }}
+    >
       <Button 
         variant="ghost" 
         size="icon" 

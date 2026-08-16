@@ -42,7 +42,7 @@ export const SellerOrderDetail = () => {
 
   return (
     <div className="min-h-screen w-full max-w-md mx-auto pb-16" style={{ background: '#FFF1DD' }}>
-      <div className="bg-white px-4 pt-12 pb-4 flex items-center justify-between">
+      <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center justify-between">
         <button onClick={() => navigate(-1)}><ArrowLeft className="h-5 w-5" /></button>
         <h1 className="text-lg font-bold">Order {shortId}</h1>
         <button><Printer className="h-5 w-5" /></button>

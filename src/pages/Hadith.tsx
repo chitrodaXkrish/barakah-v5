@@ -83,7 +83,7 @@ export const Hadith = () => {
       <SideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
       {/* Hero header */}
-      <div className="px-5 pt-12 pb-10" style={{ background: HERO_GRAD, color: '#FFF5E5' }}>
+      <div className="px-5 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-10" style={{ background: HERO_GRAD, color: '#FFF5E5' }}>
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}

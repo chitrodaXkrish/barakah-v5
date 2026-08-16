@@ -205,7 +205,7 @@ export const PrayerTimes = () => {
       style={{ background: CREAM }}
     >
       {/* Top bar */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ background: CREAM }}>
+      <div className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3" style={{ background: CREAM }}>
         <button
           onClick={() => setIsMenuOpen(true)}
           className="p-2 -ml-2"

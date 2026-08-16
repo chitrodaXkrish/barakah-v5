@@ -72,7 +72,7 @@ export const SellerAddProduct = () => {
 
   return (
     <div className="min-h-screen w-full max-w-md mx-auto pb-32" style={{ background: '#FFF1DD' }}>
-      <div className="bg-white px-4 pt-12 pb-4 flex items-center gap-3">
+      <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)}><ArrowLeft className="h-5 w-5" /></button>
         <h1 className="text-xl font-bold mx-auto pr-5">{t('seller.add_product')}</h1>
       </div>

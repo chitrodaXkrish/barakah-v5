@@ -23,11 +23,26 @@ const PushInitializer = () => {
   return null;
 };
 
+const IOSStatusBarOverlay = () => {
+  if (Capacitor.getPlatform() !== 'ios') return null;
+
+  return (
+    <div
+      className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md z-[9999] pointer-events-none"
+      style={{
+        height: 'calc(env(safe-area-inset-top) + 1.25rem)',
+        background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.08) 50%, rgba(0, 0, 0, 0) 100%)',
+      }}
+    />
+  );
+};
+
 // Eager — needed for first paint / auth flow
 import { Home } from "./pages/Home";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { Register } from "./pages/Register";
 import { Onboarding } from "./pages/Onboarding";
+
 
 // Lazy — split per route to shrink the initial bundle
 const Quran = lazy(() => import("./pages/Quran").then(m => ({ default: m.Quran })));
@@ -119,6 +134,7 @@ const App = () => (
                   <PushInitializer />
                   <Toaster />
                   <Sonner />
+                  <IOSStatusBarOverlay />
                   <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/loading" element={<LoadingScreen />} />

@@ -2012,7 +2012,7 @@ export const Forum = () => {
       <Layout showHeader={false} pageBackgroundColor={CREAM_BG}>
         <div className="min-h-screen pb-28" style={{ background: CREAM_BG, fontFamily: "'Inter', sans-serif" }}>
           {/* Top bar */}
-          <div className="flex items-center justify-between px-4 pt-4 pb-3" style={{ background: CREAM_BG }}>
+          <div className="flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3" style={{ background: CREAM_BG }}>
             <button
               onClick={() => setSelectedCommunity(null)}
               className="flex items-center gap-2"

@@ -192,7 +192,7 @@ export const Qibla = () => {
     <Layout>
       <div className="min-h-screen" style={{ background: CREAM }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-2">
           <button
             aria-label="Back"
             onClick={() => navigate(-1)}

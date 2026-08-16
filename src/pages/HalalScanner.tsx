@@ -342,7 +342,7 @@ const ScanView = ({
   }, []);
 
   return (
-    <div className="px-5 pt-4 pb-10">
+    <div className="px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="h-9 w-9 flex items-center justify-center -ml-1" aria-label="Back">
@@ -600,7 +600,7 @@ const ResultView = ({
   return (
     <div className="pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3">
+      <div className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3">
         <button onClick={onBack} className="h-9 w-9 flex items-center justify-center -ml-1" aria-label="Back">
           <ArrowLeft className="h-5 w-5" style={{ color: BROWN }} strokeWidth={1.75} />
         </button>

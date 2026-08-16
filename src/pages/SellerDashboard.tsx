@@ -222,7 +222,7 @@ export const SellerDashboard: React.FC = () => {
   return (
     <div className="min-h-screen w-full max-w-md mx-auto bg-[#FFF1DD] pb-20 flex flex-col">
       {/* Top Header */}
-      <div className="bg-white px-4 pt-10 pb-3 flex items-center justify-between border-b border-[#E8D5C4] sticky top-0 z-20">
+      <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between border-b border-[#E8D5C4] sticky top-0 z-20">
         <button
           onClick={() => navigate('/shop')}
           className="flex items-center gap-2 text-[#1a1a1a] font-bold text-sm hover:opacity-80 transition-opacity"

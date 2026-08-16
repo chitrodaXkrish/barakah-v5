@@ -91,7 +91,7 @@ export const ZakatResult = () => {
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM }}>
+        <div className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM }}>
           <button
             onClick={() => navigate('/zakat')}
             className="h-9 w-9 flex items-center justify-center"
@@ -225,7 +225,7 @@ export const ZakatResult = () => {
 
         {/* Bottom CTA */}
         <div
-          className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pt-5 pb-7 rounded-t-[28px]"
+          className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+1.75rem)] rounded-t-[28px]"
           style={{ backgroundColor: '#FFF5E5', boxShadow: '0 -8px 30px rgba(0,0,0,0.06)' }}
         >
           <button

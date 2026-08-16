@@ -712,7 +712,7 @@ export const SellerOnboarding = () => {
   return (
     <div className="min-h-screen w-full max-w-md mx-auto flex flex-col bg-[#FFF1DD]">
       {/* Header */}
-      <div className="bg-white px-4 pt-10 pb-3 flex items-center justify-between border-b border-[#E8D5C4] sticky top-0 z-20">
+      <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between border-b border-[#E8D5C4] sticky top-0 z-20">
         <button
           onClick={handleBack}
           className="p-1 rounded-full hover:bg-gray-100 transition-colors"
@@ -1346,7 +1346,7 @@ export const SellerOnboarding = () => {
 
       {/* Fixed Bottom Action Bar */}
       {step >= 1 && step <= 6 && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-[#E8D5C4] p-3 flex items-center gap-3 z-30 shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-[#E8D5C4] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] px-3 pt-3 flex items-center gap-3 z-30 shadow-lg">
           {step > 1 && (
             <Button
               variant="outline"

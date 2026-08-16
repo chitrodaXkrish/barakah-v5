@@ -25,7 +25,7 @@ export const ShopCategories = () => {
   return (
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen" style={{ backgroundColor: CREAM }}>
-        <div className="bg-white px-4 pt-4 pb-5 flex items-center gap-3">
+        <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-5 flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigate(-1)}

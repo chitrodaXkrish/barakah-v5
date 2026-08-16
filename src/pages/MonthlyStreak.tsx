@@ -142,7 +142,7 @@ export const MonthlyStreak = () => {
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto" style={{ background: CREAM, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <header className="px-5 pt-5 pb-4 flex items-center gap-3 bg-white">
+      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center gap-3 bg-white">
         <button
           onClick={() => navigate('/progress')}
           className="h-10 w-10 rounded-full border flex items-center justify-center"

@@ -259,7 +259,7 @@ export const Register = () => {
       }}
     >
       {/* Language selector */}
-      <div className="absolute top-3 right-3 z-30">
+      <div className="absolute top-[calc(env(safe-area-inset-top)+0.75rem)] right-3 z-30">
         <LanguageSelector />
       </div>
 

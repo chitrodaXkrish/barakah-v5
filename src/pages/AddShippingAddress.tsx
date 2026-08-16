@@ -85,7 +85,7 @@ export const AddShippingAddress = () => {
   return (
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
-        <div className="px-4 pt-5 pb-4 flex items-center gap-3">
+        <div className="px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
             className="h-10 w-10 rounded-full border flex items-center justify-center"
@@ -141,7 +141,7 @@ export const AddShippingAddress = () => {
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-4 pb-6 pt-3">
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3">
           <button
             onClick={handleSave}
             className="w-full h-14 rounded-full text-white text-lg font-bold shadow-lg"

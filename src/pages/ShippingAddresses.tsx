@@ -33,7 +33,7 @@ export const ShippingAddresses = () => {
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
         {/* Header */}
-        <div className="px-4 pt-5 pb-4 flex items-center gap-3" style={{ backgroundColor: CREAM }}>
+        <div className="px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-4 flex items-center gap-3" style={{ backgroundColor: CREAM }}>
           <button
             onClick={() => navigate(-1)}
             className="h-10 w-10 rounded-full border flex items-center justify-center"

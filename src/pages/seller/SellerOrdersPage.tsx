@@ -58,7 +58,7 @@ export const SellerOrdersPage = () => {
 
   return (
     <div className="min-h-screen w-full max-w-md mx-auto" style={{ background: CREAM }}>
-      <div className="px-4 pt-12 pb-4 flex items-center gap-3" style={{ background: CREAM }}>
+      <div className="px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center gap-3" style={{ background: CREAM }}>
         <button
           type="button"
           onClick={() => navigate(-1)}

@@ -21,7 +21,7 @@ export const Hajj = () => {
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-5 pt-4 pb-3"
+        className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3"
         style={{
           background: WHITE,
           borderBottom: `1px solid ${BORDER}`,

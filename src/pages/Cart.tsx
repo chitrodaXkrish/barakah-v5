@@ -41,7 +41,7 @@ export const Cart = () => {
       <Layout showHeader={false} showNavigation={false}>
         <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
           {/* Header */}
-          <div className="bg-white px-4 pt-4 pb-3 flex items-center justify-between">
+          <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between">
             <button onClick={() => navigate('/shop')} className="flex items-center gap-2" style={{ color: BROWN_DARK }}>
               <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
                 <ArrowLeft className="h-4 w-4" />
@@ -74,7 +74,7 @@ export const Cart = () => {
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
         {/* Header */}
-        <div className="bg-white px-4 pt-4 pb-3 flex items-center justify-between">
+        <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between">
           <button onClick={() => navigate('/shop')} className="flex items-center gap-2" style={{ color: BROWN_DARK }}>
             <span className="h-9 w-9 rounded-full border flex items-center justify-center" style={{ borderColor: BROWN_DARK }}>
               <ArrowLeft className="h-4 w-4" />

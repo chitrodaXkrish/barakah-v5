@@ -6,11 +6,13 @@ import { ScanBarcode } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { assetUrl } from '@/lib/assetUrl';
+import { Capacitor } from '@capacitor/core';
 
 const PILL_BG = '#FFFFFF';
 const ACTIVE_BG = '#F5E3D3';
 const TEXT_ACTIVE = '#7A3B1E';
 const TEXT_INACTIVE = '#9A9A9A';
+
 
 // Custom image icon components
 const HomeIconImg = ({ isActive }: { isActive: boolean }) => (
@@ -75,10 +77,15 @@ export const BottomNavigation = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  const isIos = Capacitor.getPlatform() === 'ios';
+
   return (
     <nav
-      className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-30 px-3 pb-3 pt-2 font-arabic"
-      style={{ backgroundColor: '#FFF5E5' }}
+      className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-30 px-3 pt-2 font-arabic"
+      style={{
+        backgroundColor: '#FFF5E5',
+        paddingBottom: isIos ? 'calc(env(safe-area-inset-bottom) + 0.75rem)' : '0.75rem'
+      }}
     >
       <div className="flex items-center gap-2 w-full">
         <div

@@ -215,7 +215,7 @@ const StarBadge = ({ n }: { n: number }) => (
 const TopBar = ({ onBack }: { onBack: () => void }) => {
   const { t } = useLanguage();
   return (
-    <div className="px-5 pt-4 pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM_BG }}>
+    <div className="px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM_BG }}>
       <div className="flex items-center gap-3">
         <button onClick={onBack} aria-label="Back" className="-ml-1">
           <ArrowLeft className="h-5 w-5" style={{ color: BROWN_ACCENT }} strokeWidth={2} />
