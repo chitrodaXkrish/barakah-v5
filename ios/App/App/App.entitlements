@@ -7,5 +7,10 @@
         <!-- Replace with your domain when you enable Associated Domains -->
         <!-- Example: applinks:example.com -->
     </array>
+
+    <key>com.apple.developer.applesignin</key>
+    <array>
+        <string>Default</string>
+    </array>
 </dict>
 </plist>
