@@ -489,7 +489,7 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
         backgroundColor: CREAM_BG,
         color: BROWN,
         height: '100dvh',
-        paddingTop: 'env(safe-area-inset-top)',
+        paddingTop: Capacitor.getPlatform() === 'ios' ? 'env(safe-area-inset-top)' : 0,
       }}
     >
       <ChatView
