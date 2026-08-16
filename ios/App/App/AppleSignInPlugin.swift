@@ -4,7 +4,13 @@ import AuthenticationServices
 import CryptoKit
 
 @objc(AppleSignInPlugin)
-public class AppleSignInPlugin: CAPPlugin, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+public class AppleSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    public let identifier = "AppleSignInPlugin"
+    public let jsName = "AppleSignIn"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise)
+    ]
+
     private var currentCall: CAPPluginCall?
     private var rawNonce: String?
 
