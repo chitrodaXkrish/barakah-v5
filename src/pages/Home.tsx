@@ -12,6 +12,7 @@ import { BottomNavigation } from '@/components/BottomNavigation';
 import { LocationPicker } from '@/components/LocationPicker';
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
 import qaAiAsset from '@/assets/qa-ai-new.png.asset.json';
 import qaPlacesAsset from '@/assets/qa-places-new.png.asset.json';
@@ -125,6 +126,7 @@ const timeAgo = (iso?: string | null) => {
 
 export const Home = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const { location, loading: locationLoading } = useGlobalLocation();
   const {
@@ -267,9 +269,9 @@ export const Home = () => {
       ? 'Locating...'
       : 'Set location';
   const prayerStatusLabel = next
-    ? next.label
+    ? (t(`prayer.${next.key.toLowerCase()}`) !== `prayer.${next.key.toLowerCase()}` ? t(`prayer.${next.key.toLowerCase()}`) : next.label)
     : prayerTimesLoading
-      ? 'Loading'
+      ? t('home.getting_location')
       : location
         ? 'Unavailable'
         : 'Set location';
@@ -285,10 +287,10 @@ export const Home = () => {
   };
 
   const quickActions = [
-    { label: 'Quran', img: assetUrl(qaQuranAsset), onClick: () => navigate('/quran') },
+    { label: t('action.quran'), img: assetUrl(qaQuranAsset), onClick: () => navigate('/quran') },
     { label: 'Islamic AI', img: assetUrl(qaAiAsset), onClick: () => setIsChatOpen(true) },
-    { label: 'Nearby', img: assetUrl(qaPlacesAsset), onClick: () => navigate('/places') },
-    { label: 'Hajj Packages', img: assetUrl(qaHajjAsset), onClick: () => navigate('/hajj') },
+    { label: t('nav.places'), img: assetUrl(qaPlacesAsset), onClick: () => navigate('/places') },
+    { label: t('action.travel'), img: assetUrl(qaHajjAsset), onClick: () => navigate('/hajj') },
   ];
 
   return (
@@ -359,7 +361,7 @@ export const Home = () => {
         <div className="relative z-10 px-5 pt-5 flex items-start justify-between">
           <div>
             <p className="text-[12px] font-medium" style={{ color: '#E8D5C4', opacity: 0.85 }}>
-              As-Salaam-Alaikum!
+              {t('home.greeting')}!
             </p>
             <p className="text-[18px] font-bold mt-0.5" style={{ color: '#E8D5C4' }}>
               {userName || 'Friend'}
@@ -505,7 +507,7 @@ export const Home = () => {
               className="text-[18px]"
               style={{ color: '#2C1309', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700 }}
             >
-              News
+              {t('news.title')}
             </h2>
           </div>
           <button
@@ -513,7 +515,7 @@ export const Home = () => {
             className="text-[12px] font-medium"
             style={{ color: '#5F5A4F' }}
           >
-            View More
+            {t('news.load_more')}
           </button>
         </div>
 

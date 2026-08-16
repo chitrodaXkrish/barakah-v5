@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { BottomNavigation } from '@/components/BottomNavigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type NewsCategory = 'all' | 'world' | 'education' | 'community' | 'charity' | 'business' | 'politics';
 
@@ -149,6 +150,7 @@ const toNewsItem = (article: FetchedNewsArticle): NewsItem => ({
 
 export const News = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<NewsCategory>('all');
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,7 +302,7 @@ export const News = () => {
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <h1 className="text-xl font-bold" style={{ color: BROWN }}>News</h1>
+              <h1 className="text-xl font-bold" style={{ color: BROWN }}>{t('news.title')}</h1>
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
@@ -330,7 +332,7 @@ export const News = () => {
                     color: active ? '#fff' : BROWN,
                   }}
                 >
-                  {label}
+                  {t(`news.category.${key}`) !== `news.category.${key}` ? t(`news.category.${key}`) : label}
                 </button>
               );
             })}

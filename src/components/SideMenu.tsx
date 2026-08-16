@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
-import { useLanguage, type Language } from '@/contexts/LanguageContext';
+import { LANGUAGE_OPTIONS, useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cancelPrayerNotifications } from '@/lib/prayerNotifications';
@@ -39,22 +39,11 @@ const MUTED = '#9A8270';
 const SERIF = "'Plus Jakarta Sans', sans-serif";
 const ITALIC = "'Cormorant Garamond', 'Plus Jakarta Sans', sans-serif";
 
-const LANG_OPTIONS: { code: Language; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'ur', label: 'Urdu' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'tr', label: 'Turkish' },
-  { code: 'id', label: 'Indonesian' },
-  { code: 'ms', label: 'Malay' },
-  { code: 'ta', label: 'Tamil' },
-  { code: 'bn', label: 'Bengali' },
-];
-
 export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const navigate = useNavigate();
   const { user, userRole, signOut } = useAuth();
   const { location } = useGlobalLocation();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
 
   const [notifications, setNotifications] = useState<boolean>(() => {
     return localStorage.getItem('barakah_notifications_enabled') !== 'false';
@@ -125,18 +114,19 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   };
 
   const handleLogout = async () => {
+    shareData.text = t('menu.share_text');
     try {
       await signOut();
       onClose();
       navigate('/login');
     } catch {
-      toast.error('Could not sign out');
+      toast.error(t('menu.sign_out_error'));
     }
   };
 
   const handleShare = async () => {
     const shareData = {
-      title: 'Barakah App',
+      title: t('app.name'),
       text: 'Discover Barakah — your Islamic lifestyle companion.',
       url: window.location.origin,
     };
@@ -145,7 +135,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(shareData.url);
-        toast.success('Link copied to clipboard');
+        toast.success(t('menu.link_copied'));
       }
     } catch {
       /* user cancelled */
@@ -155,10 +145,10 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const displayName =
     user?.displayName ||
     user?.email?.split('@')[0] ||
-    'Guest User';
+    t('menu.guest_user');
   const initial = (displayName?.[0] || 'U').toUpperCase();
-  const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : 'Set location';
-  const currentLang = LANG_OPTIONS.find(l => l.code === language)?.label || 'English';
+  const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : t('home.set_location');
+  const currentLang = LANGUAGE_OPTIONS.find(l => l.code === language)?.nativeLabel || 'English';
 
   return (
     <>
@@ -229,28 +219,28 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-2 pb-6">
-          <Section title="PROFILE">
+          <Section title={t('menu.section.profile')}>
             <Row
               icon={<User className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="View/Edit Profile"
+              label={t('menu.view_edit_profile')}
               onClick={() => go('/account')}
             />
           </Section>
 
           {userRole === 'seller' && (
-            <Section title="SELLER">
+            <Section title={t('menu.section.seller')}>
               <Row
                 icon={<LayoutDashboard className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-                label="Seller Dashboard"
+                label={t('menu.seller_dashboard')}
                 onClick={() => go('/seller-dashboard')}
               />
             </Section>
           )}
 
-          <Section title="ORDERS">
+          <Section title={t('menu.section.orders')}>
             <Row
               icon={<ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Orders"
+              label={t('menu.orders')}
               onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/cart')}
               trailing={
                 orderCount > 0 ? (
@@ -265,18 +255,18 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             />
           </Section>
 
-          <Section title="HELP">
+          <Section title={t('menu.section.help')}>
             <Row
               icon={<HelpCircle className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Help and Support"
+              label={t('menu.help_support')}
               onClick={() => go('/faq')}
             />
           </Section>
 
-          <Section title="PREFERENCES">
+          <Section title={t('menu.section.preferences')}>
             <Row
               icon={<MapPin className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Location"
+              label={t('menu.location')}
               onClick={() => go('/places')}
               trailing={
                 <span className="text-[14px]" style={{ color: ACCENT_ORANGE, fontFamily: SERIF }}>
@@ -286,12 +276,12 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             />
             <Row
               icon={<Bell className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Notifications"
+              label={t('menu.notifications')}
               onClick={() => setNotifications(v => !v)}
               trailing={
                 <button
                   onClick={(e) => { e.stopPropagation(); setNotifications(v => !v); }}
-                  aria-label="Toggle notifications"
+                  aria-label={t('menu.toggle_notifications')}
                   className="relative w-[46px] h-[26px] rounded-full transition-colors"
                   style={{ background: notifications ? ACCENT_ORANGE : '#C9B89D' }}
                 >
@@ -304,7 +294,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             />
             <Row
               icon={<Globe className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Language"
+              label={t('menu.language')}
               onClick={() => setLangOpen(true)}
               trailing={
                 <span className="text-[14px]" style={{ color: ACCENT_ORANGE }}>
@@ -314,33 +304,33 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             />
           </Section>
 
-          <Section title="APP SETUP">
+          <Section title={t('menu.section.app_setup')}>
             <Row
               icon={<LayoutGrid className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Widget Setup"
-              onClick={() => { toast.info('Widget setup coming soon'); onClose(); }}
+              label={t('menu.widget_setup')}
+              onClick={() => { toast.info(t('menu.widget_coming_soon')); onClose(); }}
             />
             <Row
               icon={<Share2 className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Share App"
+              label={t('menu.share_app')}
               onClick={handleShare}
             />
           </Section>
 
-          <Section title="LEGAL">
+          <Section title={t('menu.section.legal')}>
             <Row
               icon={<Info className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="About Us"
+              label={t('menu.about_us')}
               onClick={() => { toast.info('Barakah App · v1.0'); }}
             />
             <Row
               icon={<Shield className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Privacy Policy"
+              label={t('menu.privacy_policy')}
               onClick={() => go('/privacy-policy')}
             />
             <Row
               icon={<FileText className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label="Terms of Service"
+              label={t('menu.terms_of_service')}
               onClick={() => go('/terms-of-service')}
             />
           </Section>
@@ -352,7 +342,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
               style={{ color: '#D63A1F' }}
             >
               <LogOut className="w-[22px] h-[22px]" strokeWidth={2} />
-              Log Out
+              {t('menu.sign_out')}
             </button>
           </div>
         </div>
@@ -375,10 +365,10 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             >
               <div className="mx-auto w-10 h-1 rounded-full mb-4" style={{ background: '#D9C39E' }} />
               <h3 className="text-[18px] font-semibold mb-3" style={{ color: BROWN }}>
-                Select Language
+                {t('language.select')}
               </h3>
               <div className="max-h-[280px] overflow-y-auto -mx-1">
-                {LANG_OPTIONS.map(opt => {
+                {LANGUAGE_OPTIONS.map(opt => {
                   const active = opt.code === language;
                   return (
                     <button
@@ -387,7 +377,10 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
                       className="w-full flex items-center justify-between px-3 py-3 rounded-xl"
                       style={{ color: BROWN, background: active ? '#F5E6D0' : 'transparent' }}
                     >
-                      <span className="text-[15px]">{opt.label}</span>
+                      <span className="text-[15px]">{opt.nativeLabel}</span>
+                      <span className="ml-auto mr-3 text-[12px]" style={{ color: MUTED }}>
+                        {t(opt.labelKey)}
+                      </span>
                       {active && <Check className="w-4 h-4" style={{ color: ACCENT_ORANGE }} />}
                     </button>
                   );

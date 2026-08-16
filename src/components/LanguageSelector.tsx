@@ -1,4 +1,4 @@
-import { useLanguage, Language } from '@/contexts/LanguageContext';
+import { LANGUAGE_OPTIONS, useLanguage } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 import {
   DropdownMenu,
@@ -8,21 +8,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 
-const languages: { code: Language; label: string; nativeLabel: string }[] = [
-  { code: 'en', label: 'English', nativeLabel: 'English' },
-  { code: 'ur', label: 'Urdu', nativeLabel: 'اردو' },
-  { code: 'ar', label: 'Arabic', nativeLabel: 'العربية' },
-  { code: 'tr', label: 'Turkish', nativeLabel: 'Türkçe' },
-  { code: 'id', label: 'Indonesian', nativeLabel: 'Bahasa Indonesia' },
-  { code: 'ms', label: 'Malay', nativeLabel: 'Bahasa Melayu' },
-  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
-  { code: 'bn', label: 'Bengali', nativeLabel: 'বাংলা' },
-];
-
 export const LanguageSelector = () => {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
 
-  const currentLang = languages.find((l) => l.code === language);
+  const currentLang = LANGUAGE_OPTIONS.find((l) => l.code === language);
 
   return (
     <DropdownMenu>
@@ -41,7 +30,7 @@ export const LanguageSelector = () => {
         align="center" 
         className="w-48 rounded-xl border border-[#E8D2A8] bg-[#FFF8F3] shadow-lg"
       >
-        {languages.map((lang) => (
+        {LANGUAGE_OPTIONS.map((lang) => (
           <DropdownMenuItem
             key={lang.code}
             onClick={() => setLanguage(lang.code)}
@@ -51,7 +40,7 @@ export const LanguageSelector = () => {
             style={{ color: '#2C1309' }}
           >
             <span className="font-medium">{lang.nativeLabel}</span>
-            <span className="text-xs opacity-70">{lang.label}</span>
+            <span className="text-xs opacity-70">{t(lang.labelKey)}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
