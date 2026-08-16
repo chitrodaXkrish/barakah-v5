@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
@@ -26,6 +26,26 @@ const NATIVE_REDIRECT_URL = 'com.barakah.services://auth/callback';
 const isNative = () => Capacitor.isNativePlatform();
 const isNativeAuthCallback = (url?: string | null) =>
   Boolean(url?.startsWith('com.barakah.services://auth/'));
+
+const decodeOAuthMessage = (message: string) => {
+  let decoded = message.replace(/\+/g, ' ');
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+};
+
+const isExternalGoogleCode = (code: string | null) =>
+  Boolean(code?.startsWith('4/0') || code?.startsWith('4%2F0'));
+
+const googleProviderSetupError =
+  'Google sign in is reaching Google, but Supabase cannot exchange the Google code. Check the Supabase Google provider: use a Web OAuth client ID/secret, add the Supabase /auth/v1/callback URL in Google Cloud, and keep any Android client ID after the Web client ID.';
 
 // Parse tokens from a Supabase OAuth callback URL (hash or query).
 const parseAuthUrl = (url: string) => {
@@ -105,6 +125,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
+  const pendingNativeOAuth = useRef<((result: { error: any; role?: UserRole }) => void) | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -168,12 +189,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (!isNativeAuthCallback(url)) return;
 
           if (error) {
-            console.error('OAuth callback error:', error);
+            const decodedError = decodeOAuthMessage(error);
+            console.error('OAuth callback error:', decodedError);
+            pendingNativeOAuth.current?.({
+              error: {
+                message: decodedError.includes('Unable to exchange external code')
+                  ? googleProviderSetupError
+                  : decodedError,
+              },
+              role: undefined,
+            });
+            pendingNativeOAuth.current = null;
           } else if (access_token && refresh_token) {
-            await supabase.auth.setSession({ access_token, refresh_token });
+            const { data, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (sessionError) {
+              pendingNativeOAuth.current?.({ error: sessionError, role: undefined });
+              pendingNativeOAuth.current = null;
+            } else {
+              const role = data.user ? await getUserRoleFromDatabase(data.user.id) : null;
+              pendingNativeOAuth.current?.({ error: null, role });
+              pendingNativeOAuth.current = null;
+            }
+          } else if (isExternalGoogleCode(code)) {
+            console.error('Received a raw Google OAuth code in the native app callback.');
+            pendingNativeOAuth.current?.({ error: { message: googleProviderSetupError }, role: undefined });
+            pendingNativeOAuth.current = null;
+          } else if (code) {
+            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeError) {
+              pendingNativeOAuth.current?.({ error: exchangeError, role: undefined });
+              pendingNativeOAuth.current = null;
+            } else {
+              const role = data.user ? await getUserRoleFromDatabase(data.user.id) : null;
+              pendingNativeOAuth.current?.({ error: null, role });
+              pendingNativeOAuth.current = null;
+            }
           }
         } catch (e) {
           console.error('appUrlOpen handler failed:', e);
+          pendingNativeOAuth.current?.({
+            error: { message: e instanceof Error ? e.message : 'Google sign in failed' },
+            role: undefined,
+          });
+          pendingNativeOAuth.current = null;
         } finally {
           try { await Browser.close(); } catch { }
         }
@@ -279,7 +337,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
         if (error) return { error, role: undefined };
         if (data?.url) {
+          const callbackResult = new Promise<{ error: any; role?: UserRole }>((resolve) => {
+            pendingNativeOAuth.current = resolve;
+            window.setTimeout(() => {
+              if (pendingNativeOAuth.current === resolve) {
+                pendingNativeOAuth.current = null;
+                resolve({ error: { message: 'Google sign in timed out. Please try again.' }, role: undefined });
+              }
+            }, 120000);
+          });
           await Browser.open({ url: data.url, presentationStyle: 'popover' });
+          return await callbackResult;
         }
         return { error: null, role: null };
       }
@@ -337,7 +405,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const completeAccountSetup = async (role: Exclude<UserRole, null>, fullName: string) => {
     try {
-      if (!user) return { error: { message: 'You must be signed in to complete setup.' }, role: undefined };
+      let activeUser = user;
+      if (!activeUser) {
+        const { data } = await supabase.auth.getUser();
+        activeUser = toAppUser(data.user);
+        if (activeUser) setUser(activeUser);
+      }
+
+      if (!activeUser) return { error: { message: 'You must be signed in to complete setup.' }, role: undefined };
       if (!fullName.trim()) return { error: { message: 'Please enter your full name' }, role: undefined };
 
       const { data, error } = await supabase.rpc('complete_account_setup', {
