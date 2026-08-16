@@ -484,8 +484,13 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex flex-col font-arabic max-w-md mx-auto"
-      style={{ backgroundColor: CREAM_BG, color: BROWN }}
+      className="fixed inset-0 z-[120] flex flex-col font-arabic w-full max-w-md mx-auto overflow-hidden"
+      style={{
+        backgroundColor: CREAM_BG,
+        color: BROWN,
+        height: '100dvh',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
     >
       <ChatView
         userName={userName}
@@ -722,7 +727,7 @@ const ChatView = ({
     <>
       {/* Header — white bar */}
       <div
-        className="px-4 pt-5 pb-4 flex items-center justify-between"
+        className="px-4 pt-4 pb-4 flex items-center justify-between shrink-0"
         style={{ backgroundColor: '#FFFFFF' }}
       >
         <div className="flex items-center gap-2">
@@ -765,7 +770,7 @@ const ChatView = ({
       {/* Body */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 pt-10 pb-3"
+        className="flex-1 min-h-0 overflow-y-auto px-6 pt-10 pb-3"
         style={{ backgroundColor: CREAM_BG }}
       >
         {empty ? (
@@ -860,8 +865,11 @@ const ChatView = ({
 
       {/* Composer */}
       <div
-        className="px-4 pb-6 pt-3 flex items-center gap-3"
-        style={{ backgroundColor: '#FFFFFF' }}
+        className="px-4 pt-3 flex items-center gap-3 shrink-0"
+        style={{
+          backgroundColor: '#FFFFFF',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
+        }}
       >
         <div
           className="flex-1 flex items-center gap-2 rounded-full px-5 py-3.5 border"

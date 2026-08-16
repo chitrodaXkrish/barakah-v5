@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Menu, Bell, MapPin, ChevronDown, Newspaper, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
@@ -18,7 +20,6 @@ import barakahArcLogo from '@/assets/barakah-arc-logo.png.asset.json';
 import barakahLogo from '@/assets/barakah-logo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 import {
-  createPrayerNotificationPreviews,
   schedulePrayerNotifications,
 } from '@/lib/prayerNotifications';
 import {
@@ -40,6 +41,77 @@ interface NewsItem {
 
 const FALLBACK_IMG =
   'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=200&h=200&fit=crop';
+
+const NOTIFICATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface CachedNotification {
+  id: string;
+  title: string;
+  body: string;
+  receivedAt: number;
+}
+
+const notificationCacheKey = (userId?: string) =>
+  `barakah_home_notifications_${userId || 'guest'}`;
+
+const notificationSessionKey = (userId?: string) =>
+  `barakah_home_notification_session_${userId || 'guest'}`;
+
+const readCachedNotifications = (key: string): CachedNotification[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(
+      (item): item is CachedNotification =>
+        typeof item?.id === 'string' &&
+        typeof item?.title === 'string' &&
+        typeof item?.body === 'string' &&
+        typeof item?.receivedAt === 'number',
+    );
+  } catch {
+    return [];
+  }
+};
+
+const cacheWindow = (items: CachedNotification[], sessionStartedAt: number) => {
+  const earliest = Math.max(sessionStartedAt, Date.now() - NOTIFICATION_CACHE_TTL_MS);
+  return items
+    .filter((item) => item.receivedAt >= earliest)
+    .sort((a, b) => b.receivedAt - a.receivedAt);
+};
+
+const notificationTimeLabel = (receivedAt: number, nowDate: Date) => {
+  const diffSeconds = Math.max(0, Math.floor((nowDate.getTime() - receivedAt) / 1000));
+  if (diffSeconds < 60) return 'Just now';
+  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+  return new Date(receivedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
+const normalizeNotification = (raw: unknown): CachedNotification | null => {
+  const payload = raw as any;
+  const notification = payload?.notification || payload;
+  const title = notification?.title || payload?.title;
+  const body = notification?.body || payload?.body;
+
+  if (!title && !body) return null;
+
+  const receivedAt = Date.now();
+  const id =
+    notification?.id ||
+    notification?.tag ||
+    payload?.id ||
+    payload?.notification?.id ||
+    `${receivedAt}-${title || 'notification'}-${body || ''}`;
+
+  return {
+    id: String(id),
+    title: String(title || 'Notification'),
+    body: String(body || ''),
+    receivedAt,
+  };
+};
 
 // Date formatting utilities moved to src/lib/dateUtils.ts
 
@@ -69,6 +141,8 @@ export const Home = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
   );
+  const [notificationSessionStartedAt, setNotificationSessionStartedAt] = useState(Date.now());
+  const [cachedNotifications, setCachedNotifications] = useState<CachedNotification[]>([]);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -89,6 +163,65 @@ export const Home = () => {
       window.removeEventListener('storage', syncNotificationSetting);
     };
   }, []);
+
+  useEffect(() => {
+    const cacheKey = notificationCacheKey(user?.uid);
+    const sessionKey = notificationSessionKey(user?.uid);
+    const storedSessionStart = Number(sessionStorage.getItem(sessionKey));
+    const sessionStart = Number.isFinite(storedSessionStart) && storedSessionStart > 0
+      ? storedSessionStart
+      : Date.now();
+
+    sessionStorage.setItem(sessionKey, String(sessionStart));
+    setNotificationSessionStartedAt(sessionStart);
+
+    const nextItems = cacheWindow(readCachedNotifications(cacheKey), sessionStart);
+    localStorage.setItem(cacheKey, JSON.stringify(nextItems));
+    setCachedNotifications(nextItems);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const cacheKey = notificationCacheKey(user?.uid);
+
+    const storeNotification = (raw: unknown) => {
+      const item = normalizeNotification(raw);
+      if (!item || item.receivedAt < notificationSessionStartedAt) return;
+
+      setCachedNotifications((current) => {
+        const nextItems = cacheWindow(
+          [item, ...current.filter((existing) => existing.id !== item.id)],
+          notificationSessionStartedAt,
+        );
+        localStorage.setItem(cacheKey, JSON.stringify(nextItems));
+        return nextItems;
+      });
+    };
+    const addNotification = (event: Event) => storeNotification((event as CustomEvent).detail);
+
+    window.addEventListener('pushNotificationReceived', addNotification);
+    window.addEventListener('pushNotificationAction', addNotification);
+
+    let localReceivedHandle: { remove: () => Promise<void> } | undefined;
+    let localActionHandle: { remove: () => Promise<void> } | undefined;
+
+    if (Capacitor.isNativePlatform()) {
+      LocalNotifications.addListener('localNotificationReceived', storeNotification).then((handle) => {
+        localReceivedHandle = handle;
+      });
+      LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+        storeNotification(action?.notification || action);
+      }).then((handle) => {
+        localActionHandle = handle;
+      });
+    }
+
+    return () => {
+      window.removeEventListener('pushNotificationReceived', addNotification);
+      window.removeEventListener('pushNotificationAction', addNotification);
+      localReceivedHandle?.remove();
+      localActionHandle?.remove();
+    };
+  }, [notificationSessionStartedAt, user?.uid]);
 
   useEffect(() => {
     if (!user) return;
@@ -140,9 +273,7 @@ export const Home = () => {
       : location
         ? 'Unavailable'
         : 'Set location';
-  const notificationItems = notificationsEnabled
-    ? createPrayerNotificationPreviews(notificationPrayers, now)
-    : [];
+  const notificationItems = notificationsEnabled ? cachedNotifications : [];
   const displayedNews: Array<Partial<NewsItem>> =
     news.length ? news : Array.from({ length: 2 }, () => ({}));
 
@@ -168,7 +299,10 @@ export const Home = () => {
       {/* HERO — brown gradient top section */}
       <div
         className="relative pt-4 pb-16 overflow-hidden"
-        style={{ background: 'linear-gradient(177deg, #78351A 2.14%, #CE5728 60%, #D97A4A 85%, #E8A87C 100%)' }}
+        style={{
+          background: 'linear-gradient(177deg, #78351A 2.14%, #CE5728 60%, #D97A4A 85%, #E8A87C 100%)',
+          paddingTop: 'calc(env(safe-area-inset-top) + 1rem)',
+        }}
       >
         {/* soft radial glows */}
         <div
@@ -333,7 +467,7 @@ export const Home = () => {
                         {item.body}
                       </p>
                       <p className="text-[11px] mt-1" style={{ color: '#B0431E' }}>
-                        {item.timeLabel}
+                        {notificationTimeLabel(item.receivedAt, now)}
                       </p>
                     </div>
                   </div>
@@ -345,7 +479,7 @@ export const Home = () => {
                   No new notifications
                 </p>
                 <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
-                  Prayer alerts will appear here when available.
+                  New alerts will appear here for 24 hours after they arrive.
                 </p>
               </div>
             )}

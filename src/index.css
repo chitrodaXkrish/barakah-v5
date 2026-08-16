@@ -104,13 +104,40 @@ All colors MUST be HSL.
 }
 
 @layer base {
+  html {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Plus Jakarta Sans', sans-serif;
+    margin: 0;
+    position: relative;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
   }
 
   h1, h2, h3, h4, h5, h6 {

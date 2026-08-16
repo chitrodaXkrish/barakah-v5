@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   MessageCircle, Plus, Send, ArrowLeft, Loader2, Trash2, Heart, RefreshCw, 
-  Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight, Flag
+  Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight, Flag,
+  ThumbsUp, HandHeart, Lightbulb, Smile
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +73,7 @@ interface Like {
   id: string;
   post_id: string;
   user_id: string;
+  reaction_type?: ReactionType;
 }
 
 interface Post {
@@ -88,6 +90,7 @@ interface Post {
   likes?: Like[];
   likeCount?: number;
   isLiked?: boolean;
+  userReaction?: ReactionType | null;
 }
 
 const formatTimeAgo = (dateStr: string): string => {
@@ -131,6 +134,25 @@ const WARM_CARD = '#FFFFFF';
 const SOFT_BORDER = 'rgba(123, 63, 30, 0.12)';
 const OLIVE = '#7C7E2D';
 const OLIVE_DARK = '#656823';
+
+type ReactionType = 'like' | 'ameen' | 'love' | 'insightful' | 'joy';
+
+const REACTIONS: Array<{
+  type: ReactionType;
+  label: string;
+  color: string;
+  bg: string;
+  Icon: typeof ThumbsUp;
+}> = [
+  { type: 'like', label: 'Like', color: '#2F80ED', bg: '#EAF3FF', Icon: ThumbsUp },
+  { type: 'ameen', label: 'Ameen', color: '#5C9D45', bg: '#EDF8E9', Icon: HandHeart },
+  { type: 'love', label: 'Love', color: '#D9534F', bg: '#FFF0EE', Icon: Heart },
+  { type: 'insightful', label: 'Insightful', color: '#D69B22', bg: '#FFF5D8', Icon: Lightbulb },
+  { type: 'joy', label: 'Joy', color: '#1D9AAA', bg: '#E7FAFC', Icon: Smile },
+];
+
+const getReaction = (type?: ReactionType | null) =>
+  REACTIONS.find((reaction) => reaction.type === type) || REACTIONS[0];
 
 // Mock communities for the Explore tab
 interface Community {
@@ -727,6 +749,7 @@ export const Forum = () => {
   const [newReply, setNewReply] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [likingPosts, setLikingPosts] = useState<Set<string>>(new Set());
+  const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
   const pendingPostIdsRef = useRef(new Set<string>());
   const pendingReplyIdsRef = useRef(new Set<string>());
   const hasLoadedPostsRef = useRef(false);
@@ -931,6 +954,7 @@ export const Forum = () => {
           likes: postLikes,
           likeCount: postLikes.length,
           isLiked: user ? postLikes.some(like => like.user_id === user.uid) : false,
+          userReaction: user ? (postLikes.find(like => like.user_id === user.uid)?.reaction_type || 'like') : null,
         };
       });
 
@@ -999,7 +1023,7 @@ export const Forum = () => {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'guftagu_posts' },
         (payload) => {
-          const newPost = { ...payload.new as Post, replies: [], likes: [], likeCount: 0, isLiked: false };
+          const newPost = { ...payload.new as Post, replies: [], likes: [], likeCount: 0, isLiked: false, userReaction: null };
           pendingPostIdsRef.current.delete(newPost.id);
           setPosts((prev) => {
             if (prev.some((post) => post.id === newPost.id)) return prev;
@@ -1025,24 +1049,31 @@ export const Forum = () => {
           const like = ((payload.new as Like | null) || (payload.old as Like | null));
           if (!like?.post_id) return;
           const delta = payload.eventType === 'INSERT' ? 1 : payload.eventType === 'DELETE' ? -1 : 0;
-          if (!delta) return;
           setPosts((prev) => prev.map((post) => {
             if (post.id !== like.post_id) return post;
             const userOwnsEvent = user?.uid === like.user_id;
-            if (userOwnsEvent && post.isLiked === (payload.eventType === 'INSERT')) return post;
             return {
               ...post,
-              isLiked: userOwnsEvent ? payload.eventType === 'INSERT' : post.isLiked,
+              isLiked: userOwnsEvent ? payload.eventType !== 'DELETE' : post.isLiked,
+              userReaction: userOwnsEvent
+                ? payload.eventType === 'DELETE'
+                  ? null
+                  : like.reaction_type || 'like'
+                : post.userReaction,
               likeCount: Math.max(0, (post.likeCount || 0) + delta),
             };
           }));
           setSelectedPost((prev) => {
             if (!prev || prev.id !== like.post_id) return prev;
             const userOwnsEvent = user?.uid === like.user_id;
-            if (userOwnsEvent && prev.isLiked === (payload.eventType === 'INSERT')) return prev;
             return {
               ...prev,
-              isLiked: userOwnsEvent ? payload.eventType === 'INSERT' : prev.isLiked,
+              isLiked: userOwnsEvent ? payload.eventType !== 'DELETE' : prev.isLiked,
+              userReaction: userOwnsEvent
+                ? payload.eventType === 'DELETE'
+                  ? null
+                  : like.reaction_type || 'like'
+                : prev.userReaction,
               likeCount: Math.max(0, (prev.likeCount || 0) + delta),
             };
           });
@@ -1122,10 +1153,17 @@ export const Forum = () => {
         (currentPost.replies || []).some((reply, index) => reply.id !== selectedPost.replies?.[index]?.id);
       const metaChanged =
         currentPost.likeCount !== selectedPost.likeCount ||
-        currentPost.isLiked !== selectedPost.isLiked;
+        currentPost.isLiked !== selectedPost.isLiked ||
+        currentPost.userReaction !== selectedPost.userReaction;
 
       if (repliesChanged || metaChanged) {
-        setSelectedPost(prev => prev ? { ...prev, replies: currentPost.replies, likeCount: currentPost.likeCount, isLiked: currentPost.isLiked } : null);
+        setSelectedPost(prev => prev ? {
+          ...prev,
+          replies: currentPost.replies,
+          likeCount: currentPost.likeCount,
+          isLiked: currentPost.isLiked,
+          userReaction: currentPost.userReaction,
+        } : null);
       }
     }
   }, [selectedPost, posts]);
@@ -1203,6 +1241,7 @@ export const Forum = () => {
         likes: [],
         likeCount: 0,
         isLiked: false,
+        userReaction: null,
       } as Post;
       pendingPostIdsRef.current.add(createdPost.id);
       setPosts((prev) => {
@@ -1236,24 +1275,31 @@ export const Forum = () => {
     }
   };
 
-  const handleToggleLike = async (postId: string, isCurrentlyLiked: boolean) => {
+  const handleSetReaction = async (
+    postId: string,
+    currentReaction: ReactionType | null | undefined,
+    nextReaction: ReactionType
+  ) => {
     if (!user) {
-      toast.error('Please sign in to like posts');
+      toast.error('Please sign in to react to posts');
       return;
     }
 
     if (likingPosts.has(postId)) return;
 
     setLikingPosts(prev => new Set(prev).add(postId));
+    setActiveReactionPostId(null);
 
-    const optimisticLiked = !isCurrentlyLiked;
-    const optimisticDelta = isCurrentlyLiked ? -1 : 1;
+    const optimisticReaction = currentReaction === nextReaction ? null : nextReaction;
+    const optimisticLiked = Boolean(optimisticReaction);
+    const optimisticDelta = currentReaction ? (optimisticReaction ? 0 : -1) : 1;
 
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
         return {
           ...p,
           isLiked: optimisticLiked,
+          userReaction: optimisticReaction,
           likeCount: Math.max(0, (p.likeCount || 0) + optimisticDelta)
         };
       }
@@ -1262,30 +1308,39 @@ export const Forum = () => {
     setSelectedPost(prev => prev?.id === postId ? {
       ...prev,
       isLiked: optimisticLiked,
+      userReaction: optimisticReaction,
       likeCount: Math.max(0, (prev.likeCount || 0) + optimisticDelta),
     } : prev);
 
     try {
-      if (isCurrentlyLiked) {
+      if (currentReaction && !optimisticReaction) {
         const { error } = await supabase
           .from('guftagu_likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.uid);
         if (error) throw error;
-      } else {
+      } else if (currentReaction && optimisticReaction) {
         const { error } = await supabase
           .from('guftagu_likes')
-          .insert({ post_id: postId, user_id: user.uid });
+          .update({ reaction_type: optimisticReaction } as any)
+          .eq('post_id', postId)
+          .eq('user_id', user.uid);
+        if (error) throw error;
+      } else if (optimisticReaction) {
+        const { error } = await supabase
+          .from('guftagu_likes')
+          .insert({ post_id: postId, user_id: user.uid, reaction_type: optimisticReaction } as any);
         if (error) throw error;
       }
     } catch (error) {
-      console.error('Error toggling like:', error);
+      console.error('Error updating reaction:', error);
       setPosts(prev => prev.map(p => {
         if (p.id === postId) {
           return {
             ...p,
-            isLiked: isCurrentlyLiked,
+            isLiked: Boolean(currentReaction),
+            userReaction: currentReaction || null,
             likeCount: Math.max(0, (p.likeCount || 0) - optimisticDelta)
           };
         }
@@ -1293,10 +1348,11 @@ export const Forum = () => {
       }));
       setSelectedPost(prev => prev?.id === postId ? {
         ...prev,
-        isLiked: isCurrentlyLiked,
+        isLiked: Boolean(currentReaction),
+        userReaction: currentReaction || null,
         likeCount: Math.max(0, (prev.likeCount || 0) - optimisticDelta),
       } : prev);
-      toast.error('Failed to update like');
+      toast.error('Failed to update reaction');
     } finally {
       setLikingPosts(prev => {
         const next = new Set(prev);
@@ -1525,16 +1581,48 @@ export const Forum = () => {
     </Dialog>
   );
 
+  const ReactionPicker = ({ post }: { post: Post }) => (
+    <div
+      className="absolute bottom-full left-0 z-30 mb-2 flex items-center gap-1 rounded-full border px-2 py-1.5 shadow-lg"
+      style={{ background: '#FFFFFF', borderColor: SOFT_BORDER }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {REACTIONS.map(({ type, label, color, bg, Icon }) => {
+        const selected = post.userReaction === type;
+        return (
+          <button
+            key={type}
+            type="button"
+            onClick={() => handleSetReaction(post.id, post.userReaction, type)}
+            disabled={likingPosts.has(post.id)}
+            className="h-10 w-10 rounded-full flex items-center justify-center transition-transform hover:-translate-y-1 active:scale-95 disabled:opacity-60"
+            style={{
+              background: selected ? color : bg,
+              color: selected ? '#FFFFFF' : color,
+              boxShadow: selected ? `0 5px 12px ${color}44` : 'none',
+            }}
+            aria-label={selected ? `Remove ${label}` : `React ${label}`}
+            title={label}
+          >
+            <Icon className={cn('h-5 w-5', selected && type === 'love' && 'fill-current')} strokeWidth={2.4} />
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const PostCard = ({ post }: { post: Post; index?: number }) => {
     const isOwner = user?.uid === post.user_id;
     const isLiking = likingPosts.has(post.id);
     const isBookmarked = bookmarkedPosts.has(post.id);
+    const reaction = getReaction(post.userReaction);
+    const ReactionIcon = reaction.Icon;
     const contentPreview = post.content.length > 180 ? post.content.slice(0, 180) + '...' : post.content;
     const hasMore = post.content.length > 180;
 
     return (
       <Card 
-        className="group relative overflow-hidden border-0 rounded-2xl"
+        className="group relative overflow-visible border-0 rounded-2xl"
         style={{ 
           background: WARM_CARD,
           boxShadow: '0 1px 3px rgba(123, 63, 30, 0.06)',
@@ -1632,15 +1720,24 @@ export const Forum = () => {
           {/* Actions Row */}
           <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
             <div className="flex items-center gap-5">
-              <button
-                onClick={() => handleToggleLike(post.id, post.isLiked || false)}
-                disabled={isLiking}
-                className="flex items-center gap-1.5 text-sm transition-colors"
-                style={{ color: post.isLiked ? '#D9534F' : '#9C8569' }}
-              >
-                <Heart className={cn("h-4 w-4", post.isLiked && "fill-current")} />
-                <span className="text-xs tabular-nums">{post.likeCount || 0}</span>
-              </button>
+              <div className="relative">
+                {activeReactionPostId === post.id && <ReactionPicker post={post} />}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveReactionPostId(activeReactionPostId === post.id ? null : post.id);
+                  }}
+                  disabled={isLiking}
+                  className="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-60"
+                  style={{ color: post.isLiked ? reaction.color : '#9C8569' }}
+                  aria-label={post.isLiked ? `${reaction.label} reaction selected` : 'React to post'}
+                  title={post.isLiked ? reaction.label : 'React'}
+                >
+                  <ReactionIcon className={cn("h-4 w-4", post.isLiked && post.userReaction === 'love' && "fill-current")} />
+                  <span className="text-xs tabular-nums">{post.likeCount || 0}</span>
+                </button>
+              </div>
               <button
                 onClick={() => setSelectedPost(post)}
                 className="flex items-center gap-1.5 text-sm transition-colors"
@@ -1690,6 +1787,9 @@ export const Forum = () => {
 
   // Replies View
   if (selectedPost) {
+    const selectedReaction = getReaction(selectedPost.userReaction);
+    const SelectedReactionIcon = selectedReaction.Icon;
+
     return (
       <Layout pageBackgroundColor={CREAM_BG}>
         <div className="min-h-screen" style={{ background: CREAM_BG }}>
@@ -1727,16 +1827,24 @@ export const Forum = () => {
                 
                 <div className="flex items-center justify-between mt-5 pt-4" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
                   <div className="flex items-center gap-5">
-                    <button
-                      onClick={() => handleToggleLike(selectedPost.id, selectedPost.isLiked || false)}
-                      disabled={likingPosts.has(selectedPost.id)}
-                      className="flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                      style={{ color: selectedPost.isLiked ? '#D9534F' : '#9C8569' }}
-                      aria-label={selectedPost.isLiked ? 'Unlike post' : 'Like post'}
-                    >
-                      <Heart className={cn("h-4 w-4", selectedPost.isLiked && "fill-current")} />
-                      <span className="text-sm">{selectedPost.likeCount || 0}</span>
-                    </button>
+                    <div className="relative">
+                      {activeReactionPostId === selectedPost.id && <ReactionPicker post={selectedPost} />}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveReactionPostId(activeReactionPostId === selectedPost.id ? null : selectedPost.id);
+                        }}
+                        disabled={likingPosts.has(selectedPost.id)}
+                        className="flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                        style={{ color: selectedPost.isLiked ? selectedReaction.color : '#9C8569' }}
+                        aria-label={selectedPost.isLiked ? `${selectedReaction.label} reaction selected` : 'React to post'}
+                        title={selectedPost.isLiked ? selectedReaction.label : 'React'}
+                      >
+                        <SelectedReactionIcon className={cn("h-4 w-4", selectedPost.isLiked && selectedPost.userReaction === 'love' && "fill-current")} />
+                        <span className="text-sm">{selectedPost.likeCount || 0}</span>
+                      </button>
+                    </div>
                     <div className="flex items-center gap-1.5" style={{ color: '#9C8569' }}>
                       <MessageCircle className="h-4 w-4" />
                       <span className="text-sm">{selectedPost.replies?.length || 0}</span>
