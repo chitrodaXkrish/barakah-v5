@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import enLocale from '@/locales/en.json';
 
 export type Language = 'en' | 'ur' | 'ar' | 'tr' | 'id' | 'ms' | 'ta' | 'bn';
 
@@ -11,6 +12,7 @@ interface LanguageContextType {
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    ...enLocale,
     // Login/Register page
     'login.create_account': 'Create an account',
     'login.enter_email': 'Enter your email to signup for this app',
@@ -1011,7 +1013,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    return translations[language]?.[key] || translations.en?.[key] || (enLocale as Record<string, string>)[key] || key;
   };
 
   // RTL languages: Arabic, Urdu
