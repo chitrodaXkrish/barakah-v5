@@ -136,6 +136,7 @@ const App = () => (
                     <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                     <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
                     <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboard /></ProtectedRoute>} />
+                    <Route path="/seller/dashboard" element={<ProtectedRoute><SellerDashboard /></ProtectedRoute>} />
                     <Route path="/seller-onboarding" element={<ProtectedRoute><SellerOnboarding /></ProtectedRoute>} />
                     <Route path="/seller/products" element={<ProtectedRoute><SellerProducts /></ProtectedRoute>} />
                     <Route path="/seller/products/new" element={<ProtectedRoute><SellerAddProduct /></ProtectedRoute>} />

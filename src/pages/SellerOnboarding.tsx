@@ -1,744 +1,1383 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, CameraIcon, Shield, Check, Store, ChevronDown, Search, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  ShieldCheck,
+  Store,
+  CreditCard,
+  FileCheck,
+  CheckCircle2,
+  Upload,
+  AlertCircle,
+  Loader2,
+  Edit3,
+  Check,
+  ChevronRight,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CALLING_CODES, COUNTRIES } from '@/lib/countries';
 
-type StepNum = 1 | 2 | 3 | 4;
+export type StepNum = 1 | 2 | 3 | 4 | 5 | 6 | 7; // 1: Business, 2: KYC, 3: Store, 4: Bank, 5: Agreements, 6: Review, 7: Submitted
 
-interface FormState {
+export interface SellerFormData {
+  // Step 1: Business
   business_name: string;
-  seller_display_name: string;
+  legal_name: string;
+  business_type: string;
+  business_category: string;
   contact_person: string;
   email: string;
-  phone_country_code: string;
   phone_number: string;
-  country_of_operations: string;
-  halal_compliant: boolean;
-  no_prohibited_categories: boolean;
-  understands_review: boolean;
-  agreed_to_terms: boolean;
-  banner_url: string;
+  business_address: string;
+  city: string;
+  state: string;
+  country: string;
+  postal_code: string;
+  pan: string;
+  gstin: string;
+
+  // Step 2: KYC Documents (URLs / Storage Paths)
+  pan_doc_url: string;
+  id_doc_url: string;
+  address_proof_url: string;
+  business_pan_doc_url: string;
+  incorporation_doc_url: string;
+
+  // Step 3: Store Profile
+  store_name: string;
   logo_url: string;
+  banner_url: string;
   about_us: string;
+
+  // Step 4: Bank Account
   bank_account_name: string;
+  bank_name: string;
   bank_account_number: string;
-  stripe_connected: boolean;
+  confirm_account_number: string;
+  ifsc: string;
+  account_type: string;
+
+  // Step 5: Agreements
+  agreed_terms: boolean;
+  agreed_commission: boolean;
+  agreed_refunds: boolean;
+  agreed_accuracy: boolean;
 }
 
-const initial: FormState = {
+const initialFormState: SellerFormData = {
   business_name: '',
-  seller_display_name: '',
+  legal_name: '',
+  business_type: 'Sole Proprietorship',
+  business_category: 'Fashion & Apparel',
   contact_person: '',
   email: '',
-  phone_country_code: '+971',
   phone_number: '',
-  country_of_operations: 'United Arab Emirates',
-  halal_compliant: false,
-  no_prohibited_categories: false,
-  understands_review: false,
-  agreed_to_terms: false,
-  banner_url: '',
+  business_address: '',
+  city: '',
+  state: '',
+  country: 'India',
+  postal_code: '',
+  pan: '',
+  gstin: '',
+
+  pan_doc_url: '',
+  id_doc_url: '',
+  address_proof_url: '',
+  business_pan_doc_url: '',
+  incorporation_doc_url: '',
+
+  store_name: '',
   logo_url: '',
+  banner_url: '',
   about_us: '',
+
   bank_account_name: '',
+  bank_name: '',
   bank_account_number: '',
-  stripe_connected: false,
+  confirm_account_number: '',
+  ifsc: '',
+  account_type: 'Savings',
+
+  agreed_terms: false,
+  agreed_commission: false,
+  agreed_refunds: false,
+  agreed_accuracy: false,
 };
 
-export const SellerOnboarding = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [step, setStep] = useState<StepNum>(1);
-  const [form, setForm] = useState<FormState>(initial);
-  const [saving, setSaving] = useState(false);
+const BUSINESS_TYPES = [
+  'Individual',
+  'Sole Proprietorship',
+  'Partnership',
+  'LLP',
+  'Private Limited Company',
+  'Other',
+];
 
-  // Prefill from existing seller_profiles row if any
-  useEffect(() => {
-    if (!user?.uid) return;
-    (async () => {
-      const { data } = await supabase
-        .from('seller_profiles')
-        .select('*')
-        .eq('user_id', user.uid)
-        .maybeSingle();
-      if (data) {
-        setForm({ ...initial, ...data });
-        if (data.onboarding_completed) navigate('/seller-dashboard', { replace: true });
-      }
-    })();
-  }, [user?.uid, navigate]);
+const BUSINESS_CATEGORIES = [
+  'Fashion & Apparel',
+  'Islamic Prayer & Books',
+  'Halal Cosmetics & Personal Care',
+  'Home & Living',
+  'Accessories & Jewelry',
+  'Food & Halal Grocery',
+  'Other',
+];
 
-  const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
-    setForm((p) => ({ ...p, [k]: v }));
+// Helper to mask bank account
+const maskAccountNumber = (acc: string) => {
+  if (!acc) return '';
+  const clean = acc.trim();
+  if (clean.length <= 4) return clean;
+  return `•••• ${clean.slice(-4)}`;
+};
 
-  const persist = async (extra: Partial<FormState> = {}, completed = false) => {
-    if (!user?.uid) {
-      toast.error('You must be signed in');
-      return false;
-    }
-    setSaving(true);
-    const payload: any = {
-      user_id: user.uid,
-      ...form,
-      ...extra,
-      onboarding_completed: completed,
-    };
-    const { error } = await supabase
-      .from('seller_profiles')
-      .upsert(payload, { onConflict: 'user_id' });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return false;
-    }
-    return true;
+// ==========================================
+// SUB-COMPONENTS DECLARED OUTSIDE SELLERONBOARDING TO PREVENT FOCUS LOSS
+// ==========================================
+
+interface InputFieldProps {
+  label: string;
+  required?: boolean;
+  type?: string;
+  value: string;
+  onChange: (val: string) => void;
+  error?: string;
+  placeholder?: string;
+  maxLength?: number;
+}
+
+const FormInputField: React.FC<InputFieldProps> = React.memo(({
+  label,
+  required = true,
+  type = 'text',
+  value,
+  onChange,
+  error,
+  placeholder,
+  maxLength,
+}) => {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        className={`bg-white border text-sm text-[#1a1a1a] h-11 rounded-xl focus:ring-2 focus:ring-[#A35233] ${
+          error ? 'border-red-500' : 'border-[#E8D5C4]'
+        }`}
+      />
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+    </div>
+  );
+});
+
+interface SelectFieldProps {
+  label: string;
+  required?: boolean;
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+  error?: string;
+}
+
+const FormSelectField: React.FC<SelectFieldProps> = React.memo(({
+  label,
+  required = true,
+  value,
+  options,
+  onChange,
+  error,
+}) => {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full bg-white border text-sm text-[#1a1a1a] h-11 rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-[#A35233] ${
+          error ? 'border-red-500' : 'border-[#E8D5C4]'
+        }`}
+      >
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+    </div>
+  );
+});
+
+interface FileUploaderProps {
+  label: string;
+  required?: boolean;
+  currentUrl: string;
+  onUpload: (file: File) => Promise<void>;
+  loading: boolean;
+  error?: string;
+  accept?: string;
+  helperText?: string;
+}
+
+const FileUploaderCard: React.FC<FileUploaderProps> = React.memo(({
+  label,
+  required = true,
+  currentUrl,
+  onUpload,
+  loading,
+  error,
+  accept = 'image/*,.pdf',
+  helperText,
+}) => {
+  const [fileName, setFileName] = useState<string>('');
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    await onUpload(file);
   };
 
-  const step1Valid =
-    form.business_name.trim().length > 0 &&
-    form.halal_compliant &&
-    form.no_prohibited_categories &&
-    form.understands_review &&
-    form.agreed_to_terms;
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div
+        className={`bg-white border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all ${
+          currentUrl ? 'border-green-600 bg-green-50/30' : error ? 'border-red-500' : 'border-[#D4BCA4]'
+        }`}
+      >
+        {currentUrl ? (
+          <div className="flex items-center gap-3 w-full">
+            <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0" />
+            <div className="flex-1 text-left overflow-hidden">
+              <p className="text-xs font-bold text-green-800 truncate">Document Uploaded</p>
+              <p className="text-[11px] text-gray-500 truncate">{fileName || currentUrl}</p>
+            </div>
+            <label className="cursor-pointer text-xs font-semibold text-[#A35233] hover:underline flex-shrink-0">
+              Replace
+              <input type="file" accept={accept} onChange={handleFileChange} className="hidden" disabled={loading} />
+            </label>
+          </div>
+        ) : (
+          <label className="cursor-pointer flex flex-col items-center gap-2 w-full py-2">
+            {loading ? (
+              <Loader2 className="h-6 w-6 text-[#A35233] animate-spin" />
+            ) : (
+              <Upload className="h-6 w-6 text-[#A35233]" />
+            )}
+            <span className="text-xs font-bold text-[#A35233]">
+              {loading ? 'Uploading...' : 'Click to Upload File'}
+            </span>
+            {helperText && <span className="text-[10px] text-gray-500">{helperText}</span>}
+            <input type="file" accept={accept} onChange={handleFileChange} className="hidden" disabled={loading} />
+          </label>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+    </div>
+  );
+});
 
-  const step2Valid = true; // optional fields
-  const step3Valid =
-    form.bank_account_name.trim().length > 0 &&
-    form.bank_account_number.trim().length > 0;
+// ==========================================
+// MAIN SELLER ONBOARDING COMPONENT
+// ==========================================
+
+export const SellerOnboarding = () => {
+  const { user, userRole, refreshRoles } = useAuth();
+  const navigate = useNavigate();
+
+  const [step, setStep] = useState<StepNum>(1);
+  const [form, setForm] = useState<SellerFormData>(initialFormState);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [showMaskedAccount, setShowMaskedAccount] = useState<boolean>(true);
+
+  // Load existing seller profile / state on mount for persistence
+  useEffect(() => {
+    let mounted = true;
+    const fetchSellerState = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const { data: prof, error } = await supabase
+          .from('seller_profiles')
+          .select('*')
+          .eq('user_id', user.uid)
+          .maybeSingle();
+
+        if (error) console.warn('Seller profile fetch error:', error);
+
+        if (prof && mounted) {
+          // If already completed and verified/under review, check status
+          if (prof.onboarding_completed && prof.status === 'UNDER_REVIEW') {
+            setStep(7); // Show submitted status screen
+          } else if (prof.onboarding_completed && (prof.status === 'ACTIVE' || prof.status === 'APPROVED')) {
+            navigate('/seller-dashboard', { replace: true });
+            return;
+          } else if (prof.onboarding_step && prof.onboarding_step >= 1 && prof.onboarding_step <= 6) {
+            setStep(prof.onboarding_step as StepNum);
+          }
+
+          // Populate form fields
+          setForm((prev) => ({
+            ...prev,
+            business_name: prof.business_name || '',
+            legal_name: prof.legal_name || prof.business_name || '',
+            business_type: prof.business_type || 'Sole Proprietorship',
+            business_category: prof.business_category || 'Fashion & Apparel',
+            contact_person: prof.contact_person || '',
+            email: prof.email || user.email || '',
+            phone_number: prof.phone_number || '',
+            business_address: prof.business_address || '',
+            city: prof.city || '',
+            state: prof.state || '',
+            country: prof.country || 'India',
+            postal_code: prof.postal_code || '',
+            pan: prof.pan || '',
+            gstin: prof.gstin || '',
+            store_name: prof.seller_display_name || prof.business_name || '',
+            logo_url: prof.logo_url || '',
+            banner_url: prof.banner_url || '',
+            about_us: prof.about_us || '',
+            bank_account_name: prof.bank_account_name || '',
+            bank_account_number: prof.bank_account_number || '',
+            confirm_account_number: prof.bank_account_number || '',
+            agreed_terms: prof.agreed_to_terms || false,
+            agreed_commission: prof.agreed_to_terms || false,
+            agreed_refunds: prof.agreed_to_terms || false,
+            agreed_accuracy: prof.agreed_to_terms || false,
+          }));
+        } else if (user.email && mounted) {
+          setForm((prev) => ({ ...prev, email: user.email || '' }));
+        }
+
+        // Fetch bank account if existing
+        const { data: bankData } = await supabase
+          .from('seller_bank_accounts')
+          .select('*')
+          .eq('seller_id', user.uid)
+          .maybeSingle();
+
+        if (bankData && mounted) {
+          setForm((prev) => ({
+            ...prev,
+            bank_account_name: bankData.holder_name || prev.bank_account_name,
+            bank_name: bankData.bank_name || prev.bank_name,
+            bank_account_number: bankData.account_number || prev.bank_account_number,
+            confirm_account_number: bankData.account_number || prev.confirm_account_number,
+            ifsc: bankData.ifsc || prev.ifsc,
+            account_type: bankData.account_type || prev.account_type,
+          }));
+        }
+
+        // Fetch docs if existing
+        const { data: docsData } = await supabase
+          .from('seller_documents')
+          .select('*')
+          .eq('seller_id', user.uid);
+
+        if (docsData && mounted) {
+          docsData.forEach((doc: any) => {
+            if (doc.document_type === 'pan') setForm((p) => ({ ...p, pan_doc_url: doc.doc_url }));
+            if (doc.document_type === 'id') setForm((p) => ({ ...p, id_doc_url: doc.doc_url }));
+            if (doc.document_type === 'address') setForm((p) => ({ ...p, address_proof_url: doc.doc_url }));
+            if (doc.document_type === 'business_pan') setForm((p) => ({ ...p, business_pan_doc_url: doc.doc_url }));
+            if (doc.document_type === 'incorporation') setForm((p) => ({ ...p, incorporation_doc_url: doc.doc_url }));
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching onboarding persistence:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchSellerState();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.uid, navigate, user?.email]);
+
+  const updateField = (key: keyof SellerFormData, value: any) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (errors[key]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  // Upload file helper
+  const handleFileUpload = async (docType: string, file: File): Promise<string | null> => {
+    if (!user?.uid) {
+      toast.error('Authentication required');
+      return null;
+    }
+    setUploadingDoc(docType);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${user.uid}/${docType}_${Date.now()}.${ext}`;
+      const bucket = 'seller-documents';
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { upsert: true });
+
+      if (uploadError) {
+        // Fallback to product-images if seller-documents bucket is missing
+        const { error: fallbackError } = await supabase.storage
+          .from('product-images')
+          .upload(`${user.uid}/kyc/${docType}_${Date.now()}.${ext}`, file, { upsert: true });
+
+        if (fallbackError) {
+          throw new Error(uploadError.message || fallbackError.message);
+        }
+        const { data: publicUrlData } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(`${user.uid}/kyc/${docType}_${Date.now()}.${ext}`);
+        
+        toast.success(`${docType.toUpperCase()} document uploaded!`);
+        return publicUrlData.publicUrl;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(path);
+
+      toast.success(`${docType.toUpperCase()} document uploaded!`);
+      return publicUrlData.publicUrl || path;
+    } catch (err: any) {
+      toast.error(err.message || 'File upload failed');
+      return null;
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  // Persist current state to database
+  const saveProgressToDb = async (nextStep: StepNum, completed = false) => {
+    if (!user?.uid) return false;
+    setSaving(true);
+    try {
+      // 1. Ensure user role contains 'seller' or insert role
+      await supabase
+        .from('user_roles')
+        .insert({ user_id: user.uid, role: 'seller' as any })
+        .select()
+        .maybeSingle();
+
+      if (refreshRoles) await refreshRoles();
+
+      // 2. Upsert seller_profiles
+      const profilePayload = {
+        user_id: user.uid,
+        business_name: form.business_name || form.store_name || 'New Seller',
+        legal_name: form.legal_name || form.business_name,
+        business_type: form.business_type,
+        business_category: form.business_category,
+        contact_person: form.contact_person,
+        email: form.email,
+        phone_number: form.phone_number,
+        business_address: form.business_address,
+        city: form.city,
+        state: form.state,
+        country: form.country,
+        postal_code: form.postal_code,
+        pan: form.pan,
+        gstin: form.gstin,
+        seller_display_name: form.store_name || form.business_name,
+        logo_url: form.logo_url,
+        banner_url: form.banner_url,
+        about_us: form.about_us,
+        bank_account_name: form.bank_account_name,
+        bank_account_number: form.bank_account_number,
+        agreed_to_terms: form.agreed_terms,
+        halal_compliant: true,
+        no_prohibited_categories: true,
+        understands_review: true,
+        status: completed ? 'UNDER_REVIEW' : 'REGISTERED',
+        onboarding_completed: completed,
+        onboarding_step: nextStep,
+      };
+
+      const { error: profErr } = await supabase
+        .from('seller_profiles')
+        .upsert(profilePayload, { onConflict: 'user_id' });
+
+      if (profErr) {
+        console.error('Error saving profile:', profErr);
+        toast.error(`Failed to save: ${profErr.message}`);
+        return false;
+      }
+
+      // 3. Upsert bank account if in step 4 or beyond
+      if (form.bank_account_name && form.bank_account_number) {
+        await supabase
+          .from('seller_bank_accounts')
+          .upsert(
+            {
+              seller_id: user.uid,
+              holder_name: form.bank_account_name,
+              account_number: form.bank_account_number,
+              bank_name: form.bank_name || 'Primary Bank',
+              ifsc: form.ifsc || 'BARK0001',
+              account_type: form.account_type || 'Savings',
+              status: 'PENDING',
+            },
+            { onConflict: 'seller_id' }
+          );
+      }
+
+      // 4. Save agreements if checked
+      if (form.agreed_terms) {
+        await supabase.from('seller_agreements').upsert([
+          { seller_id: user.uid, agreement_type: 'SELLER_TERMS', version: '1.0' },
+          { seller_id: user.uid, agreement_type: 'COMMISSION_POLICY', version: '1.0' },
+          { seller_id: user.uid, agreement_type: 'REFUND_POLICY', version: '1.0' },
+        ], { onConflict: 'seller_id, agreement_type' });
+      }
+
+      // 5. Save KYC entry
+      if (step >= 2) {
+        await supabase.from('seller_kyc').upsert(
+          {
+            seller_id: user.uid,
+            status: completed ? 'UNDER_REVIEW' : 'PENDING',
+            pan: form.pan,
+            business_pan: form.pan,
+          },
+          { onConflict: 'seller_id' }
+        );
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('Error saving progress:', err);
+      toast.error('An unexpected error occurred while saving.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // STEP VALIDATIONS
+  const validateStep1 = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!form.business_name.trim()) errs.business_name = 'Business name is required';
+    if (!form.legal_name.trim()) errs.legal_name = 'Legal business name is required';
+    if (!form.contact_person.trim()) errs.contact_person = 'Contact person is required';
+    if (!form.email.trim()) errs.email = 'Email is required';
+    if (!form.phone_number.trim()) errs.phone_number = 'Phone number is required';
+    if (!form.business_address.trim()) errs.business_address = 'Business address is required';
+    if (!form.city.trim()) errs.city = 'City is required';
+    if (!form.state.trim()) errs.state = 'State is required';
+    if (!form.postal_code.trim()) errs.postal_code = 'Postal / PIN code is required';
+    if (!form.pan.trim()) errs.pan = 'PAN number is required';
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateStep2 = (): boolean => {
+    const errs: Record<string, string> = {};
+    const isIndividual = ['Individual', 'Sole Proprietorship'].includes(form.business_type);
+
+    if (isIndividual) {
+      if (!form.pan_doc_url) errs.pan_doc_url = 'PAN document is required';
+      if (!form.id_doc_url) errs.id_doc_url = 'Identity proof document is required';
+    } else {
+      if (!form.business_pan_doc_url) errs.business_pan_doc_url = 'Business PAN document is required';
+      if (!form.incorporation_doc_url) errs.incorporation_doc_url = 'Incorporation certificate is required';
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateStep3 = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!form.store_name.trim()) errs.store_name = 'Store name is required';
+    if (!form.about_us.trim()) errs.about_us = 'Store description is required';
+    if (!form.logo_url) errs.logo_url = 'Store logo is required';
+    if (!form.banner_url) errs.banner_url = 'Store banner is required';
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateStep4 = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!form.bank_account_name.trim()) errs.bank_account_name = 'Account holder name is required';
+    if (!form.bank_name.trim()) errs.bank_name = 'Bank name is required';
+    if (!form.bank_account_number.trim()) errs.bank_account_number = 'Account number is required';
+    if (!form.confirm_account_number.trim()) {
+      errs.confirm_account_number = 'Confirm account number is required';
+    } else if (form.bank_account_number.trim() !== form.confirm_account_number.trim()) {
+      errs.confirm_account_number = 'Account numbers do not match';
+    }
+    if (!form.ifsc.trim()) errs.ifsc = 'IFSC / Swift code is required';
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateStep5 = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!form.agreed_terms) errs.agreed_terms = 'You must accept the Seller Terms';
+    if (!form.agreed_commission) errs.agreed_commission = 'You must accept the Commission Policy';
+    if (!form.agreed_refunds) errs.agreed_refunds = 'You must accept the Return & Refund Policy';
+    if (!form.agreed_accuracy) errs.agreed_accuracy = 'You must confirm information accuracy';
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleNext = async () => {
-    if (step === 1 && !step1Valid) return;
-    if (step === 3 && !step3Valid) return;
-    const ok = await persist({}, false);
-    if (!ok) return;
-    setStep((s) => (s + 1) as StepNum);
-  };
+    let valid = false;
+    if (step === 1) valid = validateStep1();
+    else if (step === 2) valid = validateStep2();
+    else if (step === 3) valid = validateStep3();
+    else if (step === 4) valid = validateStep4();
+    else if (step === 5) valid = validateStep5();
+    else if (step === 6) valid = true;
 
-  const handleFinish = async () => {
-    const ok = await persist({}, true);
-    if (!ok) return;
-    toast.success('Seller account set up!');
-    navigate('/seller-dashboard', { replace: true });
+    if (!valid) {
+      toast.error('Please fix the errors before continuing.');
+      return;
+    }
+
+    const nextStep = (step + 1) as StepNum;
+    const ok = await saveProgressToDb(nextStep, false);
+    if (ok) {
+      setStep(nextStep);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleBack = () => {
-    if (step === 1) navigate(-1);
-    else setStep((s) => (s - 1) as StepNum);
+    if (step === 1) {
+      navigate('/shop');
+    } else if (step === 7) {
+      navigate('/seller-dashboard');
+    } else {
+      setStep((s) => (s - 1) as StepNum);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
+  const handleSubmitVerification = async () => {
+    const ok = await saveProgressToDb(7, true);
+    if (ok) {
+      toast.success('Seller application submitted for review!');
+      setStep(7);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFF1DD]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-[#A35233] animate-spin" />
+          <p className="text-sm font-semibold text-[#1a1a1a]">Loading onboarding status...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen max-w-md mx-auto flex flex-col" style={{ backgroundColor: '#FFF1DD' }}>
+    <div className="min-h-screen w-full max-w-md mx-auto flex flex-col bg-[#FFF1DD]">
       {/* Header */}
-      <div className="bg-white px-4 pt-4 pb-3 flex items-center gap-3">
-        <button onClick={handleBack} aria-label="Back">
+      <div className="bg-white px-4 pt-10 pb-3 flex items-center justify-between border-b border-[#E8D5C4] sticky top-0 z-20">
+        <button
+          onClick={handleBack}
+          className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+          aria-label="Back"
+        >
           <ArrowLeft className="h-6 w-6 text-[#1a1a1a]" />
         </button>
-        <h1 className="text-lg font-bold text-[#1a1a1a]" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-          Become a Seller
-        </h1>
-      </div>
-      {/* Progress bar */}
-      {step < 4 && (
-        <div className="bg-[#EADFC9] h-1 w-full">
-          <div
-            className="h-1 bg-[#6B7E2C] transition-all"
-            style={{ width: `${(step / 3) * 100}%` }}
-          />
+        <div className="text-center flex-1">
+          <h1 className="text-base font-bold text-[#1a1a1a]">Seller Onboarding</h1>
+          <p className="text-[11px] text-[#1a1a1a]/60">
+            {step === 7 ? 'Application Submitted' : `Step ${step} of 5 — ${
+              step === 1 ? 'Business Info' :
+              step === 2 ? 'KYC Verification' :
+              step === 3 ? 'Store Profile' :
+              step === 4 ? 'Bank Account' :
+              step === 5 ? 'Agreements' : 'Review & Submit'
+            }`}
+          </p>
         </div>
-      )}
-
-      <div className="flex-1 px-6 pt-6 pb-28 overflow-y-auto">
-        {step === 1 && <Step1 form={form} update={update} />}
-        {step === 2 && <Step2 form={form} update={update} userId={user?.uid} />}
-        {step === 3 && <Step3 form={form} update={update} />}
-        {step === 4 && <Step4 />}
+        <div className="w-6" />
       </div>
 
-      {/* Bottom button */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-6 pb-6 pt-3" style={{ backgroundColor: '#FFF1DD' }}>
-        {step < 4 ? (
-          <Button
-            onClick={handleNext}
-            disabled={saving || (step === 1 && !step1Valid) || (step === 3 && !step3Valid)}
-            className="w-full h-14 rounded-full text-base font-medium"
-            style={{
-              backgroundColor:
-                (step === 1 && step1Valid) || step === 2 || (step === 3 && step3Valid)
-                  ? '#A35334'
-                  : '#C9BEA8',
-              color: '#fff',
-            }}
-          >
-            {saving ? 'Saving…' : 'Next'}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleFinish}
-            disabled={saving}
-            className="w-full h-14 rounded-full text-base font-medium text-white"
-            style={{ backgroundColor: '#A35334' }}
-          >
-            Go to Dashboard
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ---------------- Step 1 ---------------- */
-const Step1 = ({
-  form,
-  update,
-}: {
-  form: FormState;
-  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-}) => {
-  const [phoneCodeOpen, setPhoneCodeOpen] = useState(false);
-  const [countryOpen, setCountryOpen] = useState(false);
-  const selectedCountryCode = CALLING_CODES.find((option) => option.code === form.phone_country_code);
-
-  return (
-  <div className="space-y-5">
-    <div>
-      <h2 className="text-3xl font-bold text-[#1a1a1a] leading-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-        Tell us about your<br />Business
-      </h2>
-      <p className="text-sm text-[#5a4a35] mt-2">This helps us personalise your experience</p>
-    </div>
-
-    <h3 className="text-sm font-bold tracking-widest text-[#A35334] uppercase pt-2">Basic Information</h3>
-
-    <Field label="Business Name*">
-      <RoundInput
-        placeholder="Legal entity name"
-        value={form.business_name}
-        onChange={(e) => update('business_name', e.target.value)}
-      />
-    </Field>
-
-    <Field label="Seller Display Name" hint="This name is shown to buyers on the platform.">
-      <RoundInput
-        placeholder="e.g. Heritage Silks"
-        value={form.seller_display_name}
-        onChange={(e) => update('seller_display_name', e.target.value)}
-      />
-    </Field>
-
-    <Field label="Contact Person">
-      <RoundInput
-        placeholder="Full name"
-        value={form.contact_person}
-        onChange={(e) => update('contact_person', e.target.value)}
-      />
-    </Field>
-
-    <Field label="Email Address">
-      <RoundInput
-        type="email"
-        placeholder="contact@business.com"
-        value={form.email}
-        onChange={(e) => update('email', e.target.value)}
-      />
-    </Field>
-
-    <Field label="Phone Number">
-      <div className="flex gap-2">
-        <PickerButton
-          label={form.phone_country_code}
-          sublabel={selectedCountryCode?.label.replace(`${selectedCountryCode.code} `, '')}
-          onClick={() => setPhoneCodeOpen(true)}
-          className="w-[106px] shrink-0 px-3"
-        />
-        <RoundInput
-          type="tel"
-          inputMode="tel"
-          placeholder="Write phone number"
-          value={form.phone_number}
-          onChange={(e) => update('phone_number', e.target.value)}
-          className="min-w-0 flex-1 px-4"
-        />
-      </div>
-    </Field>
-
-    <Field label="Country of Operations">
-      <PickerButton
-        label={form.country_of_operations || 'Select country'}
-        onClick={() => setCountryOpen(true)}
-        className="w-full px-5"
-      />
-    </Field>
-
-    {/* Islamic compliance */}
-    <div className="rounded-2xl p-5 mt-4" style={{ backgroundColor: '#F5EBB8' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <Shield className="h-5 w-5" style={{ color: '#6B7E2C' }} />
-        <span className="italic font-semibold text-lg" style={{ color: '#6B7E2C', fontFamily: 'Reem Kufi, serif' }}>
-          Islamic Compliance
-        </span>
-      </div>
-      <Checkbox
-        checked={form.halal_compliant}
-        onChange={(v) => update('halal_compliant', v)}
-        label="My products are strictly halal-compliant and ethically sourced"
-      />
-      <Checkbox
-        checked={form.no_prohibited_categories}
-        onChange={(v) => update('no_prohibited_categories', v)}
-        label="I will not list prohibited categories (Alcohol, Pork, Riba-based assets)"
-      />
-      <Checkbox
-        checked={form.understands_review}
-        onChange={(v) => update('understands_review', v)}
-        label="I understand all products may be reviewed for compliance"
-      />
-    </div>
-
-    <div className="flex items-start gap-2 pt-2">
-      <button
-        onClick={() => update('agreed_to_terms', !form.agreed_to_terms)}
-        className="mt-1 h-5 w-5 rounded-full border-2 border-[#A35334] flex items-center justify-center flex-shrink-0"
-      >
-        {form.agreed_to_terms && <div className="h-2.5 w-2.5 rounded-full bg-[#A35334]" />}
-      </button>
-      <p className="text-sm text-[#1a1a1a]">
-        I agree to Barakah Seller{' '}
-        <span className="text-[#3B6FA0] underline">Terms & Conditions</span>
-      </p>
-    </div>
-
-    {phoneCodeOpen && (
-      <OptionSheet
-        title="Phone country code"
-        searchPlaceholder="Search country or code"
-        options={CALLING_CODES.map((option) => ({
-          value: option.code,
-          label: option.code,
-          meta: option.label.replace(`${option.code} `, ''),
-          searchText: option.label,
-        }))}
-        selectedValue={form.phone_country_code}
-        onClose={() => setPhoneCodeOpen(false)}
-        onSelect={(value) => update('phone_country_code', value)}
-      />
-    )}
-
-    {countryOpen && (
-      <OptionSheet
-        title="Country of Operations"
-        searchPlaceholder="Search country"
-        options={COUNTRIES.map((country) => ({
-          value: country.name,
-          label: country.name,
-          meta: country.callingCode,
-          searchText: `${country.name} ${country.callingCode}`,
-        }))}
-        selectedValue={form.country_of_operations}
-        onClose={() => setCountryOpen(false)}
-        onSelect={(value) => update('country_of_operations', value)}
-      />
-    )}
-  </div>
-  );
-};
-
-/* ---------------- Step 2 ---------------- */
-const Step2 = ({
-  form,
-  update,
-  userId,
-}: {
-  form: FormState;
-  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-  userId?: string;
-}) => {
-  const bannerRef = useRef<HTMLInputElement>(null);
-  const logoRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState<'banner' | 'logo' | null>(null);
-
-  const upload = async (file: File, kind: 'banner' | 'logo') => {
-    if (!userId) {
-      toast.error('You must be signed in to upload images');
-      return;
-    }
-    setUploading(kind);
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `${userId}/seller-${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from('product-images').upload(path, file);
-      if (error) throw error;
-      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
-      update(kind === 'banner' ? 'banner_url' : 'logo_url', data.publicUrl);
-    } catch (e: any) {
-      toast.error(e.message || 'Upload failed');
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-3xl font-bold text-[#1a1a1a]" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-          Store profile setup
-        </h2>
-        <p className="text-sm text-[#5a4a35] mt-2">This helps us personalise your experience</p>
-      </div>
-      <p className="text-base text-[#1a1a1a] leading-relaxed">
-        You can update this anytime. Personalizing your shop helps build trust with buyers.
-      </p>
-
-      {/* Banner */}
-      <button
-        onClick={() => bannerRef.current?.click()}
-        className="w-full h-32 rounded-2xl border-2 border-dashed border-[#C9A89A] flex items-center justify-center relative overflow-hidden"
-        style={{ backgroundColor: '#FBE3DA' }}
-      >
-        {form.banner_url ? (
-          <img src={form.banner_url} alt="Banner" className="w-full h-full object-cover" />
-        ) : (
-          <div className="flex flex-col items-center text-[#8B6F5E]">
-            <Camera className="h-6 w-6 mb-1" />
-            <span className="text-sm font-medium tracking-wider">
-              {uploading === 'banner' ? 'UPLOADING…' : 'ADD BANNER'}
-            </span>
+      {/* Step Progress Bar */}
+      {step >= 1 && step <= 5 && (
+        <div className="bg-white px-4 py-3 border-b border-[#E8D5C4]">
+          <div className="flex items-center justify-between text-[11px] font-bold text-[#1a1a1a]/70 mb-1.5">
+            <span className={step >= 1 ? 'text-[#A35233]' : ''}>Business</span>
+            <span className={step >= 2 ? 'text-[#A35233]' : ''}>KYC</span>
+            <span className={step >= 3 ? 'text-[#A35233]' : ''}>Store</span>
+            <span className={step >= 4 ? 'text-[#A35233]' : ''}>Bank</span>
+            <span className={step >= 5 ? 'text-[#A35233]' : ''}>Review</span>
           </div>
-        )}
-        <span className="absolute top-2 right-3 text-xs text-[#8B6F5E]">120pt x Full</span>
-        <input
-          ref={bannerRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], 'banner')}
-        />
-      </button>
-
-      {/* Logo */}
-      <div className="flex justify-center">
-        <button
-          onClick={() => logoRef.current?.click()}
-          className="h-28 w-28 rounded-full border-2 border-dashed border-[#C9A89A] flex items-center justify-center relative overflow-hidden"
-          style={{ backgroundColor: '#FBE3DA' }}
-        >
-          {form.logo_url ? (
-            <img src={form.logo_url} alt="Logo" className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center text-[#A35334]">
-              <CameraIcon className="h-5 w-5 mb-1" />
-              <span className="text-[10px] font-semibold tracking-wider">
-                {uploading === 'logo' ? '…' : 'ADD LOGO'}
-              </span>
-            </div>
-          )}
-          <input
-            ref={logoRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], 'logo')}
-          />
-        </button>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-bold tracking-widest text-[#1a1a1a] uppercase mb-3">About Us</h3>
-        <div className="relative">
-          <Textarea
-            placeholder="Tell buyers about your store, your values, and what makes your products unique..."
-            value={form.about_us}
-            maxLength={300}
-            onChange={(e) => update('about_us', e.target.value.slice(0, 300))}
-            className="min-h-[140px] rounded-2xl bg-white border border-[#EADFC9] p-4 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#9a8a70] focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-          <span className="absolute bottom-3 right-4 text-xs text-[#C9A89A]">
-            {form.about_us.length}/300
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ---------------- Step 3 ---------------- */
-const Step3 = ({
-  form,
-  update,
-}: {
-  form: FormState;
-  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-}) => (
-  <div className="space-y-5">
-    <div>
-      <h2 className="text-3xl font-bold text-[#1a1a1a]" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-        Add Bank Details
-      </h2>
-      <p className="text-sm text-[#5a4a35] mt-2 leading-relaxed">
-        Required before your first withdrawal to ensure a seamless transfer of your earnings.
-      </p>
-    </div>
-
-    <div className="flex items-center gap-3 pt-2">
-      <span
-        className="text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full"
-        style={{ backgroundColor: '#F5D9B8', color: '#5a3a20' }}
-      >
-        Bank Details
-      </span>
-      <div className="flex-1 h-px bg-[#E5C9A8]" />
-    </div>
-
-    <Field label="Bank Account Name">
-      <RoundInput
-        placeholder="e.g. Sarah J. Al-Farsi"
-        value={form.bank_account_name}
-        onChange={(e) => update('bank_account_name', e.target.value)}
-      />
-    </Field>
-
-    <Field label="Bank Account Number">
-      <RoundInput
-        placeholder="•••• •••• •••• ••••"
-        value={form.bank_account_number}
-        onChange={(e) => update('bank_account_number', e.target.value)}
-      />
-    </Field>
-
-    <div className="flex items-center gap-3 pt-4">
-      <span
-        className="text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full"
-        style={{ backgroundColor: '#F5D9B8', color: '#5a3a20' }}
-      >
-        Payment Provider
-      </span>
-      <div className="flex-1 h-px bg-[#E5C9A8]" />
-    </div>
-
-    <div className="rounded-2xl bg-white p-4 flex items-center gap-3 shadow-sm">
-      <div className="h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: '#635BFF' }}>
-        S
-      </div>
-      <div className="flex-1">
-        <div className="font-bold text-[#1a1a1a]">Connect with Stripe</div>
-        <div className="text-xs text-[#7c6a4f]">Secure payments via Stripe</div>
-      </div>
-      <Button
-        onClick={() => {
-          update('stripe_connected', !form.stripe_connected);
-          toast.success(form.stripe_connected ? 'Stripe disconnected' : 'Stripe connected');
-        }}
-        className="rounded-full px-5 h-9 text-white font-medium"
-        style={{ backgroundColor: form.stripe_connected ? '#7c6a4f' : '#2A8049' }}
-      >
-        {form.stripe_connected ? 'Connected' : 'Connect'}
-      </Button>
-    </div>
-  </div>
-);
-
-/* ---------------- Step 4 ---------------- */
-const Step4 = () => (
-  <div className="flex flex-col items-center text-center pt-16">
-    <div className="relative">
-      <div className="h-44 w-44 rounded-full border-2 border-dashed border-[#D9C9A8] flex items-center justify-center" style={{ backgroundColor: '#EDE2C9' }}>
-        <Store className="h-16 w-16" style={{ color: '#A35334' }} />
-      </div>
-      <div className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-[#2A8049] flex items-center justify-center border-4" style={{ borderColor: '#FFF1DD' }}>
-        <Check className="h-5 w-5 text-white" strokeWidth={3} />
-      </div>
-    </div>
-    <h2 className="text-4xl italic font-bold mt-10 text-[#3a1e12]" style={{ fontFamily: 'Reem Kufi, serif' }}>
-      You're ready to sell!
-    </h2>
-    <p className="text-base text-[#1a1a1a] mt-4 leading-relaxed max-w-xs">
-      Your Barakah seller account is live. Start listing products and reach Muslim buyers worldwide.
-    </p>
-  </div>
-);
-
-/* ---------------- helpers ---------------- */
-const Field = ({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) => (
-  <div>
-    <label className="block text-base font-semibold text-[#1a1a1a] mb-2">{label}</label>
-    {children}
-    {hint && <p className="text-xs italic text-[#7c6a4f] mt-1.5">{hint}</p>}
-  </div>
-);
-
-const PickerButton = ({
-  label,
-  sublabel,
-  onClick,
-  className = '',
-}: {
-  label: string;
-  sublabel?: string;
-  onClick: () => void;
-  className?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`h-12 rounded-full bg-white border border-[#EADFC9] text-left shadow-sm flex items-center justify-between gap-2 active:scale-[0.99] transition-transform ${className}`}
-  >
-    <span className="min-w-0">
-      <span className="block text-sm font-semibold truncate text-[#1a1a1a]">{label}</span>
-      {sublabel && (
-        <span className="block text-[10px] leading-tight truncate text-[#8B6F5E]">
-          {sublabel}
-        </span>
-      )}
-    </span>
-    <ChevronDown className="h-4 w-4 shrink-0 text-[#A35334]" strokeWidth={2} />
-  </button>
-);
-
-type PickerOption = {
-  value: string;
-  label: string;
-  meta?: string;
-  searchText: string;
-};
-
-const OptionSheet = ({
-  title,
-  searchPlaceholder,
-  options,
-  selectedValue,
-  onSelect,
-  onClose,
-}: {
-  title: string;
-  searchPlaceholder: string;
-  options: PickerOption[];
-  selectedValue: string;
-  onSelect: (value: string) => void;
-  onClose: () => void;
-}) => {
-  const [query, setQuery] = useState('');
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = normalizedQuery
-    ? options.filter((option) =>
-        option.searchText.toLowerCase().includes(normalizedQuery),
-      )
-    : options;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-4 pb-4">
-      <div
-        className="w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl border"
-        style={{ backgroundColor: '#FFF5E5', borderColor: '#E4C49B' }}
-      >
-        <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3" style={{ backgroundColor: '#F5E6D0' }}>
-          <div>
-            <h3 className="text-[17px] font-bold text-[#2C1309]">{title}</h3>
-            <p className="text-[12px] text-[#8B6F5E]">{options.length} options available</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
-            style={{ color: '#A35334', backgroundColor: '#FFF5E5' }}
-            aria-label={`Close ${title}`}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="px-4 pt-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A35334]" />
-            <Input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="h-12 rounded-full bg-white border-[#EADFC9] pl-11 pr-4 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#C9A89A] focus-visible:ring-1 focus-visible:ring-[#A35334]/30 focus-visible:ring-offset-0"
+          <div className="h-2 w-full bg-[#EADFC9] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#A35233] transition-all duration-300 rounded-full"
+              style={{ width: `${(step / 5) * 100}%` }}
             />
           </div>
         </div>
+      )}
 
-        <div className="max-h-[380px] overflow-y-auto px-3 py-3">
-          {filteredOptions.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-[#8B6F5E]">
-              No matching option found.
+      {/* Main Content Area */}
+      <div className="flex-1 p-4 space-y-5 pb-24">
+        {/* ==================================================== */}
+        {/* STEP 1: BUSINESS INFORMATION */}
+        {/* ==================================================== */}
+        {step === 1 && (
+          <div className="space-y-4 bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFF1DD] flex items-center justify-center text-[#A35233]">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1a1a1a]">Business Information</h2>
+                <p className="text-xs text-gray-500">Provide legal details of your business entity</p>
+              </div>
             </div>
-          ) : (
-            filteredOptions.map((option) => {
-              const selected = option.value === selectedValue;
-              return (
-                <button
-                  type="button"
-                  key={option.value}
-                  onClick={() => {
-                    onSelect(option.value);
-                    onClose();
+
+            <FormInputField
+              label="Business / Store Name"
+              value={form.business_name}
+              onChange={(val) => updateField('business_name', val)}
+              error={errors.business_name}
+              placeholder="e.g. Barakah Boutique"
+            />
+
+            <FormInputField
+              label="Legal Business Name"
+              value={form.legal_name}
+              onChange={(val) => updateField('legal_name', val)}
+              error={errors.legal_name}
+              placeholder="Full legal registered name"
+            />
+
+            <FormSelectField
+              label="Business Type"
+              value={form.business_type}
+              options={BUSINESS_TYPES}
+              onChange={(val) => updateField('business_type', val)}
+              error={errors.business_type}
+            />
+
+            <FormSelectField
+              label="Primary Category"
+              value={form.business_category}
+              options={BUSINESS_CATEGORIES}
+              onChange={(val) => updateField('business_category', val)}
+              error={errors.business_category}
+            />
+
+            <FormInputField
+              label="Owner / Authorized Person"
+              value={form.contact_person}
+              onChange={(val) => updateField('contact_person', val)}
+              error={errors.contact_person}
+              placeholder="Full name of owner"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInputField
+                label="Email"
+                type="email"
+                value={form.email}
+                onChange={(val) => updateField('email', val)}
+                error={errors.email}
+                placeholder="seller@example.com"
+              />
+              <FormInputField
+                label="Phone Number"
+                type="tel"
+                value={form.phone_number}
+                onChange={(val) => updateField('phone_number', val)}
+                error={errors.phone_number}
+                placeholder="+91 9876543210"
+              />
+            </div>
+
+            <FormInputField
+              label="Business Address"
+              value={form.business_address}
+              onChange={(val) => updateField('business_address', val)}
+              error={errors.business_address}
+              placeholder="Street address, Suite / Shop No."
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInputField
+                label="City"
+                value={form.city}
+                onChange={(val) => updateField('city', val)}
+                error={errors.city}
+                placeholder="City"
+              />
+              <FormInputField
+                label="State"
+                value={form.state}
+                onChange={(val) => updateField('state', val)}
+                error={errors.state}
+                placeholder="State / Province"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInputField
+                label="Country"
+                value={form.country}
+                onChange={(val) => updateField('country', val)}
+                error={errors.country}
+                placeholder="India"
+              />
+              <FormInputField
+                label="PIN / Postal Code"
+                value={form.postal_code}
+                onChange={(val) => updateField('postal_code', val)}
+                error={errors.postal_code}
+                placeholder="201301"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInputField
+                label="PAN Number"
+                value={form.pan}
+                onChange={(val) => updateField('pan', val.toUpperCase())}
+                error={errors.pan}
+                placeholder="ABCDE1234F"
+                maxLength={10}
+              />
+              <FormInputField
+                label="GSTIN (Optional)"
+                required={false}
+                value={form.gstin}
+                onChange={(val) => updateField('gstin', val.toUpperCase())}
+                placeholder="22AAAAA0000A1Z5"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 2: KYC VERIFICATION */}
+        {/* ==================================================== */}
+        {step === 2 && (
+          <div className="space-y-4 bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFF1DD] flex items-center justify-center text-[#A35233]">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1a1a1a]">Verify your business</h2>
+                <p className="text-xs text-gray-500">Complete your verification to start selling on Barakah.</p>
+              </div>
+            </div>
+
+            {['Individual', 'Sole Proprietorship'].includes(form.business_type) ? (
+              <>
+                <FileUploaderCard
+                  label="PAN Card Document"
+                  currentUrl={form.pan_doc_url}
+                  loading={uploadingDoc === 'pan'}
+                  onUpload={async (file) => {
+                    const url = await handleFileUpload('pan', file);
+                    if (url) updateField('pan_doc_url', url);
                   }}
-                  className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between gap-3 transition-colors"
-                  style={{
-                    backgroundColor: selected ? '#F5EBB8' : 'transparent',
-                    color: '#2C1309',
+                  error={errors.pan_doc_url}
+                  helperText="Upload clear photo or PDF of PAN card"
+                />
+
+                <FileUploaderCard
+                  label="Identity Document (Aadhaar / Passport / Voter ID)"
+                  currentUrl={form.id_doc_url}
+                  loading={uploadingDoc === 'id'}
+                  onUpload={async (file) => {
+                    const url = await handleFileUpload('id', file);
+                    if (url) updateField('id_doc_url', url);
                   }}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold truncate">{option.label}</span>
-                    {option.meta && (
-                      <span className="block text-[12px] mt-0.5 truncate text-[#8B6F5E]">
-                        {option.meta}
-                      </span>
-                    )}
-                  </span>
-                  {selected && (
-                    <span className="h-6 w-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#A35334' }}>
-                      <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-                    </span>
-                  )}
+                  error={errors.id_doc_url}
+                  helperText="Upload government issued ID card"
+                />
+
+                <FileUploaderCard
+                  label="Address Proof (Utility Bill / Bank Statement)"
+                  required={false}
+                  currentUrl={form.address_proof_url}
+                  loading={uploadingDoc === 'address'}
+                  onUpload={async (file) => {
+                    const url = await handleFileUpload('address', file);
+                    if (url) updateField('address_proof_url', url);
+                  }}
+                  helperText="Upload address proof document (last 3 months)"
+                />
+              </>
+            ) : (
+              <>
+                <FileUploaderCard
+                  label="Business PAN Card"
+                  currentUrl={form.business_pan_doc_url}
+                  loading={uploadingDoc === 'business_pan'}
+                  onUpload={async (file) => {
+                    const url = await handleFileUpload('business_pan', file);
+                    if (url) updateField('business_pan_doc_url', url);
+                  }}
+                  error={errors.business_pan_doc_url}
+                  helperText="Upload official company PAN card"
+                />
+
+                <FileUploaderCard
+                  label="Registration / Incorporation Certificate"
+                  currentUrl={form.incorporation_doc_url}
+                  loading={uploadingDoc === 'incorporation'}
+                  onUpload={async (file) => {
+                    const url = await handleFileUpload('incorporation', file);
+                    if (url) updateField('incorporation_doc_url', url);
+                  }}
+                  error={errors.incorporation_doc_url}
+                  helperText="Upload Certificate of Incorporation / Partnership Deed"
+                />
+              </>
+            )}
+
+            <div className="bg-[#FFF5E5] p-3 rounded-xl border border-[#E8D5C4] text-xs text-[#1a1a1a]/80 space-y-1">
+              <p className="font-bold text-[#A35233]">🔒 Security & Privacy</p>
+              <p>Your documents are stored securely in encrypted storage and accessible only by authorized compliance team members.</p>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 3: STORE PROFILE */}
+        {/* ==================================================== */}
+        {step === 3 && (
+          <div className="space-y-4 bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFF1DD] flex items-center justify-center text-[#A35233]">
+                <Store className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1a1a1a]">Store Profile</h2>
+                <p className="text-xs text-gray-500">Customize how your store appears to customers</p>
+              </div>
+            </div>
+
+            <FormInputField
+              label="Store Display Name"
+              value={form.store_name}
+              onChange={(val) => updateField('store_name', val)}
+              error={errors.store_name}
+              placeholder="e.g. Al-Noor Halal Collections"
+            />
+
+            <FileUploaderCard
+              label="Store Logo"
+              currentUrl={form.logo_url}
+              loading={uploadingDoc === 'logo'}
+              onUpload={async (file) => {
+                const url = await handleFileUpload('logo', file);
+                if (url) updateField('logo_url', url);
+              }}
+              error={errors.logo_url}
+              accept="image/*"
+              helperText="Square image (500x500px recommended)"
+            />
+
+            {form.logo_url && (
+              <div className="flex items-center gap-3 p-2 bg-[#FFF1DD] rounded-xl">
+                <img src={form.logo_url} alt="Logo preview" className="w-12 h-12 rounded-full object-cover border border-[#A35233]" />
+                <span className="text-xs font-semibold text-[#1a1a1a]">Logo Preview</span>
+              </div>
+            )}
+
+            <FileUploaderCard
+              label="Store Banner Image"
+              currentUrl={form.banner_url}
+              loading={uploadingDoc === 'banner'}
+              onUpload={async (file) => {
+                const url = await handleFileUpload('banner', file);
+                if (url) updateField('banner_url', url);
+              }}
+              error={errors.banner_url}
+              accept="image/*"
+              helperText="Landscape image (1200x400px recommended)"
+            />
+
+            {form.banner_url && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-[#1a1a1a]">Banner Preview</p>
+                <img src={form.banner_url} alt="Banner preview" className="w-full h-24 rounded-xl object-cover border border-[#E8D5C4]" />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+                Store Bio / Description <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                value={form.about_us}
+                onChange={(e) => updateField('about_us', e.target.value)}
+                placeholder="Describe your brand, heritage, and values..."
+                className={`bg-white border text-sm text-[#1a1a1a] rounded-xl p-3 min-h-[90px] focus:ring-2 focus:ring-[#A35233] ${
+                  errors.about_us ? 'border-red-500' : 'border-[#E8D5C4]'
+                }`}
+              />
+              {errors.about_us && <p className="text-xs text-red-500 font-medium">{errors.about_us}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 4: BANK / PAYOUT ACCOUNT */}
+        {/* ==================================================== */}
+        {step === 4 && (
+          <div className="space-y-4 bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFF1DD] flex items-center justify-center text-[#A35233]">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1a1a1a]">Payout Account</h2>
+                <p className="text-xs text-gray-500">Specify bank account for marketplace sales earnings</p>
+              </div>
+            </div>
+
+            <FormInputField
+              label="Account Holder Name"
+              value={form.bank_account_name}
+              onChange={(val) => updateField('bank_account_name', val)}
+              error={errors.bank_account_name}
+              placeholder="Name as printed on bank statement"
+            />
+
+            <FormInputField
+              label="Bank Name"
+              value={form.bank_name}
+              onChange={(val) => updateField('bank_name', val)}
+              error={errors.bank_name}
+              placeholder="e.g. HDFC Bank / State Bank of India"
+            />
+
+            <div className="relative">
+              <FormInputField
+                label="Account Number"
+                type={showMaskedAccount ? 'password' : 'text'}
+                value={form.bank_account_number}
+                onChange={(val) => updateField('bank_account_number', val)}
+                error={errors.bank_account_number}
+                placeholder="Enter bank account number"
+              />
+              <button
+                type="button"
+                onClick={() => setShowMaskedAccount(!showMaskedAccount)}
+                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+              >
+                {showMaskedAccount ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            <FormInputField
+              label="Confirm Account Number"
+              type="text"
+              value={form.confirm_account_number}
+              onChange={(val) => updateField('confirm_account_number', val)}
+              error={errors.confirm_account_number}
+              placeholder="Re-enter bank account number"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInputField
+                label="IFSC / Swift Code"
+                value={form.ifsc}
+                onChange={(val) => updateField('ifsc', val.toUpperCase())}
+                error={errors.ifsc}
+                placeholder="HDFC0001234"
+              />
+
+              <FormSelectField
+                label="Account Type"
+                value={form.account_type}
+                options={['Savings', 'Current']}
+                onChange={(val) => updateField('account_type', val)}
+              />
+            </div>
+
+            {form.bank_account_number && (
+              <div className="bg-[#FFF5E5] p-3 rounded-xl border border-[#E8D5C4] text-xs flex items-center justify-between">
+                <span className="font-semibold text-[#1a1a1a]/70">Masked Display:</span>
+                <span className="font-mono font-bold text-[#A35233]">
+                  {maskAccountNumber(form.bank_account_number)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 5: SELLER AGREEMENTS */}
+        {/* ==================================================== */}
+        {step === 5 && (
+          <div className="space-y-4 bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFF1DD] flex items-center justify-center text-[#A35233]">
+                <FileCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1a1a1a]">Seller Agreements</h2>
+                <p className="text-xs text-gray-500">Review and accept marketplace terms & policies</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-[#E8D5C4] hover:bg-[#FFF1DD]/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.agreed_terms}
+                  onChange={(e) => updateField('agreed_terms', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#A35233]"
+                />
+                <span className="text-xs font-semibold text-[#1a1a1a]">
+                  I agree to the Barakah Seller Terms & Conditions <span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.agreed_terms && <p className="text-xs text-red-500 pl-7">{errors.agreed_terms}</p>}
+
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-[#E8D5C4] hover:bg-[#FFF1DD]/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.agreed_commission}
+                  onChange={(e) => updateField('agreed_commission', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#A35233]"
+                />
+                <span className="text-xs font-semibold text-[#1a1a1a]">
+                  I agree to the Barakah Marketplace Commission Policy (12% commission per sale) <span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.agreed_commission && <p className="text-xs text-red-500 pl-7">{errors.agreed_commission}</p>}
+
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-[#E8D5C4] hover:bg-[#FFF1DD]/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.agreed_refunds}
+                  onChange={(e) => updateField('agreed_refunds', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#A35233]"
+                />
+                <span className="text-xs font-semibold text-[#1a1a1a]">
+                  I agree to the Return & Refund Policy for Marketplace Sellers <span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.agreed_refunds && <p className="text-xs text-red-500 pl-7">{errors.agreed_refunds}</p>}
+
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-[#E8D5C4] hover:bg-[#FFF1DD]/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.agreed_accuracy}
+                  onChange={(e) => updateField('agreed_accuracy', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#A35233]"
+                />
+                <span className="text-xs font-semibold text-[#1a1a1a]">
+                  I confirm that all information and documents provided are accurate and authentic <span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.agreed_accuracy && <p className="text-xs text-red-500 pl-7">{errors.agreed_accuracy}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 6: REVIEW & SUBMIT */}
+        {/* ==================================================== */}
+        {step === 6 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] shadow-sm space-y-3">
+              <h2 className="text-base font-bold text-[#1a1a1a]">Review Your Application</h2>
+              <p className="text-xs text-gray-500">Please review all submitted details before final submission.</p>
+            </div>
+
+            {/* Business Card */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-green-600" /> Business Information
+                </span>
+                <button onClick={() => setStep(1)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
+                  <Edit3 className="h-3 w-3" /> Edit
                 </button>
-              );
-            })
+              </div>
+              <div className="text-xs space-y-1 text-gray-700">
+                <p><strong>Name:</strong> {form.business_name} ({form.legal_name})</p>
+                <p><strong>Type:</strong> {form.business_type} | <strong>Category:</strong> {form.business_category}</p>
+                <p><strong>Contact:</strong> {form.contact_person} ({form.email}, {form.phone_number})</p>
+                <p><strong>Address:</strong> {form.business_address}, {form.city}, {form.state}, {form.country} - {form.postal_code}</p>
+                <p><strong>PAN:</strong> {form.pan} {form.gstin ? `| GSTIN: ${form.gstin}` : ''}</p>
+              </div>
+            </div>
+
+            {/* KYC Card */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-green-600" /> KYC Verification Documents
+                </span>
+                <button onClick={() => setStep(2)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
+                  <Edit3 className="h-3 w-3" /> Edit
+                </button>
+              </div>
+              <p className="text-xs text-gray-700">
+                Documents uploaded successfully for verification.
+              </p>
+            </div>
+
+            {/* Store Profile Card */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-green-600" /> Store Profile
+                </span>
+                <button onClick={() => setStep(3)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
+                  <Edit3 className="h-3 w-3" /> Edit
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                {form.logo_url && <img src={form.logo_url} alt="" className="w-10 h-10 rounded-full object-cover" />}
+                <div>
+                  <p className="text-xs font-bold text-[#1a1a1a]">{form.store_name}</p>
+                  <p className="text-[11px] text-gray-500 line-clamp-1">{form.about_us}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Card */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-green-600" /> Payout Account
+                </span>
+                <button onClick={() => setStep(4)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
+                  <Edit3 className="h-3 w-3" /> Edit
+                </button>
+              </div>
+              <p className="text-xs text-gray-700">
+                <strong>{form.bank_account_name}</strong> — {form.bank_name} ({maskAccountNumber(form.bank_account_number)})
+              </p>
+            </div>
+
+            {/* Agreements Card */}
+            <div className="bg-white rounded-2xl p-4 border border-[#E8D5C4] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#A35233] flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-green-600" /> Agreements Accepted
+                </span>
+                <button onClick={() => setStep(5)} className="text-xs font-semibold text-[#A35233] underline flex items-center gap-1">
+                  <Edit3 className="h-3 w-3" /> Edit
+                </button>
+              </div>
+              <p className="text-xs text-gray-700">
+                Seller Terms, Marketplace 12% Commission Policy, and Return Policy accepted.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 7: SUBMITTED / UNDER REVIEW STATUS */}
+        {/* ==================================================== */}
+        {step === 7 && (
+          <div className="bg-white rounded-2xl p-6 border border-[#E8D5C4] shadow-sm text-center space-y-4 my-auto">
+            <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="h-10 w-10 text-[#A35233]" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-[#1a1a1a]">You&apos;re ready to sell!</h2>
+              <p className="text-xs text-gray-600 leading-relaxed max-w-xs mx-auto">
+                Your Barakah seller account has been submitted for verification. We&apos;ll review your information and notify you once your account is approved.
+              </p>
+            </div>
+
+            <div className="bg-[#FFF1DD] p-3 rounded-xl border border-[#E8D5C4] text-xs text-[#1a1a1a]/80 flex items-center justify-between">
+              <span className="font-medium">Verification Status:</span>
+              <span className="font-bold px-2.5 py-1 rounded-full bg-amber-200 text-amber-900">
+                UNDER REVIEW
+              </span>
+            </div>
+
+            <Button
+              onClick={() => navigate('/seller-dashboard')}
+              className="w-full h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm"
+            >
+              Go to Seller Dashboard
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed Bottom Action Bar */}
+      {step >= 1 && step <= 6 && (
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-[#E8D5C4] p-3 flex items-center gap-3 z-30 shadow-lg">
+          {step > 1 && (
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={saving}
+              className="flex-1 h-12 border-[#E8D5C4] text-[#1a1a1a] font-semibold rounded-xl"
+            >
+              Back
+            </Button>
+          )}
+
+          {step < 6 ? (
+            <Button
+              onClick={handleNext}
+              disabled={saving}
+              className="flex-1 h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Next'}
+              {!saving && <ChevronRight className="h-4 w-4" />}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmitVerification}
+              disabled={saving}
+              className="w-full h-12 bg-[#A35233] hover:bg-[#8B4226] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit for Verification'}
+            </Button>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
-
-const RoundInput = (props: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) => (
-  <Input
-    {...props}
-    className={`h-12 rounded-full bg-white border border-[#EADFC9] px-5 text-[#1a1a1a] caret-[#A35334] placeholder:text-[#C9A89A] focus-visible:ring-0 focus-visible:ring-offset-0 ${props.className || ''}`}
-  />
-);
-
-const Checkbox = ({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-}) => (
-  <button onClick={() => onChange(!checked)} className="flex items-start gap-3 text-left w-full mb-3 last:mb-0">
-    <span className="mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: '#6B7E2C' }}>
-      {checked && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#6B7E2C' }} />}
-    </span>
-    <span className="text-sm text-[#3a3a3a] leading-snug">{label}</span>
-  </button>
-);
 
 export default SellerOnboarding;
