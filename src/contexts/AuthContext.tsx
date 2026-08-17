@@ -435,9 +435,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
     } finally {
+      // Clear user state synchronously after signOut completes
       setUser(null);
       setUserRole(null);
-      navigate('/login', { replace: true });
+      // NOTE: Navigation to /login is handled by the caller (e.g., SideMenu.handleLogout)
+      // to avoid race conditions and double navigation
     }
   };
 

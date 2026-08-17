@@ -96,6 +96,15 @@ export const Account = () => {
 
   const accountOptions = getAccountOptions();
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      toast.error(t('account.log_out_error') || 'Failed to sign out');
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!user?.uid) return;
 
@@ -253,7 +262,7 @@ export const Account = () => {
           <Card 
             className="p-4 rounded-2xl cursor-pointer shadow-sm transition-shadow hover:shadow-md"
             style={{ backgroundColor: CARD, borderColor: '#F0C8BD' }}
-            onClick={signOut}
+            onClick={handleLogout}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
