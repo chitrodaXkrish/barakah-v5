@@ -32,7 +32,7 @@ export interface SellerFormData {
   business_name: string;
   legal_name: string;
   business_type: string;
-  business_category: string;
+  business_category: string[];
   contact_person: string;
   email: string;
   phone_number: string;
@@ -49,7 +49,6 @@ export interface SellerFormData {
   // Step 3: Store Profile
   store_name: string;
   logo_url: string;
-  banner_url: string;
   about_us: string;
 
   // Step 4: Bank Account
@@ -71,7 +70,7 @@ const initialFormState: SellerFormData = {
   business_name: '',
   legal_name: '',
   business_type: 'Sole Proprietorship',
-  business_category: 'Fashion & Apparel',
+  business_category: [],
   contact_person: '',
   email: '',
   phone_number: '',
@@ -86,7 +85,6 @@ const initialFormState: SellerFormData = {
 
   store_name: '',
   logo_url: '',
-  banner_url: '',
   about_us: '',
 
   bank_account_name: '',
@@ -112,13 +110,18 @@ const BUSINESS_TYPES = [
 ];
 
 const BUSINESS_CATEGORIES = [
-  'Fashion & Apparel',
-  'Islamic Prayer & Books',
-  'Halal Cosmetics & Personal Care',
-  'Home & Living',
-  'Accessories & Jewelry',
-  'Food & Halal Grocery',
-  'Other',
+  'Islamic Essentials',
+  'Prayer & Worship Essentials',
+  'Books & Islamic Education',
+  'Modest Fashion',
+  'Hijab & Accessories',
+  'Jewellery & Accessories',
+  'Halal Beauty & Personal Care',
+  'Fragrance & Attar',
+  'Gifts & Hampers',
+  'Hajj & Umrah Essentials',
+  'Men\'s Wear',
+  'Women\'s Wear',
 ];
 
 // Helper to mask bank account
@@ -209,6 +212,54 @@ const FormSelectField: React.FC<SelectFieldProps> = React.memo(({
           </option>
         ))}
       </select>
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+    </div>
+  );
+});
+
+interface MultiSelectFieldProps {
+  label: string;
+  required?: boolean;
+  value: string[];
+  options: string[];
+  onChange: (val: string[]) => void;
+  error?: string;
+}
+
+const FormMultiSelectField: React.FC<MultiSelectFieldProps> = React.memo(({
+  label,
+  required = true,
+  value,
+  options,
+  onChange,
+  error,
+}) => {
+  const handleToggle = (option: string) => {
+    if (value.includes(option)) {
+      onChange(value.filter((item) => item !== option));
+    } else {
+      onChange([...value, option]);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="bg-white border rounded-xl p-3 space-y-2" style={{ borderColor: error ? '#ff6b6b' : '#E8D5C4' }}>
+        {options.map((option) => (
+          <label key={option} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={value.includes(option)}
+              onChange={() => handleToggle(option)}
+              className="w-4 h-4 rounded border-[#E8D5C4] text-[#A35233] focus:ring-[#A35233]"
+            />
+            <span className="text-sm text-[#1a1a1a]">{option}</span>
+          </label>
+        ))}
+      </div>
       {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
     </div>
   );
@@ -337,7 +388,7 @@ export const SellerOnboarding = () => {
             business_name: prof.business_name || '',
             legal_name: prof.legal_name || prof.business_name || '',
             business_type: prof.business_type || 'Sole Proprietorship',
-            business_category: prof.business_category || 'Fashion & Apparel',
+            business_category: Array.isArray(prof.business_category) ? prof.business_category : [],
             contact_person: prof.contact_person || '',
             email: prof.email || user.email || '',
             phone_number: prof.phone_number || '',
@@ -348,7 +399,6 @@ export const SellerOnboarding = () => {
             postal_code: prof.postal_code || '',
             store_name: prof.seller_display_name || prof.business_name || '',
             logo_url: prof.logo_url || '',
-            banner_url: prof.banner_url || '',
             about_us: prof.about_us || '',
             bank_account_name: prof.bank_account_name || '',
             bank_account_number: prof.bank_account_number || '',
@@ -495,7 +545,6 @@ export const SellerOnboarding = () => {
         postal_code: form.postal_code,
         seller_display_name: form.store_name || form.business_name,
         logo_url: form.logo_url,
-        banner_url: form.banner_url,
         about_us: form.about_us,
         bank_account_name: form.bank_account_name,
         bank_account_number: form.bank_account_number,
@@ -579,6 +628,7 @@ export const SellerOnboarding = () => {
     if (!form.city.trim()) errs.city = 'City is required';
     if (!form.state.trim()) errs.state = 'State / Province is required';
     if (!form.postal_code.trim()) errs.postal_code = 'Postal code is required';
+    if (form.business_category.length === 0) errs.business_category = 'Please select at least one category';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -600,7 +650,6 @@ export const SellerOnboarding = () => {
     if (!form.store_name.trim()) errs.store_name = 'Store name is required';
     if (!form.about_us.trim()) errs.about_us = 'Store description is required';
     if (!form.logo_url) errs.logo_url = 'Store logo is required';
-    if (!form.banner_url) errs.banner_url = 'Store banner is required';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -771,7 +820,7 @@ export const SellerOnboarding = () => {
               error={errors.business_type}
             />
 
-            <FormSelectField
+            <FormMultiSelectField
               label={t('seller.primary_category')}
               value={form.business_category}
               options={BUSINESS_CATEGORIES}
@@ -937,26 +986,6 @@ export const SellerOnboarding = () => {
               <div className="flex items-center gap-3 p-2 bg-[#FFF1DD] rounded-xl">
                 <img src={form.logo_url} alt="Logo preview" className="w-12 h-12 rounded-full object-cover border border-[#A35233]" />
                 <span className="text-xs font-semibold text-[#1a1a1a]">{t('seller.logo_preview')}</span>
-              </div>
-            )}
-
-            <FileUploaderCard
-              label={t('seller.store_banner')}
-              currentUrl={form.banner_url}
-              loading={uploadingDoc === 'banner'}
-              onUpload={async (file) => {
-                const url = await handleFileUpload('banner', file);
-                if (url) updateField('banner_url', url);
-              }}
-              error={errors.banner_url}
-              accept="image/*"
-              helperText="Landscape image (1200x400px recommended)"
-            />
-
-            {form.banner_url && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-[#1a1a1a]">{t('seller.banner_preview')}</p>
-                <img src={form.banner_url} alt="Banner preview" className="w-full h-24 rounded-xl object-cover border border-[#E8D5C4]" />
               </div>
             )}
 
@@ -1156,7 +1185,8 @@ export const SellerOnboarding = () => {
               </div>
               <div className="text-xs space-y-1 text-gray-700">
                 <p><strong>Name:</strong> {form.business_name} ({form.legal_name})</p>
-                <p><strong>Type:</strong> {form.business_type} | <strong>Category:</strong> {form.business_category}</p>
+                <p><strong>Type:</strong> {form.business_type}</p>
+                <p><strong>Categories:</strong> {form.business_category.length > 0 ? form.business_category.join(', ') : 'None selected'}</p>
                 <p><strong>Contact:</strong> {form.contact_person} ({form.email}, {form.phone_number})</p>
                 <p><strong>Address:</strong> {form.business_address}, {form.city}, {form.state}, {form.country} - {form.postal_code}</p>
                 <p><strong>ID Document:</strong> Uploaded</p>

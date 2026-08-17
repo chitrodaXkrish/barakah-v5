@@ -10,8 +10,13 @@ const config: CapacitorConfig = {
   ios: {
     scheme: 'com.barakah.services',
     // Preserve native safe-area insets for the WebView. The web UI consumes
-    // them with CSS env(safe-area-inset-*), where needed.
+    // them with CSS env(safe-area-inset-*), which prevents content from
+    // rendering underneath the system status bar, notch, or Dynamic Island.
     contentInset: 'automatic',
+  },
+  android: {
+    // Safe-area insets are automatically respected by Capacitor WebView
+    // on Android, ensuring content doesn't overlap with system UI
   },
 };
 
