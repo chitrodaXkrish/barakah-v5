@@ -14,41 +14,43 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
     private var isAudioTapInstalled = false
     
     @objc func start(_ call: CAPPluginCall) {
+        if activeCall != nil {
+            call.reject("Voice input is already active.")
+            return
+        }
+
         cleanupRecognition()
         let language = call.getString("language") ?? "en-US"
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
         speechRecognizer?.delegate = self
-        
+
         guard let recognizer = speechRecognizer, recognizer.isAvailable else {
             call.reject("Speech recognition is not available on this iOS device.")
             return
         }
-        
-        SFSpeechRecognizer.requestAuthorization { authStatus in
-            DispatchQueue.main.async {
-                switch authStatus {
-                case .authorized:
-                    self.requestMicrophonePermission(call)
-                case .denied:
-                    call.reject("Speech recognition permission was denied.")
-                case .restricted:
-                    call.reject("Speech recognition is restricted on this device.")
-                case .notDetermined:
-                    call.reject("Speech recognition permission not determined.")
-                @unknown default:
-                    call.reject("Unknown authorization status.")
-                }
-            }
-        }
-    }
-    
-    private func requestMicrophonePermission(_ call: CAPPluginCall) {
+
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
             DispatchQueue.main.async {
-                if granted {
-                    self.startRecording(call)
-                } else {
+                if !granted {
                     call.reject("Microphone permission was denied.")
+                    return
+                }
+
+                SFSpeechRecognizer.requestAuthorization { authStatus in
+                    DispatchQueue.main.async {
+                        switch authStatus {
+                        case .authorized:
+                            self.startRecording(call)
+                        case .denied:
+                            call.reject("Speech recognition permission was denied.")
+                        case .restricted:
+                            call.reject("Speech recognition is restricted on this device.")
+                        case .notDetermined:
+                            call.reject("Speech recognition permission not determined.")
+                        @unknown default:
+                            call.reject("Unknown authorization status.")
+                        }
+                    }
                 }
             }
         }
@@ -149,6 +151,10 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegat
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            // Ignore inactive-session cleanup failures.
+        }
     }
 }
