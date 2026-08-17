@@ -131,7 +131,29 @@ const verseAudio = (surahNo: number, verseNo: number, reciterId: string) =>
   `https://everyayah.com/data/${RECITER_FOLDER[reciterId]}/${String(surahNo).padStart(3, '0')}${String(
     verseNo,
   ).padStart(3, '0')}.mp3`;
+async function fetchQuranJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Quran data: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
 
+const mapQuranChapterToSurah = (chapter: any, verses: any[] = []): SurahDetail => ({
+  surahName: chapter?.name_simple || chapter?.surahName || 'Unknown Surah',
+  surahNameArabic: chapter?.name_arabic || chapter?.surahNameArabic || '',
+  surahNameArabicLong: chapter?.name_arabic || chapter?.surahNameArabicLong || '',
+  surahNameTranslation: chapter?.translated_name?.name || chapter?.surahNameTranslation || chapter?.name_simple || 'Unknown Surah',
+  revelationPlace: chapter?.revelation_place === 'makkah' ? 'Mecca' : chapter?.revelation_place === 'madinah' ? 'Madina' : chapter?.revelation_place || '',
+  totalAyah: Number(chapter?.verses_count || verses.length || 0),
+  surahNo: Number(chapter?.id || chapter?.surahNo || 0),
+  arabic1: (verses || []).map((verse: any) => verse?.text_uthmani || verse?.text_uthmani_simple || ''),
+  english: (verses || []).map((verse: any) => {
+    const translated = Array.isArray(verse?.translations) ? verse.translations.find((item: any) => item?.language_name === 'english' || item?.language_name === 'English' || !item?.language_name) : null;
+    return translated?.text || verse?.translation?.text || '';
+  }),
+  audio: {},
+});
 const QURAN_BOOKMARK_KEY = 'barakah_quran_bookmark';
 const QURAN_READING_STATS_KEY = 'barakah_quran_reading_stats';
 
@@ -255,10 +277,21 @@ export const Quran = () => {
 
   // Fetch surah list
   useEffect(() => {
-    fetch('https://quranapi.pages.dev/api/surah.json')
-      .then((r) => r.json())
-      .then((d) => setSurahs(d))
-      .catch(() => {})
+    fetchQuranJson<{ chapters: any[] }>('https://api.quran.com/api/v4/chapters?language=en')
+      .then((data) => {
+        const nextSurahs = (data?.chapters || []).map((chapter) => ({
+          surahName: chapter?.name_simple || 'Unknown Surah',
+          surahNameArabic: chapter?.name_arabic || '',
+          surahNameArabicLong: chapter?.name_arabic || '',
+          surahNameTranslation: chapter?.translated_name?.name || chapter?.name_simple || 'Unknown Surah',
+          revelationPlace: chapter?.revelation_place === 'makkah' ? 'Mecca' : chapter?.revelation_place === 'madinah' ? 'Madina' : chapter?.revelation_place || '',
+          totalAyah: Number(chapter?.verses_count || 0),
+        }));
+        setSurahs(nextSurahs);
+      })
+      .catch(() => {
+        setSurahs([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -289,10 +322,14 @@ export const Quran = () => {
     setDetailTab('translation');
     setSelectedPara(null);
     try {
-      const r = await fetch(`https://quranapi.pages.dev/api/${surahNo}.json`);
-      const data = await r.json();
-      setSelectedSurah({ ...data, surahNo });
+      const [chapterRes, verseRes] = await Promise.all([
+        fetchQuranJson<{ chapter: any }>(`https://api.quran.com/api/v4/chapters/${surahNo}?language=en`),
+        fetchQuranJson<{ verses: any[] }>(`https://api.quran.com/api/v4/verses/by_chapter/${surahNo}?language=en&translations=131`),
+      ]);
+      setSelectedSurah(mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses));
       saveQuranReadingDay();
+    } catch {
+      setSelectedSurah(null);
     } finally {
       setLoadingSurah(false);
     }
@@ -314,9 +351,11 @@ export const Quran = () => {
       );
       const details = await Promise.all(
         surahNumbers.map(async (surahNo) => {
-          const response = await fetch(`https://quranapi.pages.dev/api/${surahNo}.json`);
-          const data = await response.json();
-          return { ...data, surahNo } as SurahDetail;
+          const [chapterRes, verseRes] = await Promise.all([
+            fetchQuranJson<{ chapter: any }>(`https://api.quran.com/api/v4/chapters/${surahNo}?language=en`),
+            fetchQuranJson<{ verses: any[] }>(`https://api.quran.com/api/v4/verses/by_chapter/${surahNo}?language=en&translations=131`),
+          ]);
+          return mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses);
         }),
       );
 
@@ -345,6 +384,8 @@ export const Quran = () => {
 
       setSelectedPara({ paraNo, verses });
       saveQuranReadingDay();
+    } catch {
+      setSelectedPara({ paraNo, verses: [] });
     } finally {
       setLoadingPara(false);
     }
@@ -492,16 +533,16 @@ export const Quran = () => {
 
         <div className="px-5 mt-6">
           <div className="grid grid-cols-2 text-center">
-            {(['translation', 'arabic'] as const).map((t) => {
-              const active = detailTab === t;
+            {(['translation', 'arabic'] as const).map((tabKey) => {
+              const active = detailTab === tabKey;
               return (
                 <button
-                  key={t}
-                  onClick={() => setDetailTab(t)}
+                  key={tabKey}
+                  onClick={() => setDetailTab(tabKey)}
                   className="pb-2 text-[15px] font-semibold relative"
                   style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
                 >
-                  {t === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
+                  {tabKey === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
                   <span
                     className="absolute left-0 right-0 -bottom-px h-[2px]"
                     style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
@@ -656,16 +697,16 @@ export const Quran = () => {
         {/* Tabs */}
         <div className="px-5 mt-6">
           <div className="grid grid-cols-2 text-center">
-            {(['translation', 'arabic'] as const).map((t) => {
-              const active = detailTab === t;
+            {(['translation', 'arabic'] as const).map((tabKey) => {
+              const active = detailTab === tabKey;
               return (
                 <button
-                  key={t}
-                  onClick={() => setDetailTab(t)}
+                  key={tabKey}
+                  onClick={() => setDetailTab(tabKey)}
                   className="pb-2 text-[15px] font-semibold relative"
                   style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
                 >
-                  {t === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
+                  {tabKey === 'translation' ? t('quran.with_translation') : t('quran.arabic_only')}
                   <span
                     className="absolute left-0 right-0 -bottom-px h-[2px]"
                     style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
@@ -852,16 +893,16 @@ export const Quran = () => {
       {/* Tabs */}
       <div className="px-10 mt-6">
         <div className="grid grid-cols-2 text-center">
-          {(['surah', 'para'] as const).map((t) => {
-            const active = tab === t;
+          {(['surah', 'para'] as const).map((tabKey) => {
+            const active = tab === tabKey;
             return (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
                 className="pb-2 text-[16px] font-semibold relative capitalize"
                 style={{ color: active ? BROWN_ACCENT : '#B69E84' }}
               >
-                {t === 'surah' ? t('quran.surah') : t('quran.para')}
+                {tabKey === 'surah' ? t('quran.surah') : t('quran.para')}
                 <span
                   className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full"
                   style={{ backgroundColor: active ? BROWN_ACCENT : BORDER }}
