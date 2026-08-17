@@ -11,8 +11,16 @@ import { Card } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
 import loginFullBg from '@/assets/login-full-bg.png.asset.json';
-import appleLogo from '@/assets/AppleLogo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
+
+const AppleLogoMark = () => (
+  <svg viewBox="0 0 24 24" className="w-[30px] h-[30px] mr-2" aria-hidden="true">
+    <path
+      fill="currentColor"
+      d="M17.05 11.68c0-2.05 1.66-3.03 1.74-3.08-.95-1.39-2.42-1.59-2.94-1.61-1.25-.13-2.45.74-3.1.74-.65 0-1.63-.72-2.67-.7-1.38.02-2.66.8-3.37 2.04-1.44 2.49-.37 6.18 1.03 8.2.68.98 1.5 2.07 2.57 2.03 1.03-.04 1.42-.66 2.67-.66 1.25 0 1.61.66 2.69.64 1.12-.02 1.83-1.02 2.5-2 .79-1.16 1.11-2.29 1.13-2.35-.02-.01-2.17-.83-3.22-3.1ZM15.5 6.06c.56-.68.94-1.63.84-2.58-.81.03-1.8.54-2.38 1.21-.52.61-1 1.59-.87 2.53.92.07 1.84-.46 2.41-1.16Z"
+    />
+  </svg>
+);
 
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
 
@@ -295,9 +303,9 @@ export const Register = () => {
               onClick={handleAppleSignIn}
               disabled={loading}
               variant="outline"
-              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium flex items-center justify-center"
             >
-              <img src={assetUrl(appleLogo)} alt="Apple" className="w-5 h-5 mr-2 object-contain" />
+              <AppleLogoMark />
               {t('login.apple')}
             </Button>
 
@@ -480,9 +488,9 @@ export const Register = () => {
                     onClick={handleAppleSignIn}
                     disabled={loading}
                     variant="outline"
-                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium flex items-center justify-center"
                   >
-                    <img src={assetUrl(appleLogo)} alt="Apple" className="w-5 h-5 mr-2 object-contain" />
+                    <AppleLogoMark />
                     {t('login.apple')}
                   </Button>
                 </>

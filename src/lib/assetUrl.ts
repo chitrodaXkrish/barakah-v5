@@ -23,8 +23,19 @@ export function assetUrl(pointer: { url: string } | string): string {
   const raw = typeof pointer === "string" ? pointer : pointer?.url ?? "";
   if (!raw) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith("/__l5e/") && isNativeWebView()) {
+
+  const needsCdnRewrite = raw.startsWith("/__l5e/") && (
+    isNativeWebView() ||
+    typeof window !== "undefined" && (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "0.0.0.0"
+    )
+  );
+
+  if (needsCdnRewrite) {
     return CDN_ORIGIN + raw;
   }
+
   return raw;
 }
