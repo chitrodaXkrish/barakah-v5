@@ -116,8 +116,7 @@ export const PrivacyPolicy = () => (
       <p>Barakah is a brand owned and operated by KONNECTHU LLP.</p>
       <p className="whitespace-pre-line">
         KONNECTHU LLP{"\n"}
-        Shop No. 12, Zarina Bano, Khan Chawl,{"\n"}
-        Mogra Pada, Andheri East,{"\n"}
+        Andheri East,{"\n"}
         Mumbai - 400069, Maharashtra, India{"\n"}
         Email: <a href="mailto:info@barakah.services" className="underline">info@barakah.services</a>
       </p>
