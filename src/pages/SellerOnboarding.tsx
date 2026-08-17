@@ -41,15 +41,10 @@ export interface SellerFormData {
   state: string;
   country: string;
   postal_code: string;
-  pan: string;
-  gstin: string;
 
   // Step 2: KYC Documents (URLs / Storage Paths)
-  pan_doc_url: string;
   id_doc_url: string;
   address_proof_url: string;
-  business_pan_doc_url: string;
-  incorporation_doc_url: string;
 
   // Step 3: Store Profile
   store_name: string;
@@ -83,16 +78,11 @@ const initialFormState: SellerFormData = {
   business_address: '',
   city: '',
   state: '',
-  country: 'India',
+  country: '',
   postal_code: '',
-  pan: '',
-  gstin: '',
 
-  pan_doc_url: '',
   id_doc_url: '',
   address_proof_url: '',
-  business_pan_doc_url: '',
-  incorporation_doc_url: '',
 
   store_name: '',
   logo_url: '',
@@ -354,10 +344,8 @@ export const SellerOnboarding = () => {
             business_address: prof.business_address || '',
             city: prof.city || '',
             state: prof.state || '',
-            country: prof.country || 'India',
+            country: prof.country || '',
             postal_code: prof.postal_code || '',
-            pan: prof.pan || '',
-            gstin: prof.gstin || '',
             store_name: prof.seller_display_name || prof.business_name || '',
             logo_url: prof.logo_url || '',
             banner_url: prof.banner_url || '',
@@ -401,11 +389,8 @@ export const SellerOnboarding = () => {
 
         if (docsData && mounted) {
           docsData.forEach((doc: any) => {
-            if (doc.document_type === 'pan') setForm((p) => ({ ...p, pan_doc_url: doc.doc_url }));
             if (doc.document_type === 'id') setForm((p) => ({ ...p, id_doc_url: doc.doc_url }));
             if (doc.document_type === 'address') setForm((p) => ({ ...p, address_proof_url: doc.doc_url }));
-            if (doc.document_type === 'business_pan') setForm((p) => ({ ...p, business_pan_doc_url: doc.doc_url }));
-            if (doc.document_type === 'incorporation') setForm((p) => ({ ...p, incorporation_doc_url: doc.doc_url }));
           });
         }
       } catch (err) {
@@ -508,8 +493,6 @@ export const SellerOnboarding = () => {
         state: form.state,
         country: form.country,
         postal_code: form.postal_code,
-        pan: form.pan,
-        gstin: form.gstin,
         seller_display_name: form.store_name || form.business_name,
         logo_url: form.logo_url,
         banner_url: form.banner_url,
@@ -568,8 +551,7 @@ export const SellerOnboarding = () => {
           {
             seller_id: user.uid,
             status: completed ? 'UNDER_REVIEW' : 'PENDING',
-            pan: form.pan,
-            business_pan: form.pan,
+            id_document_url: form.id_doc_url,
           },
           { onConflict: 'seller_id' }
         );
@@ -595,9 +577,8 @@ export const SellerOnboarding = () => {
     if (!form.phone_number.trim()) errs.phone_number = 'Phone number is required';
     if (!form.business_address.trim()) errs.business_address = 'Business address is required';
     if (!form.city.trim()) errs.city = 'City is required';
-    if (!form.state.trim()) errs.state = 'State is required';
-    if (!form.postal_code.trim()) errs.postal_code = 'Postal / PIN code is required';
-    if (!form.pan.trim()) errs.pan = 'PAN number is required';
+    if (!form.state.trim()) errs.state = 'State / Province is required';
+    if (!form.postal_code.trim()) errs.postal_code = 'Postal code is required';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -605,14 +586,9 @@ export const SellerOnboarding = () => {
 
   const validateStep2 = (): boolean => {
     const errs: Record<string, string> = {};
-    const isIndividual = ['Individual', 'Sole Proprietorship'].includes(form.business_type);
 
-    if (isIndividual) {
-      if (!form.pan_doc_url) errs.pan_doc_url = 'PAN document is required';
-      if (!form.id_doc_url) errs.id_doc_url = 'Identity proof document is required';
-    } else {
-      if (!form.business_pan_doc_url) errs.business_pan_doc_url = 'Business PAN document is required';
-      if (!form.incorporation_doc_url) errs.incorporation_doc_url = 'Incorporation certificate is required';
+    if (!form.id_doc_url) {
+      errs.id_doc_url = 'Government / state-issued ID document is required';
     }
 
     setErrors(errs);
@@ -872,23 +848,6 @@ export const SellerOnboarding = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormInputField
-                label={t('seller.pan')}
-                value={form.pan}
-                onChange={(val) => updateField('pan', val.toUpperCase())}
-                error={errors.pan}
-                placeholder="ABCDE1234F"
-                maxLength={10}
-              />
-              <FormInputField
-                label={t('seller.gstin')}
-                required={false}
-                value={form.gstin}
-                onChange={(val) => updateField('gstin', val.toUpperCase())}
-                placeholder="22AAAAA0000A1Z5"
-              />
-            </div>
           </div>
         )}
 
@@ -907,71 +866,29 @@ export const SellerOnboarding = () => {
               </div>
             </div>
 
-            {['Individual', 'Sole Proprietorship'].includes(form.business_type) ? (
-              <>
-                <FileUploaderCard
-                  label="PAN Card Document"
-                  currentUrl={form.pan_doc_url}
-                  loading={uploadingDoc === 'pan'}
-                  onUpload={async (file) => {
-                    const url = await handleFileUpload('pan', file);
-                    if (url) updateField('pan_doc_url', url);
-                  }}
-                  error={errors.pan_doc_url}
-                  helperText="Upload clear photo or PDF of PAN card"
-                />
+            <FileUploaderCard
+              label="Government / State-issued ID"
+              currentUrl={form.id_doc_url}
+              loading={uploadingDoc === 'id'}
+              onUpload={async (file) => {
+                const url = await handleFileUpload('id', file);
+                if (url) updateField('id_doc_url', url);
+              }}
+              error={errors.id_doc_url}
+              helperText="Upload a clear photo or PDF of a valid government, national, or state-issued ID"
+            />
 
-                <FileUploaderCard
-                  label="Identity Document (Aadhaar / Passport / Voter ID)"
-                  currentUrl={form.id_doc_url}
-                  loading={uploadingDoc === 'id'}
-                  onUpload={async (file) => {
-                    const url = await handleFileUpload('id', file);
-                    if (url) updateField('id_doc_url', url);
-                  }}
-                  error={errors.id_doc_url}
-                  helperText="Upload government issued ID card"
-                />
-
-                <FileUploaderCard
-                  label="Address Proof (Utility Bill / Bank Statement)"
-                  required={false}
-                  currentUrl={form.address_proof_url}
-                  loading={uploadingDoc === 'address'}
-                  onUpload={async (file) => {
-                    const url = await handleFileUpload('address', file);
-                    if (url) updateField('address_proof_url', url);
-                  }}
-                  helperText="Upload address proof document (last 3 months)"
-                />
-              </>
-            ) : (
-              <>
-                <FileUploaderCard
-                  label="Business PAN Card"
-                  currentUrl={form.business_pan_doc_url}
-                  loading={uploadingDoc === 'business_pan'}
-                  onUpload={async (file) => {
-                    const url = await handleFileUpload('business_pan', file);
-                    if (url) updateField('business_pan_doc_url', url);
-                  }}
-                  error={errors.business_pan_doc_url}
-                  helperText="Upload official company PAN card"
-                />
-
-                <FileUploaderCard
-                  label="Registration / Incorporation Certificate"
-                  currentUrl={form.incorporation_doc_url}
-                  loading={uploadingDoc === 'incorporation'}
-                  onUpload={async (file) => {
-                    const url = await handleFileUpload('incorporation', file);
-                    if (url) updateField('incorporation_doc_url', url);
-                  }}
-                  error={errors.incorporation_doc_url}
-                  helperText="Upload Certificate of Incorporation / Partnership Deed"
-                />
-              </>
-            )}
+            <FileUploaderCard
+              label="Address Proof"
+              required={false}
+              currentUrl={form.address_proof_url}
+              loading={uploadingDoc === 'address'}
+              onUpload={async (file) => {
+                const url = await handleFileUpload('address', file);
+                if (url) updateField('address_proof_url', url);
+              }}
+              helperText="Optional: upload a utility bill, bank statement, or official address document"
+            />
 
             <div className="bg-[#FFF5E5] p-3 rounded-xl border border-[#E8D5C4] text-xs text-[#1a1a1a]/80 space-y-1">
               <p className="font-bold text-[#A35233]">🔒 Security & Privacy</p>
@@ -1242,7 +1159,7 @@ export const SellerOnboarding = () => {
                 <p><strong>Type:</strong> {form.business_type} | <strong>Category:</strong> {form.business_category}</p>
                 <p><strong>Contact:</strong> {form.contact_person} ({form.email}, {form.phone_number})</p>
                 <p><strong>Address:</strong> {form.business_address}, {form.city}, {form.state}, {form.country} - {form.postal_code}</p>
-                <p><strong>PAN:</strong> {form.pan} {form.gstin ? `| GSTIN: ${form.gstin}` : ''}</p>
+                <p><strong>ID Document:</strong> Uploaded</p>
               </div>
             </div>
 

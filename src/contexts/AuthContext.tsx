@@ -431,10 +431,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setUserRole(null);
-    navigate('/login');
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) throw error;
+    } finally {
+      setUser(null);
+      setUserRole(null);
+      navigate('/login', { replace: true });
+    }
   };
 
   return (

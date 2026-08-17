@@ -114,11 +114,10 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   };
 
   const handleLogout = async () => {
-    shareData.text = t('menu.share_text');
     try {
       await signOut();
       onClose();
-      navigate('/login');
+      navigate('/login', { replace: true });
     } catch {
       toast.error(t('menu.sign_out_error'));
     }
