@@ -16,16 +16,17 @@ interface TopHeaderProps {
   titleStyle?: React.CSSProperties;
   buttonClassName?: string;
   leftAlignTitle?: boolean;
+  disableSafeAreaPadding?: boolean;
 }
 
-export const TopHeader = ({ onMenuClick, title, rightContent, onSearchClick, showSearch, className, titleClassName, titleStyle, buttonClassName, leftAlignTitle }: TopHeaderProps) => {
+export const TopHeader = ({ onMenuClick, title, rightContent, onSearchClick, showSearch, className, titleClassName, titleStyle, buttonClassName, leftAlignTitle, disableSafeAreaPadding }: TopHeaderProps) => {
   const isIos = Capacitor.getPlatform() === 'ios';
 
   return (
     <header 
       className={cn("relative z-20 px-5 py-4 flex items-center font-arabic", leftAlignTitle ? "justify-start gap-3" : "justify-between", className)}
       style={{
-        paddingTop: isIos ? 'calc(env(safe-area-inset-top) + 1rem)' : undefined
+        paddingTop: isIos && !disableSafeAreaPadding ? 'calc(env(safe-area-inset-top) + 1rem)' : undefined
       }}
     >
       <Button 

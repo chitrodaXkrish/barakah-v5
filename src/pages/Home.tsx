@@ -341,7 +341,6 @@ export const Home = () => {
         className="relative pt-4 pb-16 overflow-hidden"
         style={{
           background: 'linear-gradient(177deg, #78351A 2.14%, #CE5728 60%, #D97A4A 85%, #E8A87C 100%)',
-          paddingTop: Capacitor.getPlatform() === 'ios' ? 'calc(env(safe-area-inset-top) + 1rem)' : '1rem',
         }}
       >
         {/* soft radial glows */}

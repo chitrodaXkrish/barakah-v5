@@ -4,7 +4,13 @@ import Speech
 import AVFoundation
 
 @objc(NativeSpeechRecognitionPlugin)
-public class NativeSpeechRecognitionPlugin: CAPPlugin, SFSpeechRecognizerDelegate {
+public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeechRecognizerDelegate {
+    public let identifier = "NativeSpeechRecognitionPlugin"
+    public let jsName = "NativeSpeechRecognition"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+    ]
     
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?

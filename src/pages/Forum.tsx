@@ -2281,6 +2281,7 @@ export const Forum = () => {
       headerTitleStyle={{ color: '#2C1309' }}
       headerButtonClassName="text-[#2C1309] hover:bg-[#2C1309]/10 hover:text-[#2C1309] border-transparent hover:border-[#2C1309]/25"
       leftAlignHeaderTitle
+      disableHeaderSafeAreaPadding
       pageBackgroundColor={CREAM_BG}
     >
       <div 
