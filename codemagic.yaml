@@ -14,7 +14,9 @@ workflows:
       xcode: latest
     scripts:
       - name: Install JavaScript dependencies
-        script: npm ci
+        script: |
+          npm config set cache "$CM_BUILD_DIR/.npm-cache" --global
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
       - name: Build web application
         script: npm run build
       - name: Sync Capacitor iOS project
