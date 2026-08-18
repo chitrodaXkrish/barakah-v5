@@ -65,6 +65,16 @@ const NEWS_FUNCTION_HEADERS = {
 };
 const FETCHED_ARTICLE_CACHE_KEY = 'barakah:fetched-news-articles:v1';
 
+function removeUnavailablePaidPlanText(value: string | null): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/\bONLY\s+AVAILABLE\s+IN\s+PAID\s+PLANS\b\.?/gi, '')
+    .replace(/\bAVAILABLE\s+ONLY\s+IN\s+PAID\s+PLANS\b\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || null;
+}
+
 function hashString(value: string): string {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -75,6 +85,37 @@ function hashString(value: string): string {
 
 function newsItemId(article: FetchedNewsArticle): string {
   return article.id || `feed-${hashString(article.guid || article.article_url || article.title)}`;
+}
+
+function normalizeArticleKey(value: string): string {
+  try {
+    const url = new URL(value.trim());
+    url.hash = '';
+    [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'fbclid',
+      'gclid',
+    ].forEach((param) => url.searchParams.delete(param));
+    return url.toString().replace(/\/$/, '').toLowerCase();
+  } catch {
+    return value.trim().replace(/\/$/, '').toLowerCase();
+  }
+}
+
+function dedupeNewsItems(items: NewsItem[]): NewsItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.article_url
+      ? normalizeArticleKey(item.article_url)
+      : item.title.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function cacheFetchedArticles(articles: FetchedNewsArticle[]) {
@@ -140,7 +181,7 @@ function timeAgo(iso: string | null): string {
 const toNewsItem = (article: FetchedNewsArticle): NewsItem => ({
   id: newsItemId(article),
   title: article.title,
-  description: article.description,
+  description: removeUnavailablePaidPlanText(article.description),
   image_url: article.image_url,
   article_url: article.article_url,
   source: article.source_name,
@@ -168,7 +209,7 @@ export const News = () => {
     if (selectedCategory !== 'all') q = q.eq('category', selectedCategory);
     const { data, error } = await q;
     if (!error && data) {
-      const nextItems = data.map((d) => toNewsItem({
+      const nextItems = dedupeNewsItems(data.map((d) => toNewsItem({
         id: d.id,
         title: d.title,
         description: d.description,
@@ -177,7 +218,7 @@ export const News = () => {
         source_name: d.source_name,
         published_at: d.published_at,
         category: (d.category as NewsCategory) ?? 'world',
-      }));
+      })));
       setItems(nextItems);
       setLoading(false);
       return nextItems;
@@ -210,9 +251,9 @@ export const News = () => {
           : `Fetched ${data?.totalProcessed ?? 0} articles`,
       });
       const fetchedItems = Array.isArray(data?.articles)
-        ? data.articles
+        ? dedupeNewsItems(data.articles
             .map((article: FetchedNewsArticle) => toNewsItem(article))
-            .filter((article: NewsItem) => selectedCategory === 'all' || article.category === selectedCategory)
+            .filter((article: NewsItem) => selectedCategory === 'all' || article.category === selectedCategory))
         : [];
       if (Array.isArray(data?.articles)) {
         cacheFetchedArticles(data.articles);
@@ -220,6 +261,7 @@ export const News = () => {
       if (fetchedItems.length > 0) {
         setItems(fetchedItems);
         setLoading(false);
+        return;
       }
       const loadedItems = await load();
       if (loadedItems.length === 0 && fetchedItems.length > 0) {

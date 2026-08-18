@@ -35,6 +35,7 @@ interface NewsItem {
   id: string;
   title: string;
   source_name: string;
+  article_url?: string | null;
   category?: string | null;
   image_url?: string | null;
   published_at?: string | null;
@@ -80,6 +81,38 @@ const cacheWindow = (items: CachedNotification[], sessionStartedAt: number) => {
   return items
     .filter((item) => item.receivedAt >= earliest)
     .sort((a, b) => b.receivedAt - a.receivedAt);
+};
+
+const normalizeNewsKey = (item: Pick<NewsItem, 'article_url' | 'title'>) => {
+  if (item.article_url) {
+    try {
+      const url = new URL(item.article_url.trim());
+      url.hash = '';
+      [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'fbclid',
+        'gclid',
+      ].forEach((param) => url.searchParams.delete(param));
+      return url.toString().replace(/\/$/, '').toLowerCase();
+    } catch {
+      return item.article_url.trim().replace(/\/$/, '').toLowerCase();
+    }
+  }
+  return item.title.replace(/\s+/g, ' ').trim().toLowerCase();
+};
+
+const dedupeNewsItems = (items: NewsItem[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = normalizeNewsKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const notificationTimeLabel = (receivedAt: number, nowDate: Date) => {
@@ -246,10 +279,10 @@ export const Home = () => {
     (async () => {
       const { data } = await supabase
         .from('news_articles')
-        .select('id, title, source_name, category, image_url, published_at')
+        .select('id, title, source_name, article_url, category, image_url, published_at')
         .order('published_at', { ascending: false, nullsFirst: false })
-        .limit(4);
-      if (data) setNews(data as NewsItem[]);
+        .limit(12);
+      if (data) setNews(dedupeNewsItems(data as NewsItem[]).slice(0, 4));
     })();
   }, []);
 

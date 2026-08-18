@@ -1073,12 +1073,33 @@ export const SellerOnboarding = () => {
                 placeholder="HDFC0001234"
               />
 
-              <FormSelectField
-                label={t('seller.account_type')}
-                value={form.account_type}
-                options={[t('seller.cat_savings'), t('seller.cat_current')]}
-                onChange={(val) => updateField('account_type', val)}
-              />
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#1a1a1a] flex items-center gap-1">
+                  {t('seller.account_type')} <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-[#E8D5C4] bg-[#FFF5E5] p-1">
+                  {[
+                    { value: 'Savings', label: t('seller.cat_savings') },
+                    { value: 'Current', label: t('seller.cat_current') },
+                  ].map((option) => {
+                    const isSelected = form.account_type === option.value || form.account_type === option.label;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => updateField('account_type', option.value)}
+                        className={`h-9 rounded-lg text-xs font-bold transition-colors ${
+                          isSelected
+                            ? 'bg-[#A35233] text-white shadow-sm'
+                            : 'text-[#1a1a1a]/70 hover:bg-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {form.bank_account_number && (

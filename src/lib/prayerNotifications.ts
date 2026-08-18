@@ -22,15 +22,25 @@ export interface PrayerNotificationPreview {
 const CHANNEL_ID = 'prayer-times';
 const NOTIFICATION_GROUP = 'barakah-prayer-times';
 const MAX_PRAYER_NOTIFICATION_SLOTS = 6;
+const PRE_PRAYER_MINUTES = 5;
+const AFTER_PRAYER_MINUTES = 20;
+const TAHAJJUD_BEFORE_FAJR_MINUTES = 90;
 
-const notificationId = (index: number, isReminder: boolean) =>
-  7000 + index * 2 + (isReminder ? 0 : 1);
+type NotificationKind = 'pre' | 'time' | 'after';
 
-const notificationIdsForSlots = (slotCount: number) =>
-  Array.from({ length: slotCount }).flatMap((_, index) => [
-    { id: notificationId(index, true) },
-    { id: notificationId(index, false) },
-  ]);
+const notificationId = (index: number, kind: NotificationKind) =>
+  7000 + index * 3 + (kind === 'pre' ? 0 : kind === 'time' ? 1 : 2);
+
+const tahajjudNotificationId = 7999;
+
+const notificationIdsForSlots = (slotCount: number) => [
+  ...Array.from({ length: slotCount }).flatMap((_, index) => [
+    { id: notificationId(index, 'pre') },
+    { id: notificationId(index, 'time') },
+    { id: notificationId(index, 'after') },
+  ]),
+  { id: tahajjudNotificationId },
+];
 
 const subtractMinutes = (h: number, m: number, minutes: number) => {
   const total = (h * 60 + m - minutes + 24 * 60) % (24 * 60);
@@ -73,6 +83,83 @@ const dailyScheduleFrom = (at: Date, allowWhileIdle = false) => ({
   ...(allowWhileIdle ? { allowWhileIdle: true } : {}),
 });
 
+const prayerCopy = {
+  fajr: {
+    pre: {
+      title: '🌙 FAJR',
+      body: "Wake up for what your heart needs. 🌄\nFajr is almost here. Hayya 'alal-falah.",
+    },
+    time: {
+      title: '🌙 FAJR',
+      body: "Your morning starts now. 🌙\nIt's time for Fajr.",
+    },
+  },
+  dhuhr: {
+    pre: {
+      title: '☀️ ZUHR',
+      body: 'Your dunya can wait a few minutes. ⏳\nZuhr is coming. Make time for Allah.',
+    },
+    time: {
+      title: '☀️ ZUHR',
+      body: "Pause the dunya. ⏸️\nIt's time for Zuhr.",
+    },
+  },
+  asr: {
+    pre: {
+      title: '🌤️ ASR',
+      body: 'Before the day gets away from you... 🌅\nTurn back to Allah with Asr.',
+    },
+    time: {
+      title: '🌤️ ASR',
+      body: 'A few minutes for Allah. ☝🏻\nMake time for Asr.',
+    },
+  },
+  maghrib: {
+    pre: {
+      title: '🌅 MAGHRIB',
+      body: 'As the day closes, remember Who gave it to you. 🌟\nMaghrib is almost here.',
+    },
+    time: {
+      title: '🌅 MAGHRIB',
+      body: "The sun has set. 🌙\nIt's time for Maghrib.",
+    },
+  },
+  isha: {
+    pre: {
+      title: '🌙 ISHA',
+      body: 'You made it through today. Say Alhamdulillah. ☝🏻\nNow get ready for Isha.',
+    },
+    time: {
+      title: '🌙 ISHA',
+      body: 'Put the day down for a moment. 🤍\nIsha time is here.',
+    },
+  },
+} as const;
+
+const afterPrayerCopy = {
+  title: 'Mark as done / Streak',
+  body: 'Another salah, another step. 🌟\nMark it done. Keep your streak going.',
+};
+
+const tahajjudCopy = {
+  title: '🌙 Tahajjud: Set your Alarm',
+  body: 'Got something on your heart? ❤️‍🩹\nTake it to Allah in Tahajjud.',
+};
+
+const notificationCopyFor = (
+  prayer: PrayerNotificationTime,
+  kind: NotificationKind,
+) => {
+  const key = prayer.key.toLowerCase() as keyof typeof prayerCopy;
+  if (kind === 'after') return afterPrayerCopy;
+  return prayerCopy[key]?.[kind] ?? {
+    title: kind === 'pre' ? `${prayer.label} in ${PRE_PRAYER_MINUTES} minutes` : `${prayer.label} time`,
+    body: kind === 'pre'
+      ? `It's almost time for ${prayer.label} prayer.`
+      : `It's time for ${prayer.label} prayer.`,
+  };
+};
+
 export const createPrayerNotificationPreviews = (
   prayers: PrayerNotificationTime[],
   now: Date,
@@ -80,27 +167,50 @@ export const createPrayerNotificationPreviews = (
 ) =>
   prayers
     .flatMap((prayer) => {
-      const reminder = subtractMinutes(prayer.h, prayer.m, 5);
+      const reminder = subtractMinutes(prayer.h, prayer.m, PRE_PRAYER_MINUTES);
       const reminderAt = nextDateForTime(reminder.h, reminder.m, now);
       const prayerAt = nextDateForTime(prayer.h, prayer.m, now);
+      const after = nextDateForTime(prayer.h, prayer.m + AFTER_PRAYER_MINUTES, now);
+      const preCopy = notificationCopyFor(prayer, 'pre');
+      const timeCopy = notificationCopyFor(prayer, 'time');
 
       return [
         {
           id: `${prayer.key}-reminder`,
-          title: `${prayer.label} in 5 minutes`,
-          body: `It's almost time for ${prayer.label} prayer.`,
+          title: preCopy.title,
+          body: preCopy.body,
           timeLabel: formatPreviewTime(reminderAt, now),
           at: reminderAt,
         },
         {
           id: `${prayer.key}-time`,
-          title: `${prayer.label} time`,
-          body: `It's time for ${prayer.label} prayer.`,
+          title: timeCopy.title,
+          body: timeCopy.body,
           timeLabel: formatPreviewTime(prayerAt, now),
           at: prayerAt,
         },
+        {
+          id: `${prayer.key}-after`,
+          title: afterPrayerCopy.title,
+          body: afterPrayerCopy.body,
+          timeLabel: formatPreviewTime(after, now),
+          at: after,
+        },
       ];
     })
+    .concat((() => {
+      const fajr = prayers.find((prayer) => prayer.key.toLowerCase() === 'fajr');
+      if (!fajr) return [];
+      const tahajjud = subtractMinutes(fajr.h, fajr.m, TAHAJJUD_BEFORE_FAJR_MINUTES);
+      const tahajjudAt = nextDateForTime(tahajjud.h, tahajjud.m, now);
+      return [{
+        id: 'tahajjud-alarm',
+        title: tahajjudCopy.title,
+        body: tahajjudCopy.body,
+        timeLabel: formatPreviewTime(tahajjudAt, now),
+        at: tahajjudAt,
+      }];
+    })())
     .sort((a, b) => a.at.getTime() - b.at.getTime())
     .slice(0, limit);
 
@@ -135,32 +245,59 @@ export const schedulePrayerNotifications = async (
   const now = new Date();
   const notifications: LocalNotificationSchema[] = prayers.flatMap(
     (prayer, index) => {
-      const reminder = subtractMinutes(prayer.h, prayer.m, 5);
+      const reminder = subtractMinutes(prayer.h, prayer.m, PRE_PRAYER_MINUTES);
       const reminderAt = nextDateForTime(reminder.h, reminder.m, now);
       const prayerAt = nextDateForTime(prayer.h, prayer.m, now);
+      const afterAt = nextDateForTime(prayer.h, prayer.m + AFTER_PRAYER_MINUTES, now);
+      const preCopy = notificationCopyFor(prayer, 'pre');
+      const timeCopy = notificationCopyFor(prayer, 'time');
 
       return [
         {
-          id: notificationId(index, true),
-          title: `${prayer.label} in 5 minutes`,
-          body: `It's almost time for ${prayer.label} prayer.`,
+          id: notificationId(index, 'pre'),
+          title: preCopy.title,
+          body: preCopy.body,
           channelId: CHANNEL_ID,
           group: NOTIFICATION_GROUP,
           autoCancel: true,
           schedule: dailyScheduleFrom(reminderAt),
         },
         {
-          id: notificationId(index, false),
-          title: `${prayer.label} time`,
-          body: `It's time for ${prayer.label} prayer.`,
+          id: notificationId(index, 'time'),
+          title: timeCopy.title,
+          body: timeCopy.body,
           channelId: CHANNEL_ID,
           group: NOTIFICATION_GROUP,
           autoCancel: true,
           schedule: dailyScheduleFrom(prayerAt, true),
         },
+        {
+          id: notificationId(index, 'after'),
+          title: afterPrayerCopy.title,
+          body: afterPrayerCopy.body,
+          channelId: CHANNEL_ID,
+          group: NOTIFICATION_GROUP,
+          autoCancel: true,
+          schedule: dailyScheduleFrom(afterAt),
+        },
       ];
     },
   );
+
+  const fajr = prayers.find((prayer) => prayer.key.toLowerCase() === 'fajr');
+  if (fajr) {
+    const tahajjud = subtractMinutes(fajr.h, fajr.m, TAHAJJUD_BEFORE_FAJR_MINUTES);
+    const tahajjudAt = nextDateForTime(tahajjud.h, tahajjud.m, now);
+    notifications.push({
+      id: tahajjudNotificationId,
+      title: tahajjudCopy.title,
+      body: tahajjudCopy.body,
+      channelId: CHANNEL_ID,
+      group: NOTIFICATION_GROUP,
+      autoCancel: true,
+      schedule: dailyScheduleFrom(tahajjudAt, true),
+    });
+  }
 
   await LocalNotifications.schedule({ notifications });
   return true;

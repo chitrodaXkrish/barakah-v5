@@ -482,14 +482,16 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
     setInput(s);
   };
 
+  const isNative = Capacitor.isNativePlatform();
+
   return (
     <div
       className="fixed inset-0 z-[120] flex flex-col font-arabic w-full max-w-md mx-auto overflow-hidden"
       style={{
         backgroundColor: CREAM_BG,
         color: BROWN,
-        height: '100dvh',
-        paddingTop: Capacitor.getPlatform() === 'ios' ? 'env(safe-area-inset-top)' : 0,
+        top: isNative ? 'var(--safe-area-inset-top)' : 0,
+        height: isNative ? 'calc(100dvh - var(--safe-area-inset-top))' : '100dvh',
       }}
     >
       <ChatView

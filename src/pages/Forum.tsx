@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   MessageCircle, Plus, Send, ArrowLeft, Loader2, Trash2, Heart, RefreshCw, 
   Sparkles, Users, TrendingUp, AtSign, Search, X, Bookmark, BookmarkCheck, Share2, User, ChevronRight, Pin, ImagePlus, Compass, Info, BookOpen, Check, Camera, Globe, Lock, ArrowRight, Flag,
-  ThumbsUp, HandHeart, Lightbulb, Smile
+  ThumbsUp, HandHeart, Lightbulb, Laugh
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -136,20 +136,22 @@ const SOFT_BORDER = 'rgba(123, 63, 30, 0.12)';
 const OLIVE = '#7C7E2D';
 const OLIVE_DARK = '#656823';
 
-type ReactionType = 'like' | 'ameen' | 'love' | 'insightful' | 'joy';
+type ReactionType = 'like' | 'ameen' | 'love' | 'insightful' | 'laugh' | 'horrified';
 
 const REACTIONS: Array<{
   type: ReactionType;
   label: string;
   color: string;
   bg: string;
-  Icon: typeof ThumbsUp;
+  Icon?: typeof ThumbsUp;
+  emoji?: string;
 }> = [
   { type: 'like', label: 'Like', color: '#2F80ED', bg: '#EAF3FF', Icon: ThumbsUp },
   { type: 'ameen', label: 'Ameen', color: '#5C9D45', bg: '#EDF8E9', Icon: HandHeart },
   { type: 'love', label: 'Love', color: '#D9534F', bg: '#FFF0EE', Icon: Heart },
   { type: 'insightful', label: 'Insightful', color: '#D69B22', bg: '#FFF5D8', Icon: Lightbulb },
-  { type: 'joy', label: 'Joy', color: '#1D9AAA', bg: '#E7FAFC', Icon: Smile },
+  { type: 'laugh', label: 'Laugh', color: '#1D9AAA', bg: '#E7FAFC', Icon: Laugh },
+  { type: 'horrified', label: 'Horrified', color: '#7B61FF', bg: '#F1EEFF', emoji: '😱' },
 ];
 
 const getReaction = (type?: ReactionType | null) =>
@@ -1590,7 +1592,7 @@ export const Forum = () => {
       style={{ background: '#FFFFFF', borderColor: SOFT_BORDER }}
       onClick={(e) => e.stopPropagation()}
     >
-      {REACTIONS.map(({ type, label, color, bg, Icon }) => {
+      {REACTIONS.map(({ type, label, color, bg, Icon, emoji }) => {
         const selected = post.userReaction === type;
         return (
           <button
@@ -1607,7 +1609,11 @@ export const Forum = () => {
             aria-label={selected ? `Remove ${label}` : `React ${label}`}
             title={label}
           >
-            <Icon className={cn('h-5 w-5', selected && type === 'love' && 'fill-current')} strokeWidth={2.4} />
+            {Icon ? (
+              <Icon className={cn('h-5 w-5', selected && type === 'love' && 'fill-current')} strokeWidth={2.4} />
+            ) : (
+              <span className="text-xl leading-none" aria-hidden="true">{emoji}</span>
+            )}
           </button>
         );
       })}
@@ -1737,7 +1743,11 @@ export const Forum = () => {
                   aria-label={post.isLiked ? `${reaction.label} reaction selected` : 'React to post'}
                   title={post.isLiked ? reaction.label : 'React'}
                 >
-                  <ReactionIcon className={cn("h-4 w-4", post.isLiked && post.userReaction === 'love' && "fill-current")} />
+                  {ReactionIcon ? (
+                    <ReactionIcon className={cn("h-4 w-4", post.isLiked && post.userReaction === 'love' && "fill-current")} />
+                  ) : (
+                    <span className="text-base leading-none" aria-hidden="true">{reaction.emoji}</span>
+                  )}
                   <span className="text-xs tabular-nums">{post.likeCount || 0}</span>
                 </button>
               </div>
@@ -1844,7 +1854,11 @@ export const Forum = () => {
                         aria-label={selectedPost.isLiked ? `${selectedReaction.label} reaction selected` : 'React to post'}
                         title={selectedPost.isLiked ? selectedReaction.label : 'React'}
                       >
-                        <SelectedReactionIcon className={cn("h-4 w-4", selectedPost.isLiked && selectedPost.userReaction === 'love' && "fill-current")} />
+                        {SelectedReactionIcon ? (
+                          <SelectedReactionIcon className={cn("h-4 w-4", selectedPost.isLiked && selectedPost.userReaction === 'love' && "fill-current")} />
+                        ) : (
+                          <span className="text-base leading-none" aria-hidden="true">{selectedReaction.emoji}</span>
+                        )}
                         <span className="text-sm">{selectedPost.likeCount || 0}</span>
                       </button>
                     </div>
