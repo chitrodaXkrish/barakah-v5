@@ -17,27 +17,13 @@ const BROWN = '#A35233';
 const ORANGE = '#CE5728';
 
 const MECCA = { lat: 21.422487, lng: 39.826206 };
-const HEADING_SMOOTHING = 0.08;
-const HEADING_DEADBAND_DEGREES = 2.5;
-const MIN_HEADING_UPDATE_MS = 120;
+const HEADING_SMOOTHING = 0.35;
+const HEADING_DEADBAND_DEGREES = 1.5;
 const IOS_MAX_COMPASS_ACCURACY = 35;
+const COMPASS_CALIBRATION_MESSAGE = 'Move your phone in a figure-8 to calibrate the compass.';
 
 const normalizeDegrees = (deg: number) => ((deg % 360) + 360) % 360;
 const shortestAngleDelta = (from: number, to: number) => ((to - from + 540) % 360) - 180;
-const circularMean = (values: number[]) => {
-  const total = values.reduce(
-    (acc, value) => {
-      const rad = (value * Math.PI) / 180;
-      return {
-        sin: acc.sin + Math.sin(rad),
-        cos: acc.cos + Math.cos(rad),
-      };
-    },
-    { sin: 0, cos: 0 }
-  );
-
-  return normalizeDegrees((Math.atan2(total.sin, total.cos) * 180) / Math.PI);
-};
 
 function qiblaBearing(lat: number, lng: number) {
   const φ1 = (lat * Math.PI) / 180;
@@ -68,13 +54,10 @@ export const Qibla = () => {
   const { t } = useLanguage();
   const { location, loading: locLoading } = useGlobalLocation();
   const [heading, setHeading] = useState<number | null>(null);
-  const [displayAngle, setDisplayAngle] = useState(0);
+  const [headingAccuracy, setHeadingAccuracy] = useState<number | null>(null);
   const [orientationGranted, setOrientationGranted] = useState(false);
   const cleanupOrientationRef = useRef<(() => void) | null>(null);
   const smoothedHeadingRef = useRef<number | null>(null);
-  const headingSamplesRef = useRef<number[]>([]);
-  const lastHeadingUpdateRef = useRef(0);
-  const lastAbsoluteEventRef = useRef(0);
 
   const qibla = useMemo(
     () => (location ? qiblaBearing(location.latitude, location.longitude) : 0),
@@ -85,73 +68,83 @@ export const Qibla = () => {
     [location]
   );
 
-  // Bearing of mosque icon on dial: qibla relative to device north.
-  const dialAngle = normalizeDegrees(heading !== null ? qibla - heading : qibla);
+  const shouldShowCalibration = typeof headingAccuracy !== 'number' || headingAccuracy < 0 || headingAccuracy > IOS_MAX_COMPASS_ACCURACY;
+  const relativeQibla = normalizeDegrees(qibla - (heading ?? 0));
+  const dialAngle = relativeQibla;
 
-  useEffect(() => {
-    setDisplayAngle((current) => current + shortestAngleDelta(normalizeDegrees(current), dialAngle));
-  }, [dialAngle]);
+  const getTrueNorthHeading = useCallback((event: DeviceOrientationEvent) => {
+    const anyEvent = event as any;
+
+    if (typeof anyEvent.webkitCompassHeading === 'number') {
+      return {
+        heading: normalizeDegrees(anyEvent.webkitCompassHeading),
+        accuracy: typeof anyEvent.webkitCompassAccuracy === 'number' ? anyEvent.webkitCompassAccuracy : null,
+      };
+    }
+
+    if (typeof event.alpha === 'number' && event.absolute === true) {
+      return {
+        heading: normalizeDegrees(360 - event.alpha),
+        accuracy: typeof anyEvent.webkitCompassAccuracy === 'number' ? anyEvent.webkitCompassAccuracy : null,
+      };
+    }
+
+    return null;
+  }, []);
 
   const attachOrientation = useCallback(() => {
     cleanupOrientationRef.current?.();
-    const handler = (e: DeviceOrientationEvent) => {
-      // webkitCompassHeading on iOS gives true compass heading (clockwise from N)
-      const anyE = e as any;
-      const now = performance.now();
-      let h: number | null = null;
-      if (typeof anyE.webkitCompassHeading === 'number' && (typeof anyE.webkitCompassAccuracy !== 'number' || anyE.webkitCompassAccuracy <= IOS_MAX_COMPASS_ACCURACY)) {
-        h = anyE.webkitCompassHeading;
-        lastAbsoluteEventRef.current = now;
-      } else if (e.type === 'deviceorientationabsolute' && e.alpha !== null) {
-        h = 360 - e.alpha;
-        lastAbsoluteEventRef.current = now;
-      } else if (e.alpha !== null && e.absolute !== false && now - lastAbsoluteEventRef.current > 1500) {
-        // alpha: 0 when facing N if absolute; convert (counter-clockwise) to clockwise heading
-        h = 360 - e.alpha;
-      }
-      if (h === null) return;
 
-      const next = normalizeDegrees(h);
-      const samples = [...headingSamplesRef.current, next].slice(-5);
-      headingSamplesRef.current = samples;
-      const averaged = circularMean(samples);
+    const handler = (event: DeviceOrientationEvent) => {
+      const reading = getTrueNorthHeading(event);
+      if (!reading) return;
+
+      const { heading, accuracy } = reading;
       const previous = smoothedHeadingRef.current;
+
       if (previous === null) {
-        smoothedHeadingRef.current = averaged;
-        lastHeadingUpdateRef.current = now;
-        setHeading(averaged);
+        smoothedHeadingRef.current = heading;
+        setHeading(heading);
+        setHeadingAccuracy(accuracy);
         return;
       }
 
-      const rawDelta = shortestAngleDelta(previous, averaged);
-      if (Math.abs(rawDelta) < HEADING_DEADBAND_DEGREES) return;
+      const rawDelta = shortestAngleDelta(previous, heading);
+      if (Math.abs(rawDelta) < HEADING_DEADBAND_DEGREES) {
+        setHeading(previous);
+        setHeadingAccuracy(accuracy);
+        return;
+      }
 
       const smoothed = normalizeDegrees(previous + rawDelta * HEADING_SMOOTHING);
-      if (now - lastHeadingUpdateRef.current < MIN_HEADING_UPDATE_MS) {
-        smoothedHeadingRef.current = smoothed;
-        return;
-      }
-
       smoothedHeadingRef.current = smoothed;
-      lastHeadingUpdateRef.current = now;
       setHeading(smoothed);
+      setHeadingAccuracy(accuracy);
     };
-    window.addEventListener('deviceorientationabsolute' as any, handler, true);
+
+    window.addEventListener('deviceorientationabsolute', handler, true);
     window.addEventListener('deviceorientation', handler, true);
+
     const cleanup = () => {
-      window.removeEventListener('deviceorientationabsolute' as any, handler, true);
+      window.removeEventListener('deviceorientationabsolute', handler, true);
       window.removeEventListener('deviceorientation', handler, true);
     };
+
     cleanupOrientationRef.current = cleanup;
     return cleanup;
-  }, []);
+  }, [getTrueNorthHeading]);
 
   useEffect(() => {
     const DOE: any = (window as any).DeviceOrientationEvent;
-    if (DOE && typeof DOE.requestPermission === 'function') {
-      // iOS – wait for user gesture
+    if (!DOE) {
+      setOrientationGranted(false);
       return;
     }
+
+    if (typeof DOE.requestPermission === 'function') {
+      return;
+    }
+
     setOrientationGranted(true);
     const cleanup = attachOrientation();
     return cleanup;
@@ -166,18 +159,18 @@ export const Qibla = () => {
     try {
       if (DOE && typeof DOE.requestPermission === 'function') {
         const res = await DOE.requestPermission();
-        if (res === 'granted') {
-          setOrientationGranted(true);
-          smoothedHeadingRef.current = null;
-          headingSamplesRef.current = [];
-          lastHeadingUpdateRef.current = 0;
-          lastAbsoluteEventRef.current = 0;
-          attachOrientation();
-          toast.success('Compass enabled');
-        } else {
+        if (res !== 'granted') {
           toast.error('Motion access denied');
+          return;
         }
       }
+
+      setOrientationGranted(true);
+      smoothedHeadingRef.current = null;
+      setHeading(null);
+      setHeadingAccuracy(null);
+      attachOrientation();
+      toast.success('Compass enabled');
     } catch {
       toast.error('Compass unavailable on this device');
     }
@@ -249,8 +242,8 @@ export const Qibla = () => {
 
             {/* Needle + Mosque icon rotated to Qibla */}
             <div
-              className="absolute inset-0 transition-transform duration-500 ease-out"
-              style={{ transform: `rotate(${displayAngle}deg)` }}
+              className="absolute inset-0 transition-transform duration-200 ease-out"
+              style={{ transform: `rotate(${dialAngle}deg)` }}
             >
               {/* Needle line from center up */}
               <div
@@ -346,6 +339,12 @@ export const Qibla = () => {
             >
               Enable compass sensor
             </button>
+          )}
+
+          {shouldShowCalibration && (
+            <p className="mt-3 text-xs text-center px-8" style={{ color: BROWN }}>
+              {COMPASS_CALIBRATION_MESSAGE}
+            </p>
           )}
 
           <p className="mt-4 mb-10 text-xs text-center px-8" style={{ color: '#9a7c63' }}>
