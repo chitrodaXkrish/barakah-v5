@@ -113,7 +113,7 @@ export const PrivacyPolicy = () => (
 
     <section>
       <h2 className="text-xl font-semibold mb-2">14. Contact Information</h2>
-      <p>Barakah is owned and operated by KONNECTHU LLP.</p>
+      <p>Barakah is owned and operated by KONNECTHU.</p>
       <p className="whitespace-pre-line">
         KONNECTHU LLP{"\n"}
         Andheri East,{"\n"}
