@@ -131,6 +131,23 @@ const verseAudio = (surahNo: number, verseNo: number, reciterId: string) =>
   `https://everyayah.com/data/${RECITER_FOLDER[reciterId]}/${String(surahNo).padStart(3, '0')}${String(
     verseNo,
   ).padStart(3, '0')}.mp3`;
+
+const DEFAULT_TRANSLATION_ID = '85';
+const MAX_VERSES_PER_SURAH = 1000;
+
+const getVerseListUrl = (surahNo: number) =>
+  `https://api.quran.com/api/v4/verses/by_chapter/${surahNo}?language=en&translations=${DEFAULT_TRANSLATION_ID}&fields=text_uthmani&per_page=${MAX_VERSES_PER_SURAH}`;
+
+const extractEnglishTranslation = (verse: any) => {
+  const translation = Array.isArray(verse?.translations)
+    ? verse.translations.find(
+        (item: any) => typeof item?.text === 'string' && item.text.trim().length > 0,
+      )
+    : null;
+
+  return translation?.text || verse?.translation?.text || '';
+};
+
 async function fetchQuranJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -148,10 +165,7 @@ const mapQuranChapterToSurah = (chapter: any, verses: any[] = []): SurahDetail =
   totalAyah: Number(chapter?.verses_count || verses.length || 0),
   surahNo: Number(chapter?.id || chapter?.surahNo || 0),
   arabic1: (verses || []).map((verse: any) => verse?.text_uthmani || verse?.text_uthmani_simple || ''),
-  english: (verses || []).map((verse: any) => {
-    const translated = Array.isArray(verse?.translations) ? verse.translations.find((item: any) => item?.language_name === 'english' || item?.language_name === 'English' || !item?.language_name) : null;
-    return translated?.text || verse?.translation?.text || '';
-  }),
+  english: (verses || []).map((verse: any) => extractEnglishTranslation(verse)),
   audio: {},
 });
 const QURAN_BOOKMARK_KEY = 'barakah_quran_bookmark';
@@ -324,9 +338,14 @@ export const Quran = () => {
     try {
       const [chapterRes, verseRes] = await Promise.all([
         fetchQuranJson<{ chapter: any }>(`https://api.quran.com/api/v4/chapters/${surahNo}?language=en`),
-        fetchQuranJson<{ verses: any[] }>(`https://api.quran.com/api/v4/verses/by_chapter/${surahNo}?language=en&translations=131`),
+        fetchQuranJson<{ verses: any[] }>(getVerseListUrl(surahNo)),
       ]);
-      setSelectedSurah(mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses));
+
+      const mappedSurah = mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses || []);
+      if (!mappedSurah.arabic1.length) {
+        throw new Error('No Quran verses were returned for this surah');
+      }
+      setSelectedSurah(mappedSurah);
       saveQuranReadingDay();
     } catch {
       setSelectedSurah(null);
@@ -353,9 +372,9 @@ export const Quran = () => {
         surahNumbers.map(async (surahNo) => {
           const [chapterRes, verseRes] = await Promise.all([
             fetchQuranJson<{ chapter: any }>(`https://api.quran.com/api/v4/chapters/${surahNo}?language=en`),
-            fetchQuranJson<{ verses: any[] }>(`https://api.quran.com/api/v4/verses/by_chapter/${surahNo}?language=en&translations=131`),
+            fetchQuranJson<{ verses: any[] }>(getVerseListUrl(surahNo)),
           ]);
-          return mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses);
+          return mapQuranChapterToSurah(chapterRes.chapter, verseRes.verses || []);
         }),
       );
 

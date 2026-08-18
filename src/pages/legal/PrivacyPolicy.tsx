@@ -113,11 +113,12 @@ export const PrivacyPolicy = () => (
 
     <section>
       <h2 className="text-xl font-semibold mb-2">14. Contact Information</h2>
-      <p>Barakah is a brand owned and operated by KONNECTHU LLP.</p>
+      <p>Barakah is owned and operated by KONNECTHU LLP.</p>
       <p className="whitespace-pre-line">
         KONNECTHU LLP{"\n"}
         Andheri East,{"\n"}
-        Mumbai - 400069, Maharashtra, India{"\n"}
+        Mumbai - 400069,{"\n"}
+        Maharashtra, India{"\n"}
         Email: <a href="mailto:info@barakah.services" className="underline">info@barakah.services</a>
       </p>
     </section>
