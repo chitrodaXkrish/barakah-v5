@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@amplitude/unified": "^1.1.29",
     "@capacitor/android": "^8.4.1",
     "@capacitor/app": "^8",
     "@capacitor/browser": "^8",

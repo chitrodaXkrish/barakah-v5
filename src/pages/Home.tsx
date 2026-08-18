@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import * as amplitude from '@amplitude/unified';
 import { useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -146,6 +147,10 @@ export const Home = () => {
   const [notificationSessionStartedAt, setNotificationSessionStartedAt] = useState(Date.now());
   const [cachedNotifications, setCachedNotifications] = useState<CachedNotification[]>([]);
   const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    amplitude.track('Viewed Home Page', { prompt_version: 'BA400.4' });
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
