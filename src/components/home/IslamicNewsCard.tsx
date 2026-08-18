@@ -11,6 +11,35 @@ interface NewsItem {
   article_url: string;
 }
 
+function normalizeNewsKey(item: NewsItem) {
+  try {
+    const url = new URL(item.article_url.trim());
+    url.hash = "";
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+    ].forEach((param) => url.searchParams.delete(param));
+    return url.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return (item.article_url || item.title).trim().replace(/\/$/, "").toLowerCase();
+  }
+}
+
+function dedupeNewsItems(items: NewsItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = normalizeNewsKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export const IslamicNewsCard = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -23,8 +52,8 @@ export const IslamicNewsCard = () => {
         .from("news_articles")
         .select("id, title, source_name, article_url")
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(3);
-      if (active && data) setItems(data as NewsItem[]);
+        .limit(12);
+      if (active && data) setItems(dedupeNewsItems(data as NewsItem[]).slice(0, 3));
       if (active) setLoading(false);
     })();
     return () => {

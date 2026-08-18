@@ -147,6 +147,8 @@ export const NewsDetail = () => {
       .replace(new RegExp(`[\\u201C\\u201D"]${REMOVED_QUOTE}[\\u201C\\u201D"]`, 'g'), '')
       .replace(new RegExp(`"${REMOVED_QUOTE}"`, 'g'), '')
       .replace(new RegExp(REMOVED_QUOTE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+      .replace(/\bONLY\s+AVAILABLE\s+IN\s+PAID\s+PLANS\b\.?/gi, '')
+      .replace(/\bAVAILABLE\s+ONLY\s+IN\s+PAID\s+PLANS\b\.?/gi, '')
       .replace(/\s*<p>\s*<\/p>\s*/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();

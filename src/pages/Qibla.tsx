@@ -1,6 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ArrowLeft, MapPin } from 'lucide-react';
+import { ArrowLeft, MapPin, Rotate3D } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
@@ -16,10 +16,15 @@ const BROWN_DEEP = '#5C2A12';
 const BROWN = '#A35233';
 const ORANGE = '#CE5728';
 
-const MECCA = { lat: 21.422487, lng: 39.826206 };
-const HEADING_SMOOTHING = 0.35;
-const HEADING_DEADBAND_DEGREES = 1.5;
-const IOS_MAX_COMPASS_ACCURACY = 35;
+const KAABA = { lat: 21.4224779, lng: 39.8251832 };
+const HEADING_SMOOTHING_GOOD = 0.2;
+const HEADING_SMOOTHING_LOW_CONFIDENCE = 0.1;
+const HEADING_DEADBAND_DEGREES = 1.25;
+const IOS_MAX_COMPASS_ACCURACY = 45;
+const LOW_CONFIDENCE_COMPASS_ACCURACY = 35;
+const SPIKE_REJECTION_DEGREES = 95;
+const SPIKE_REJECTION_MS = 350;
+const MECCA = KAABA;
 const COMPASS_CALIBRATION_MESSAGE = 'Move your phone in a figure-8 to calibrate the compass.';
 
 const normalizeDegrees = (deg: number) => ((deg % 360) + 360) % 360;
@@ -44,6 +49,38 @@ function greatCircleKm(lat: number, lng: number) {
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+function accurateQiblaBearing(lat: number, lng: number) {
+  const fromLat = toRad(lat);
+  const toLat = toRad(KAABA.lat);
+  const deltaLng = toRad(KAABA.lng - lng);
+  const y = Math.sin(deltaLng) * Math.cos(toLat);
+  const x =
+    Math.cos(fromLat) * Math.sin(toLat) -
+    Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+  return normalizeDegrees((Math.atan2(y, x) * 180) / Math.PI);
+}
+
+function accurateGreatCircleKm(lat: number, lng: number) {
+  const earthRadiusKm = 6371.0088;
+  const fromLat = toRad(lat);
+  const toLat = toRad(KAABA.lat);
+  const deltaLat = toRad(KAABA.lat - lat);
+  const deltaLng = toRad(KAABA.lng - lng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(deltaLng / 2) ** 2;
+  return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function screenOrientationAngle() {
+  const screenAngle = window.screen?.orientation?.angle;
+  if (typeof screenAngle === 'number') return screenAngle;
+  const legacyOrientation = (window as any).orientation;
+  return typeof legacyOrientation === 'number' ? legacyOrientation : 0;
+}
+
 function cardinal(deg: number) {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return dirs[Math.round(deg / 45) % 8];
@@ -56,15 +93,17 @@ export const Qibla = () => {
   const [heading, setHeading] = useState<number | null>(null);
   const [headingAccuracy, setHeadingAccuracy] = useState<number | null>(null);
   const [orientationGranted, setOrientationGranted] = useState(false);
+  const [showCalibrationPopup, setShowCalibrationPopup] = useState(true);
   const cleanupOrientationRef = useRef<(() => void) | null>(null);
   const smoothedHeadingRef = useRef<number | null>(null);
+  const lastHeadingAtRef = useRef(0);
 
   const qibla = useMemo(
-    () => (location ? qiblaBearing(location.latitude, location.longitude) : 0),
+    () => (location ? accurateQiblaBearing(location.latitude, location.longitude) : 0),
     [location]
   );
   const distanceKm = useMemo(
-    () => (location ? greatCircleKm(location.latitude, location.longitude) : 0),
+    () => (location ? accurateGreatCircleKm(location.latitude, location.longitude) : 0),
     [location]
   );
 
@@ -82,9 +121,10 @@ export const Qibla = () => {
       };
     }
 
-    if (typeof event.alpha === 'number' && event.absolute === true) {
+    const hasAbsoluteHeading = event.type === 'deviceorientationabsolute' || event.absolute !== false;
+    if (typeof event.alpha === 'number' && hasAbsoluteHeading) {
       return {
-        heading: normalizeDegrees(360 - event.alpha),
+        heading: normalizeDegrees(360 - event.alpha + screenOrientationAngle()),
         accuracy: typeof anyEvent.webkitCompassAccuracy === 'number' ? anyEvent.webkitCompassAccuracy : null,
       };
     }
@@ -101,23 +141,41 @@ export const Qibla = () => {
 
       const { heading, accuracy } = reading;
       const previous = smoothedHeadingRef.current;
+      const now = Date.now();
 
       if (previous === null) {
         smoothedHeadingRef.current = heading;
+        lastHeadingAtRef.current = now;
         setHeading(heading);
         setHeadingAccuracy(accuracy);
         return;
       }
 
       const rawDelta = shortestAngleDelta(previous, heading);
+      const lowConfidence =
+        typeof accuracy === 'number' &&
+        (accuracy < 0 || accuracy > LOW_CONFIDENCE_COMPASS_ACCURACY);
+
+      if (
+        lowConfidence &&
+        Math.abs(rawDelta) > SPIKE_REJECTION_DEGREES &&
+        now - lastHeadingAtRef.current < SPIKE_REJECTION_MS
+      ) {
+        setHeading(previous);
+        setHeadingAccuracy(accuracy);
+        return;
+      }
+
       if (Math.abs(rawDelta) < HEADING_DEADBAND_DEGREES) {
         setHeading(previous);
         setHeadingAccuracy(accuracy);
         return;
       }
 
-      const smoothed = normalizeDegrees(previous + rawDelta * HEADING_SMOOTHING);
+      const smoothing = lowConfidence ? HEADING_SMOOTHING_LOW_CONFIDENCE : HEADING_SMOOTHING_GOOD;
+      const smoothed = normalizeDegrees(previous + rawDelta * smoothing);
       smoothedHeadingRef.current = smoothed;
+      lastHeadingAtRef.current = now;
       setHeading(smoothed);
       setHeadingAccuracy(accuracy);
     };
@@ -133,6 +191,11 @@ export const Qibla = () => {
     cleanupOrientationRef.current = cleanup;
     return cleanup;
   }, [getTrueNorthHeading]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowCalibrationPopup(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const DOE: any = (window as any).DeviceOrientationEvent;
@@ -167,6 +230,7 @@ export const Qibla = () => {
 
       setOrientationGranted(true);
       smoothedHeadingRef.current = null;
+      lastHeadingAtRef.current = 0;
       setHeading(null);
       setHeadingAccuracy(null);
       attachOrientation();
@@ -184,6 +248,25 @@ export const Qibla = () => {
   return (
     <Layout>
       <div className="min-h-screen" style={{ background: CREAM }}>
+        {showCalibrationPopup && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-8 pointer-events-none">
+            <div
+              className="flex max-w-[280px] flex-col items-center gap-3 rounded-2xl px-5 py-4 text-center shadow-2xl"
+              style={{ background: 'rgba(92, 42, 18, 0.94)', color: '#FFF7E8' }}
+            >
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-full"
+                style={{ background: 'rgba(255, 245, 229, 0.16)' }}
+              >
+                <Rotate3D className="h-6 w-6" />
+              </div>
+              <div className="text-sm font-semibold leading-snug">
+                Move your phone in a figure-8 to calibrate the compass.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-2">
           <button

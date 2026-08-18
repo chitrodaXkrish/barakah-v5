@@ -31,7 +31,7 @@ export const Shop = () => {
     <Layout showHeader={false} pageBackgroundColor={CREAM}>
       <div className="min-h-screen" style={{ backgroundColor: CREAM }}>
         {/* Top bar */}
-        <div className="bg-white px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center justify-between">
+        <div className="bg-white px-4 pt-4 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               type="button"

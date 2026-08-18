@@ -148,6 +148,52 @@ function stripHtml(s: string | null): string | null {
     .trim();
 }
 
+function removeUnavailablePaidPlanText(value: string | null): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/\bONLY\s+AVAILABLE\s+IN\s+PAID\s+PLANS\b\.?/gi, "")
+    .replace(/\bAVAILABLE\s+ONLY\s+IN\s+PAID\s+PLANS\b\.?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || null;
+}
+
+function normalizeArticleUrl(value: string | null | undefined): string {
+  if (!value) return "";
+  try {
+    const url = new URL(value.trim());
+    url.hash = "";
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+    ].forEach((param) => url.searchParams.delete(param));
+    return url.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return value.trim().replace(/\/$/, "").toLowerCase();
+  }
+}
+
+function articleDedupeKey(article: Pick<NewsArticleRow, "article_url" | "title">): string {
+  const normalizedUrl = normalizeArticleUrl(article.article_url);
+  if (normalizedUrl) return normalizedUrl;
+  return article.title.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function dedupeArticles<T extends NewsArticleRow>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = articleDedupeKey(row);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -234,14 +280,132 @@ function parseRss(xml: string): ParsedItem[] {
   return items;
 }
 
+interface NewsDataArticle {
+  article_id?: string | null;
+  title?: string | null;
+  description?: string | null;
+  content?: string | null;
+  link?: string | null;
+  image_url?: string | null;
+  pubDate?: string | null;
+  creator?: string[] | string | null;
+  source_id?: string | null;
+  source_name?: string | null;
+  category?: string[] | string | null;
+  keywords?: string[] | null;
+}
+
+interface NewsDataResponse {
+  status?: string;
+  totalResults?: number;
+  results?: NewsDataArticle[];
+  nextPage?: string | null;
+  code?: string;
+  message?: string;
+}
+
+const NEWSDATA_QUERIES: Record<NewsCategory, string> = {
+  world: "islam OR muslim OR palestine OR gaza OR hajj OR umrah OR quran",
+  education: "islamic education OR quran OR hadith OR muslim learning",
+  community: "muslim community OR islamic community OR mosque OR masjid",
+  charity: "islamic charity OR muslim charity OR zakat OR sadaqah OR relief",
+  business: "islamic finance OR halal business OR muslim business",
+  politics: "muslim politics OR islamic world OR middle east OR palestine",
+};
+
+const NEWSDATA_CATEGORY_NAMES: Record<NewsCategory, string> = {
+  world: "World",
+  education: "Education",
+  community: "Community",
+  charity: "Charity",
+  business: "Business",
+  politics: "Politics",
+};
+
+function stringifyCreator(value: NewsDataArticle["creator"]): string | null {
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || null;
+  return value || null;
+}
+
+function newsDataCategory(value: NewsCategory | null, article: NewsDataArticle): NewsCategory {
+  if (value) return value;
+
+  const rawCategories = Array.isArray(article.category)
+    ? article.category
+    : typeof article.category === "string"
+      ? [article.category]
+      : [];
+  const joined = [...rawCategories, ...(article.keywords ?? [])].join(" ").toLowerCase();
+
+  if (joined.includes("business") || joined.includes("finance")) return "business";
+  if (joined.includes("charity") || joined.includes("zakat") || joined.includes("relief")) return "charity";
+  if (joined.includes("education") || joined.includes("quran") || joined.includes("hadith")) return "education";
+  if (joined.includes("politic") || joined.includes("government")) return "politics";
+  if (joined.includes("community") || joined.includes("mosque") || joined.includes("masjid")) return "community";
+  return "world";
+}
+
+function newsDataArticleToRow(article: NewsDataArticle, categoryFilter: NewsCategory | null): NewsArticleRow | null {
+  const title = article.title?.trim();
+  const link = article.link?.trim();
+  if (!title || !link) return null;
+
+  const category = newsDataCategory(categoryFilter, article);
+  const sourceName = article.source_name || article.source_id || "NewsData.io";
+  const guid = `newsdata:${article.article_id || normalizeArticleUrl(link)}`;
+  const description = removeUnavailablePaidPlanText(stripHtml(article.description || null));
+  const cleanContent = removeUnavailablePaidPlanText(stripHtml(article.content || null));
+
+  return {
+    guid,
+    title,
+    description,
+    content: cleanContent || (description ? textToParagraphHtml(description) : null),
+    image_url: article.image_url || null,
+    article_url: link,
+    published_at: parseDate(article.pubDate || null) || new Date().toISOString(),
+    author: stringifyCreator(article.creator),
+    tags: article.keywords?.filter(Boolean).slice(0, 10) || [],
+    source_name: sourceName,
+    category,
+  };
+}
+
+async function fetchNewsDataCategory(apiKey: string, category: NewsCategory): Promise<NewsArticleRow[]> {
+  const url = new URL("https://newsdata.io/api/1/latest");
+  url.searchParams.set("apikey", apiKey);
+  url.searchParams.set("q", NEWSDATA_QUERIES[category]);
+  url.searchParams.set("language", "en");
+  url.searchParams.set("size", "10");
+
+  const response = await fetchWithTimeout(url.toString(), 12000);
+  const payload = await response.json().catch(() => null) as NewsDataResponse | null;
+
+  if (!response.ok || payload?.status === "error") {
+    throw new Error(payload?.message || `NewsData.io HTTP ${response.status}`);
+  }
+
+  return dedupeArticles((payload?.results || [])
+    .map((article) => newsDataArticleToRow(article, category))
+    .filter((row): row is NewsArticleRow => Boolean(row)));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const newsDataApiKey = Deno.env.get("NEWSDATA_API_KEY");
 
   if (!supabaseUrl || !serviceKey) {
     return new Response(JSON.stringify({ success: false, error: "Server configuration error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (!newsDataApiKey) {
+    return new Response(JSON.stringify({ success: false, error: "Missing NEWSDATA_API_KEY secret" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -251,20 +415,9 @@ Deno.serve(async (req) => {
 
   try {
     const categoryFilter = await requestedCategory(req);
-    const { data: sources, error: srcErr } = await supabase
-      .from("news_sources")
-      .select("name, rss_url, category")
-      .eq("is_active", true);
-    if (srcErr) throw srcErr;
-
-    const activeSources = ensureCategoryCoverage(mergeSources((sources ?? []).map((source) => ({
-      name: source.name,
-      rss_url: source.rss_url,
-      category: normalizeCategory(source.category),
-    }))));
-    const filteredSources = categoryFilter
-      ? activeSources.filter((source) => source.category === categoryFilter)
-      : activeSources;
+    const fetchCategories = categoryFilter
+      ? [categoryFilter]
+      : [...NEWS_CATEGORIES];
 
     let totalProcessed = 0;
     const results: Record<string, number | string> = {};
@@ -277,54 +430,61 @@ Deno.serve(async (req) => {
       business: 0,
       politics: 0,
     };
-    const processSource = async (src: NewsSource) => {
+
+    const processCategory = async (category: NewsCategory) => {
       try {
-        const res = await fetchWithTimeout(src.rss_url);
-        if (!res.ok) {
-          return { source: src.name, result: `HTTP ${res.status}`, total: 0, rowCategories: [] as NewsCategory[] };
-        }
-        const xml = await res.text();
-        const items = parseRss(xml).slice(0, MAX_ITEMS_PER_SOURCE);
-        const rows: NewsArticleRow[] = [];
-        const rowCategories: NewsCategory[] = [];
-        for (const it of items) {
-          const category = itemCategory(src.category);
-          const { source, ...articleItem } = it;
-          rows.push({
-            ...articleItem,
-            guid: `${category}:${src.name}:${it.guid}`,
-            content: it.content || (it.description ? textToParagraphHtml(it.description) : null),
-            source_name: source || src.name,
-            category,
-            published_at: it.published_at || new Date().toISOString(),
-          });
-          rowCategories.push(category);
-        }
+        const rows = await fetchNewsDataCategory(newsDataApiKey, category);
         if (rows.length) {
+          await supabase
+            .from("news_articles")
+            .delete()
+            .eq("category", category);
+
           const { error } = await supabase.from("news_articles").upsert(rows, { onConflict: "guid" });
           if (error) {
-            return { source: src.name, result: `DB: ${error.message}`, total: rows.length, rowCategories, rows };
+            return {
+              source: NEWSDATA_CATEGORY_NAMES[category],
+              result: `DB: ${error.message}`,
+              total: rows.length,
+              rowCategories: rows.map((row) => row.category),
+              rows,
+            };
           }
         }
-        return { source: src.name, result: rows.length, total: rows.length, rowCategories, rows };
+        return {
+          source: NEWSDATA_CATEGORY_NAMES[category],
+          result: rows.length,
+          total: rows.length,
+          rowCategories: rows.map((row) => row.category),
+          rows,
+        };
       } catch (e) {
-        return { source: src.name, result: `ERR: ${(e as Error).message}`, total: 0, rowCategories: [] as NewsCategory[], rows: [] };
+        return {
+          source: NEWSDATA_CATEGORY_NAMES[category],
+          result: `ERR: ${(e as Error).message}`,
+          total: 0,
+          rowCategories: [] as NewsCategory[],
+          rows: [] as NewsArticleRow[],
+        };
       }
     };
 
-    const settledSources = await Promise.allSettled(filteredSources.map(processSource));
+    const settledSources = await Promise.allSettled(fetchCategories.map(processCategory));
+    const rawArticles: NewsArticleRow[] = [];
     for (const settled of settledSources) {
       if (settled.status === "rejected") {
         results.unknown = `ERR: ${settled.reason?.message ?? "Unknown source error"}`;
         continue;
       }
       results[settled.value.source] = settled.value.result;
-      totalProcessed += settled.value.total;
-      settled.value.rowCategories.forEach((category) => {
-        categories[category] += 1;
-      });
-      articles.push(...settled.value.rows);
+      rawArticles.push(...settled.value.rows);
     }
+
+    articles.push(...dedupeArticles(rawArticles));
+    totalProcessed = articles.length;
+    articles.forEach((article) => {
+      categories[article.category] += 1;
+    });
 
     articles.sort((a, b) =>
       new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
