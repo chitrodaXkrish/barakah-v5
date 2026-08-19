@@ -11,7 +11,8 @@ import {
   Store,
   Edit3,
   Save,
-  X
+  X,
+  Camera,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -41,8 +42,10 @@ export const Account = () => {
   );
   const [fullName, setFullName] = useState(fallbackName);
   const [profileName, setProfileName] = useState(fallbackName);
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(user?.photoURL || null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -51,7 +54,7 @@ export const Account = () => {
     const loadProfile = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, avatar_url')
         .eq('user_id', user.uid)
         .maybeSingle();
 
@@ -66,6 +69,7 @@ export const Account = () => {
       const nextName = data?.full_name || fallbackName;
       setProfileName(nextName);
       setFullName(nextName);
+      setProfileAvatar(data?.avatar_url || user?.photoURL || null);
     };
 
     loadProfile();
@@ -132,6 +136,51 @@ export const Account = () => {
     toast.success('Profile updated');
   };
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.uid) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `${user.uid}/avatar.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('profile-avatars')
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('profile-avatars')
+        .getPublicUrl(path);
+      const avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({ user_id: user.uid, avatar_url: avatarUrl }, { onConflict: 'user_id' });
+
+      if (profileError) throw profileError;
+
+      setProfileAvatar(avatarUrl);
+      window.dispatchEvent(new CustomEvent('barakah-profile-updated'));
+      toast.success('Profile photo updated');
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not update profile photo');
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = '';
+    }
+  };
+
   const handleCancelEdit = () => {
     setFullName(profileName);
     setIsEditingProfile(false);
@@ -163,9 +212,27 @@ export const Account = () => {
         {/* User Info */}
         <Card className="p-4 rounded-2xl shadow-sm" style={{ backgroundColor: CARD, borderColor: BORDER }}>
           <div className="flex items-start space-x-3 mb-3">
-            <div className="p-3 rounded-full" style={{ backgroundColor: SOFT_ACCENT }}>
-              <User className="h-6 w-6" style={{ color: BROWN }} />
-            </div>
+            <label
+              className="relative p-3 rounded-full cursor-pointer overflow-hidden"
+              style={{ backgroundColor: SOFT_ACCENT }}
+              title="Change profile photo"
+            >
+              {profileAvatar ? (
+                <img src={profileAvatar} alt="Profile" className="h-12 w-12 rounded-full object-cover" />
+              ) : (
+                <User className="h-12 w-12 p-2" style={{ color: BROWN }} />
+              )}
+              <span className="absolute bottom-1 right-1 rounded-full p-1 text-white" style={{ backgroundColor: BROWN }}>
+                <Camera className="h-3 w-3" />
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handleAvatarUpload}
+                disabled={uploadingAvatar}
+              />
+            </label>
             <div className="flex-1 min-w-0">
               {isEditingProfile ? (
                 <div className="space-y-2">

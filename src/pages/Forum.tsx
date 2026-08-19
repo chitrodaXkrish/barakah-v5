@@ -920,6 +920,17 @@ export const Forum = () => {
 
       if (postsError) throw postsError;
 
+      const authorIds = Array.from(new Set((postsData || []).map((post) => post.user_id).filter(Boolean)));
+      const { data: profilesData, error: profilesError } = authorIds.length
+        ? await supabase.from('profiles').select('user_id, avatar_url').in('user_id', authorIds)
+        : { data: [], error: null };
+
+      if (profilesError) throw profilesError;
+
+      const avatarsByUserId = Object.fromEntries(
+        (profilesData || []).map((profile) => [profile.user_id, profile.avatar_url]),
+      );
+
       const { data: repliesData, error: repliesError } = await supabase
         .from('guftagu_replies')
         .select('*')
@@ -955,6 +966,7 @@ export const Forum = () => {
         const postLikes = likesByPost[post.id] || [];
         return {
           ...post,
+          avatar_url: avatarsByUserId[post.user_id] || post.avatar_url || undefined,
           replies: repliesByPost[post.id] || [],
           likes: postLikes,
           likeCount: postLikes.length,
@@ -973,6 +985,14 @@ export const Forum = () => {
       setRefreshing(false);
     }
   }, [user?.uid]);
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      fetchPosts(false);
+    };
+    window.addEventListener('barakah-profile-updated', handleProfileUpdate);
+    return () => window.removeEventListener('barakah-profile-updated', handleProfileUpdate);
+  }, [fetchPosts]);
 
   // Pull to refresh handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
