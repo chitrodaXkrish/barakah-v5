@@ -116,6 +116,19 @@ export const FAQ = () => {
             </Card>
           ))}
         </div>
+
+        <div className="pt-1">
+          <p className="text-sm leading-relaxed" style={{ color: MUTED }}>
+            For any app-related questions or support, please contact us at:
+          </p>
+          <a
+            href="mailto:info@barakah.services"
+            className="inline-block text-sm font-medium underline transition-opacity hover:opacity-80"
+            style={{ color: BROWN }}
+          >
+            info@barakah.services
+          </a>
+        </div>
       </div>
     </Layout>
   );
