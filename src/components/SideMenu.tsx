@@ -167,6 +167,9 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const initial = (displayName?.[0] || 'U').toUpperCase();
   const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : t('home.set_location');
   const currentLang = LANGUAGE_OPTIONS.find(l => l.code === language)?.nativeLabel || 'English';
+  const accountLabel = user?.email?.toLowerCase().endsWith('@privaterelay.appleid.com')
+    ? 'Apple ID'
+    : user?.email || '+00 000 000 000';
   const nativeSafeAreaTop = Capacitor.isNativePlatform()
     ? 'max(var(--safe-area-inset-top), 24px)'
     : 'var(--safe-area-inset-top)';
@@ -248,7 +251,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
                 {displayName}
               </p>
               <p className="mt-2 text-[16px]" style={{ color: BROWN, opacity: 0.8 }}>
-                {user?.email || '+00 000 000 000'}
+                {accountLabel}
               </p>
             </div>
           </div>
