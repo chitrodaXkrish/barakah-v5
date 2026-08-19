@@ -43,6 +43,7 @@ const PrayerTimes = lazy(() => import("./pages/PrayerTimes").then(m => ({ defaul
 const Progress = lazy(() => import("./pages/Progress").then(m => ({ default: m.Progress })));
 const MonthlyStreak = lazy(() => import("./pages/MonthlyStreak").then(m => ({ default: m.MonthlyStreak })));
 const FAQ = lazy(() => import("./pages/FAQ").then(m => ({ default: m.FAQ })));
+const AboutUs = lazy(() => import("./pages/AboutUs").then(m => ({ default: m.AboutUs })));
 const Zakat = lazy(() => import("./pages/Zakat").then(m => ({ default: m.Zakat })));
 const ZakatResult = lazy(() => import("./pages/ZakatResult").then(m => ({ default: m.ZakatResult })));
 const Hajj = lazy(() => import("./pages/Hajj").then(m => ({ default: m.Hajj })));
@@ -148,6 +149,7 @@ const App = () => (
                     <Route path="/progress" element={<ProtectedRoute><Progress /></ProtectedRoute>} />
                     <Route path="/monthly-streak" element={<ProtectedRoute><MonthlyStreak /></ProtectedRoute>} />
                     <Route path="/faq" element={<ProtectedRoute><FAQ /></ProtectedRoute>} />
+                    <Route path="/about-us" element={<ProtectedRoute><AboutUs /></ProtectedRoute>} />
                     <Route path="/zakat" element={<ProtectedRoute><Zakat /></ProtectedRoute>} />
                     <Route path="/zakat-result" element={<ProtectedRoute><ZakatResult /></ProtectedRoute>} />
                     <Route path="/hajj" element={<ProtectedRoute><Hajj /></ProtectedRoute>} />

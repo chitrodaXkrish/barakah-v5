@@ -339,7 +339,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
               <ListRow
                 icon={<Info className="w-[22px] h-[22px]" strokeWidth={1.8} />}
                 label={t('menu.about_us')}
-                onClick={() => { toast.info('Barakah App · v1.0'); }}
+                onClick={() => go('/about-us')}
               />
 
               <ListRow
