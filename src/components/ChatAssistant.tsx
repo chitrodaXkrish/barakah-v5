@@ -86,12 +86,16 @@ async function streamChat({
   onError: (err: string) => void;
 }) {
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
     const resp = await fetch(CHAT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${accessToken || publishableKey}`,
+        apikey: publishableKey,
       },
       body: JSON.stringify({ messages }),
     });
@@ -266,6 +270,9 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [showThreads, setShowThreads] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Prevents the activeThreadId effect from overwriting optimistically-set messages
+  // when a new thread is created inline during send().
+  const freshThreadRef = useRef(false);
 
   const userName = user?.displayName?.split(' ')[0] || '';
 
@@ -286,6 +293,12 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   useEffect(() => {
     if (!activeThreadId) {
       setMessages([]);
+      return;
+    }
+    // Skip the DB fetch if the thread was just created inline by send() —
+    // messages are already set optimistically, so we must not overwrite them.
+    if (freshThreadRef.current) {
+      freshThreadRef.current = false;
       return;
     }
     (async () => {
@@ -367,6 +380,8 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
         return;
       }
       threadId = created.id;
+      // Mark as fresh so the useEffect won't overwrite our optimistic messages
+      freshThreadRef.current = true;
       setActiveThreadId(threadId);
       setThreads(prev => [created as Thread, ...prev]);
     }
@@ -464,10 +479,23 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
             });
           }
         },
-        onError: (err) => {
+        onError: async (err) => {
           flushAssistant();
           streamHadError = true;
-          setMessages(prev => [...prev, { role: 'assistant', content: err }]);
+          if (!assistantSoFar) {
+            setMessages(prev => [...prev, { role: 'assistant', content: err }]);
+          } else {
+            console.warn('Stream interrupted after receiving content:', err);
+            // Save whatever partial response was generated before interruption
+            if (threadId) {
+              await supabase.from('chat_messages').insert({
+                thread_id: threadId,
+                user_id: user.uid,
+                role: 'assistant',
+                content: assistantSoFar,
+              });
+            }
+          }
           setIsLoading(false);
         },
       });
@@ -481,8 +509,6 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   const handleSuggestion = (s: string) => {
     setInput(s);
   };
-
-  const isNative = Capacitor.isNativePlatform();
 
   return (
     <div

@@ -13,6 +13,21 @@ import hadithIcon from '@/assets/hadith-icon-v2.png.asset.json';
 import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
 import quranIconFallback from '@/assets/qa-quran.png';
 import hajjIcon from '@/assets/hajj-icon.png.asset.json';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Bell, MapPin, ChevronDown, Sun, Sunrise, Sunset, Moon, Cloud, CloudSun, Sparkles, X, BookOpen, Flame, Trophy, Calendar as CalendarIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { SideMenu } from '@/components/SideMenu';
+import { BottomNavigation } from '@/components/BottomNavigation';
+import { LocationPicker } from '@/components/LocationPicker';
+import { useGlobalLocation } from '@/contexts/LocationContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
+import prayerArcLogo from '@/assets/prayer-arc-logo.png.asset.json';
+import hadithIcon from '@/assets/hadith-icon-v2.png.asset.json';
+import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
+import quranIconFallback from '@/assets/qa-quran.png';
+import hajjIcon from '@/assets/hajj-icon.png.asset.json';
 import placesIcon from '@/assets/places-icon.png.asset.json';
 import zakatIcon from '@/assets/zakat-icon.png.asset.json';
 import duaIcon from '@/assets/dua-icon.png.asset.json';
@@ -21,9 +36,9 @@ import prayerMarkIcon from '@/assets/prayer-mark-icon.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 import {
   cancelPrayerNotifications,
-  createPrayerNotificationPreviews,
   schedulePrayerNotifications,
 } from '@/lib/prayerNotifications';
+import { useAppNotifications, formatNotificationTimeLabel } from '@/hooks/useAppNotifications';
 import {
   formatPrayerTime12,
   formatPrayerTime24,
@@ -173,13 +188,7 @@ export const PrayerTimes = () => {
   );
   const next = getNextPrayer(prayers, now);
   const cityLabel = location ? location.area || location.city : (locationLoading ? 'Locating...' : 'Set location');
-  const notificationItems = useMemo(
-    () =>
-      notificationsEnabled && orderedDay.length > 0
-        ? createPrayerNotificationPreviews(orderedDay, now)
-        : [],
-    [notificationsEnabled, orderedDay, now],
-  );
+  const { notifications } = useAppNotifications();
 
   useEffect(() => {
     if (!notificationsEnabled) {
@@ -194,9 +203,6 @@ export const PrayerTimes = () => {
 
   const openNotifications = () => {
     setIsNotificationsOpen(true);
-    if (!notificationsEnabled || orderedDay.length === 0) return;
-
-    schedulePrayerNotifications(orderedDay).catch(() => {});
   };
 
   return (
@@ -228,7 +234,7 @@ export const PrayerTimes = () => {
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" strokeWidth={2} />
-            {notificationItems.length > 0 && (
+            {notifications.length > 0 && (
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E89D2F' }} />
             )}
           </button>
@@ -258,8 +264,8 @@ export const PrayerTimes = () => {
               </div>
 
               <div className="max-h-[330px] overflow-y-auto py-2">
-                {notificationItems.length > 0 ? (
-                  notificationItems.map((item) => (
+                {notifications.length > 0 ? (
+                  notifications.map((item) => (
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-start gap-3">
                         <div
@@ -276,7 +282,7 @@ export const PrayerTimes = () => {
                             {item.body}
                           </p>
                           <p className="text-[11px] mt-1" style={{ color: BROWN_ACCENT }}>
-                            {item.timeLabel}
+                            {formatNotificationTimeLabel(item.receivedAt, now)}
                           </p>
                         </div>
                       </div>
@@ -288,7 +294,7 @@ export const PrayerTimes = () => {
                       No new notifications
                     </p>
                     <p className="text-[12px] mt-1" style={{ color: '#8B6F5C' }}>
-                      Prayer alerts will appear here when available.
+                      Notifications received will be saved here for 24 hours.
                     </p>
                   </div>
                 )}
