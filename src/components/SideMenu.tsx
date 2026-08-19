@@ -51,6 +51,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   });
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<Array<{ id: string; title: string; body: string; receivedAt: number }>>([]);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [orderCount, setOrderCount] = useState(0);
 
@@ -82,6 +83,33 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
       setNotificationHistory([]);
     }
   }, [isOpen, user?.uid]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfileName = async () => {
+      if (!user?.uid) {
+        setProfileName(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.uid)
+        .maybeSingle();
+
+      if (active) setProfileName(data?.full_name?.trim() || null);
+    };
+
+    loadProfileName();
+    window.addEventListener('barakah-profile-updated', loadProfileName);
+
+    return () => {
+      active = false;
+      window.removeEventListener('barakah-profile-updated', loadProfileName);
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!isOpen || !user?.uid) {
@@ -161,6 +189,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   };
 
   const displayName =
+    profileName ||
     user?.displayName ||
     user?.email?.split('@')[0] ||
     t('menu.guest_user');
