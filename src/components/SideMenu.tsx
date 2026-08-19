@@ -48,6 +48,8 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const [notifications, setNotifications] = useState<boolean>(() => {
     return localStorage.getItem('barakah_notifications_enabled') !== 'false';
   });
+  const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
+  const [notificationHistory, setNotificationHistory] = useState<Array<{ id: string; title: string; body: string; receivedAt: number }>>([]);
   const [langOpen, setLangOpen] = useState(false);
   const [orderCount, setOrderCount] = useState(0);
 
@@ -63,6 +65,22 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
       cancelPrayerNotifications().catch(() => undefined);
     }
   }, [notifications]);
+
+  useEffect(() => {
+    const cacheKey = `barakah_home_notifications_${user?.uid || 'guest'}`;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      if (Array.isArray(parsed)) {
+        setNotificationHistory(
+          parsed
+            .filter((item: any) => item && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.body === 'string')
+            .sort((a: any, b: any) => (b.receivedAt || 0) - (a.receivedAt || 0)),
+        );
+      }
+    } catch {
+      setNotificationHistory([]);
+    }
+  }, [isOpen, user?.uid]);
 
   useEffect(() => {
     if (!isOpen || !user?.uid) {
@@ -173,176 +191,180 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header: avatar + back */}
-        <div className="px-6 pt-7 pb-2 flex items-start justify-between">
-          <div className="relative">
-            <div
-              className="w-[72px] h-[72px] rounded-full overflow-hidden flex items-center justify-center text-2xl font-semibold"
-              style={{
-                border: `2px solid ${ACCENT_ORANGE}`,
-                color: BROWN,
-                background: '#E8D3AE',
-                fontFamily: SERIF,
-              }}
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-0 pb-6">
+          <div className="px-6 pt-4 pb-2 flex items-center justify-between">
+            <button
+              onClick={onClose}
+              aria-label="Back"
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-transform active:scale-95"
+              style={{ border: `1.5px solid ${BROWN}`, color: BROWN }}
             >
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <span>{initial}</span>
-              )}
+              <ArrowLeft className="w-5 h-5" strokeWidth={1.8} />
+            </button>
+            <div className="flex-1 pl-3">
+              <h2 className="text-[28px] font-bold" style={{ color: BROWN }}>Menu</h2>
             </div>
-            <span
-              className="absolute bottom-0 right-1 w-3.5 h-3.5 rounded-full"
-              style={{ background: '#B54A22', border: `2px solid ${CREAM}` }}
-            />
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label="Close menu"
-            className="w-11 h-11 rounded-full flex items-center justify-center transition-transform active:scale-95"
-            style={{ border: `1.5px solid ${BROWN}`, color: BROWN }}
-          >
-            <ArrowLeft className="w-5 h-5" strokeWidth={1.8} />
-          </button>
-        </div>
-
-        <div className="px-6 pb-4">
-          <h2
-            className="text-[22px] italic"
-            style={{ color: BROWN_ACCENT, fontFamily: ITALIC, fontWeight: 500 }}
-          >
-            {displayName}
-          </h2>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-2 pb-6">
-          <Section title={t('menu.section.profile')}>
-            <Row
-              icon={<User className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.view_edit_profile')}
-              onClick={() => go('/account')}
-            />
-          </Section>
-
-          {userRole === 'seller' && (
-            <Section title={t('menu.section.seller')}>
-              <Row
-                icon={<LayoutDashboard className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-                label={t('menu.seller_dashboard')}
-                onClick={() => go('/seller-dashboard')}
+          <div className="px-6 pb-4 flex items-center gap-4">
+            <div className="relative">
+              <div
+                className="w-[74px] h-[74px] rounded-full overflow-hidden flex items-center justify-center text-2xl font-semibold"
+                style={{
+                  border: `2px solid ${ACCENT_ORANGE}`,
+                  color: BROWN,
+                  background: '#E8D3AE',
+                  fontFamily: SERIF,
+                }}
+              >
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{initial}</span>
+                )}
+              </div>
+              <span
+                className="absolute bottom-0 right-1 w-3.5 h-3.5 rounded-full"
+                style={{ background: '#B54A22', border: `2px solid ${CREAM}` }}
               />
-            </Section>
-          )}
+            </div>
 
-          <Section title={t('menu.section.orders')}>
-            <Row
-              icon={<ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+            <div className="min-w-0">
+              <p className="text-[26px] leading-none font-bold truncate" style={{ color: BROWN }}>
+                {displayName}
+              </p>
+              <p className="mt-2 text-[16px]" style={{ color: BROWN, opacity: 0.8 }}>
+                {user?.phoneNumber || user?.email || '+00 000 000 000'}
+              </p>
+            </div>
+          </div>
+
+          <div className="px-5 pb-6 grid grid-cols-3 gap-3">
+            <MenuTile
+              icon={<ShoppingBag className="w-[28px] h-[28px]" strokeWidth={1.8} />}
               label={t('menu.orders')}
               onClick={() => go(userRole === 'seller' ? '/seller/orders' : '/cart')}
-              trailing={
-                orderCount > 0 ? (
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-semibold text-white"
-                    style={{ background: BADGE_BROWN }}
-                  >
-                    {orderCount > 9 ? '9+' : orderCount}
-                  </span>
-                ) : null
-              }
+              badge={orderCount > 0 ? (orderCount > 9 ? '9+' : String(orderCount)) : null}
             />
-          </Section>
-
-          <Section title={t('menu.section.help')}>
-            <Row
-              icon={<HelpCircle className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+            <MenuTile
+              icon={<HelpCircle className="w-[28px] h-[28px]" strokeWidth={1.8} />}
               label={t('menu.help_support')}
               onClick={() => go('/faq')}
             />
-          </Section>
-
-          <Section title={t('menu.section.preferences')}>
-            <Row
-              icon={<MapPin className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.location')}
-              onClick={() => go('/places')}
-              trailing={
-                <span className="text-[14px]" style={{ color: ACCENT_ORANGE, fontFamily: SERIF }}>
-                  {locationLabel}
-                </span>
-              }
-            />
-            <Row
-              icon={<Bell className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+            <MenuTile
+              icon={<Bell className="w-[28px] h-[28px]" strokeWidth={1.8} />}
               label={t('menu.notifications')}
-              onClick={() => setNotifications(v => !v)}
-              trailing={
-                <button
-                  onClick={(e) => { e.stopPropagation(); setNotifications(v => !v); }}
-                  aria-label={t('menu.toggle_notifications')}
-                  className="relative w-[46px] h-[26px] rounded-full transition-colors"
-                  style={{ background: notifications ? ACCENT_ORANGE : '#C9B89D' }}
-                >
-                  <span
-                    className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all"
-                    style={{ left: notifications ? 23 : 3 }}
-                  />
-                </button>
-              }
+              onClick={() => setShowNotificationsPanel((prev) => !prev)}
             />
-            <Row
-              icon={<Globe className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.language')}
-              onClick={() => setLangOpen(true)}
-              trailing={
-                <span className="text-[14px]" style={{ color: ACCENT_ORANGE }}>
-                  {currentLang}
-                </span>
-              }
-            />
-          </Section>
+          </div>
 
-          <Section title={t('menu.section.app_setup')}>
-            <Row
-              icon={<LayoutGrid className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.widget_setup')}
-              onClick={() => { toast.info(t('menu.widget_coming_soon')); onClose(); }}
-            />
-            <Row
-              icon={<Share2 className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.share_app')}
-              onClick={handleShare}
-            />
-          </Section>
+          {showNotificationsPanel && (
+            <div className="px-5 pb-4">
+              <div className="rounded-2xl border p-3" style={{ borderColor: 'rgba(44,19,9,0.12)', background: 'rgba(255,255,255,0.25)' }}>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-[14px] font-bold" style={{ color: BROWN }}>Past notifications</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationsPanel(false)}
+                    className="text-[12px] font-medium"
+                    style={{ color: ACCENT_ORANGE }}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="max-h-[220px] space-y-2 overflow-y-auto">
+                  {notificationHistory.length > 0 ? (
+                    notificationHistory.map((item) => (
+                      <div key={item.id} className="rounded-xl border px-3 py-2" style={{ borderColor: 'rgba(44,19,9,0.08)', background: 'rgba(255,255,255,0.12)' }}>
+                        <p className="text-[13px] font-semibold" style={{ color: BROWN }}>{item.title}</p>
+                        <p className="mt-1 text-[12px] leading-snug" style={{ color: MUTED }}>{item.body}</p>
+                        <p className="mt-1 text-[10px]" style={{ color: ACCENT_ORANGE }}>
+                          {new Date(item.receivedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[12px]" style={{ color: MUTED }}>No past notifications yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
-          <Section title={t('menu.section.legal')}>
-            <Row
-              icon={<Info className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.about_us')}
-              onClick={() => { toast.info('Barakah App · v1.0'); }}
-            />
-            <Row
-              icon={<Shield className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.privacy_policy')}
-              onClick={() => go('/privacy-policy')}
-            />
-            <Row
-              icon={<FileText className="w-[22px] h-[22px]" strokeWidth={1.8} />}
-              label={t('menu.terms_of_service')}
-              onClick={() => go('/terms-of-service')}
-            />
-          </Section>
+          <div className="px-5">
+            <h3 className="text-[22px] font-bold mb-3" style={{ color: BROWN }}>Profile</h3>
 
-          <div className="px-4 pt-6">
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 text-[17px] font-semibold transition-opacity active:opacity-70"
-              style={{ color: '#D63A1F' }}
-            >
-              <LogOut className="w-[22px] h-[22px]" strokeWidth={2} />
-              {t('menu.sign_out')}
-            </button>
+            <div className="space-y-0 rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(44,19,9,0.12)', background: 'rgba(255,255,255,0.28)' }}>
+              <ListRow
+                icon={<User className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.view_edit_profile')}
+                onClick={() => go('/account')}
+              />
+
+              {userRole === 'seller' && (
+                <ListRow
+                  icon={<LayoutDashboard className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                  label={t('menu.seller_dashboard')}
+                  onClick={() => go('/seller-dashboard')}
+                />
+              )}
+
+              <ListRow
+                icon={<MapPin className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.location')}
+                onClick={() => go('/places')}
+                trailing={<span className="text-[14px]" style={{ color: ACCENT_ORANGE, fontFamily: SERIF }}>{locationLabel}</span>}
+              />
+
+              <ListRow
+                icon={<Globe className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.language')}
+                onClick={() => setLangOpen(true)}
+                trailing={<span className="text-[14px]" style={{ color: ACCENT_ORANGE }}>{currentLang}</span>}
+              />
+
+              <ListRow
+                icon={<LayoutGrid className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.widget_setup')}
+                onClick={() => { toast.info(t('menu.widget_coming_soon')); onClose(); }}
+              />
+
+              <ListRow
+                icon={<Share2 className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.share_app')}
+                onClick={handleShare}
+              />
+
+              <ListRow
+                icon={<Info className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.about_us')}
+                onClick={() => { toast.info('Barakah App · v1.0'); }}
+              />
+
+              <ListRow
+                icon={<Shield className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.privacy_policy')}
+                onClick={() => go('/privacy-policy')}
+              />
+
+              <ListRow
+                icon={<FileText className="w-[22px] h-[22px]" strokeWidth={1.8} />}
+                label={t('menu.terms_of_service')}
+                onClick={() => go('/terms-of-service')}
+              />
+            </div>
+
+            <div className="pt-6 pb-2">
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 text-[18px] font-semibold transition-opacity active:opacity-70"
+                style={{ color: '#D63A1F' }}
+              >
+                <LogOut className="w-[22px] h-[22px]" strokeWidth={2} />
+                {t('menu.sign_out')}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -395,19 +417,41 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
 
 /* ---------- helpers ---------- */
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="px-4 pt-5">
-    <div
-      className="text-[12px] tracking-[0.18em] mb-1 px-1"
-      style={{ color: MUTED, fontWeight: 600 }}
-    >
-      {title}
-    </div>
-    <div>{children}</div>
-  </div>
+const MenuTile = ({
+  icon,
+  label,
+  onClick,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  badge?: string | null;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="relative flex flex-col items-center justify-center rounded-[18px] p-3 min-h-[110px] transition-transform active:scale-[0.98]"
+    style={{ background: '#F3E8E0', color: BROWN }}
+  >
+    {badge && (
+      <span
+        className="absolute right-2 top-2 min-w-[20px] h-5 rounded-full flex items-center justify-center px-1 text-[11px] font-semibold text-white"
+        style={{ background: BADGE_BROWN }}
+      >
+        {badge}
+      </span>
+    )}
+    <span className="mb-2 flex items-center justify-center" style={{ color: BROWN }}>
+      {icon}
+    </span>
+    <span className="text-center text-[15px] font-semibold leading-tight" style={{ color: BROWN }}>
+      {label}
+    </span>
+  </button>
 );
 
-const Row = ({
+const ListRow = ({
   icon,
   label,
   onClick,
@@ -421,8 +465,8 @@ const Row = ({
   <button
     type="button"
     onClick={onClick}
-    className="w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-colors active:bg-[#F5E6D0]"
-    style={{ color: BROWN }}
+    className="w-full flex items-center gap-4 px-4 py-4 border-b last:border-b-0 transition-colors active:bg-[#F5E6D0]"
+    style={{ color: BROWN, borderColor: 'rgba(44,19,9,0.08)' }}
   >
     <span className="flex items-center justify-center w-9 h-9" style={{ color: BROWN }}>
       {icon}
@@ -430,6 +474,6 @@ const Row = ({
     <span className="flex-1 text-left text-[17px] font-semibold" style={{ color: BROWN }}>
       {label}
     </span>
-    {trailing}
+    {trailing ?? <span aria-hidden className="text-[26px] leading-none" style={{ color: '#6D584A' }}>›</span>}
   </button>
 );
