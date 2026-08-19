@@ -247,9 +247,6 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
             >
               <ArrowLeft className="w-5 h-5" strokeWidth={1.8} />
             </button>
-            <div className="flex-1 pl-3">
-              <h2 className="text-[28px] font-bold" style={{ color: BROWN }}>Menu</h2>
-            </div>
           </div>
 
           <div className="px-6 pb-4 flex items-center gap-4">
