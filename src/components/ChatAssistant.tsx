@@ -479,10 +479,23 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
             });
           }
         },
-        onError: (err) => {
+        onError: async (err) => {
           flushAssistant();
           streamHadError = true;
-          setMessages(prev => [...prev, { role: 'assistant', content: err }]);
+          if (!assistantSoFar) {
+            setMessages(prev => [...prev, { role: 'assistant', content: err }]);
+          } else {
+            console.warn('Stream interrupted after receiving content:', err);
+            // Save whatever partial response was generated before interruption
+            if (threadId) {
+              await supabase.from('chat_messages').insert({
+                thread_id: threadId,
+                user_id: user.uid,
+                role: 'assistant',
+                content: assistantSoFar,
+              });
+            }
+          }
           setIsLoading(false);
         },
       });
