@@ -15,7 +15,7 @@ type Thread = { id: string; title: string; updated_at: string };
 
 interface NativeSpeechRecognitionPlugin {
   start(options?: { language?: string }): Promise<{ text: string }>;
-  stop(): Promise<void>;
+  stop(): Promise<{ text?: string } | void>;
   requestPermissions(options?: { permissions?: string[] }): Promise<{ microphone?: string }>;
 }
 
@@ -490,8 +490,8 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
       style={{
         backgroundColor: CREAM_BG,
         color: BROWN,
-        top: isNative ? 'var(--safe-area-inset-top)' : 0,
-        height: isNative ? 'calc(100dvh - var(--safe-area-inset-top))' : '100dvh',
+        top: 0,
+        height: '100dvh',
       }}
     >
       <ChatView
@@ -698,7 +698,10 @@ const ChatView = ({
     if (isListening) {
       recognitionRef.current?.stop?.();
       if (Capacitor.isNativePlatform()) {
-        await NativeSpeechRecognition.stop().catch(() => undefined);
+        const result = await NativeSpeechRecognition.stop().catch(() => undefined);
+        if (result && 'text' in result && result.text) {
+          appendTranscript(result.text);
+        }
       }
       setIsListening(false);
       return;
@@ -730,7 +733,12 @@ const ChatView = ({
       {/* Header — white bar */}
       <div
         className="px-4 pt-4 pb-4 flex items-center justify-between shrink-0"
-        style={{ backgroundColor: '#FFFFFF' }}
+        style={{
+          backgroundColor: '#FFFFFF',
+          paddingTop: Capacitor.isNativePlatform()
+            ? 'calc(var(--safe-area-inset-top) + 1rem)'
+            : undefined,
+        }}
       >
         <div className="flex items-center gap-2">
           <button

@@ -18,6 +18,8 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     private let audioEngine = AVAudioEngine()
     private var activeCall: CAPPluginCall?
     private var isAudioTapInstalled = false
+    private var latestTranscript = ""
+    private var silenceFinishWorkItem: DispatchWorkItem?
     
     @objc func start(_ call: CAPPluginCall) {
         if activeCall != nil {
@@ -64,6 +66,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     
     private func startRecording(_ call: CAPPluginCall) {
         activeCall = call
+        latestTranscript = ""
         
         let audioSession = AVAudioSession.sharedInstance()
         do {
@@ -82,16 +85,19 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
             return
         }
         
-        recognitionRequest.shouldReportPartialResults = false
+        recognitionRequest.shouldReportPartialResults = true
         
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest, resultHandler: { result, error in
             var isFinal = false
             
             if let result = result {
                 let text = result.bestTranscription.formattedString
+                self.latestTranscript = text
                 isFinal = result.isFinal
                 if isFinal {
                     self.resolveActiveCall(["text": text])
+                } else {
+                    self.scheduleSilenceFinish()
                 }
             }
             
@@ -123,10 +129,30 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     
     @objc func stop(_ call: CAPPluginCall) {
         if activeCall != nil {
-            rejectActiveCall("Voice input stopped.")
+            let transcript = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if transcript.isEmpty {
+                rejectActiveCall("Voice input stopped.")
+            } else {
+                resolveActiveCall(["text": transcript])
+            }
         }
         cleanupRecognition()
         call.resolve()
+    }
+
+    private func scheduleSilenceFinish() {
+        silenceFinishWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, self.activeCall != nil else { return }
+            let transcript = self.latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !transcript.isEmpty {
+                self.resolveActiveCall(["text": transcript])
+            }
+        }
+
+        silenceFinishWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
     }
     
     private func resolveActiveCall(_ data: [String: Any]) {
@@ -146,6 +172,8 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     }
 
     private func cleanupRecognition() {
+        silenceFinishWorkItem?.cancel()
+        silenceFinishWorkItem = nil
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -157,6 +185,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
+        latestTranscript = ""
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
