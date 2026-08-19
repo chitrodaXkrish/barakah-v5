@@ -432,7 +432,7 @@ const MenuTile = ({
     type="button"
     onClick={onClick}
     className="relative flex flex-col items-center justify-center rounded-[18px] p-3 min-h-[110px] transition-transform active:scale-[0.98]"
-    style={{ background: '#F3E8E0', color: BROWN }}
+    style={{ background: 'transparent', border: 'none', color: BROWN }}
   >
     {badge && (
       <span
