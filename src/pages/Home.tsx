@@ -14,6 +14,7 @@ import { LocationPicker } from '@/components/LocationPicker';
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { usePrayerTimes } from '@/contexts/PrayerTimesContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppNotifications, formatNotificationTimeLabel } from '@/hooks/useAppNotifications';
 import qaQuranAsset from '@/assets/qa-quran-new.png.asset.json';
 import qaAiAsset from '@/assets/qa-ai-new.png.asset.json';
 import qaPlacesAsset from '@/assets/qa-places-new.png.asset.json';
@@ -21,10 +22,7 @@ import qaHajjAsset from '@/assets/qa-hajj-new.png.asset.json';
 import barakahArcLogo from '@/assets/barakah-arc-logo.png.asset.json';
 import barakahLogo from '@/assets/barakah-logo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
-import {
-  createPrayerNotificationPreviews,
-  schedulePrayerNotifications,
-} from '@/lib/prayerNotifications';
+import { schedulePrayerNotifications } from '@/lib/prayerNotifications';
 import {
   type AppPrayerTime,
   formatPrayerTime12,
@@ -45,45 +43,6 @@ interface NewsItem {
 
 const FALLBACK_IMG =
   'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=200&h=200&fit=crop';
-
-const NOTIFICATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-interface CachedNotification {
-  id: string;
-  title: string;
-  body: string;
-  receivedAt: number;
-}
-
-const notificationCacheKey = (userId?: string) =>
-  `barakah_home_notifications_${userId || 'guest'}`;
-
-const notificationSessionKey = (userId?: string) =>
-  `barakah_home_notification_session_${userId || 'guest'}`;
-
-const readCachedNotifications = (key: string): CachedNotification[] => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (item): item is CachedNotification =>
-        typeof item?.id === 'string' &&
-        typeof item?.title === 'string' &&
-        typeof item?.body === 'string' &&
-        typeof item?.receivedAt === 'number',
-    );
-  } catch {
-    return [];
-  }
-};
-
-const cacheWindow = (items: CachedNotification[], sessionStartedAt: number) => {
-  const earliest = Math.max(sessionStartedAt, Date.now() - NOTIFICATION_CACHE_TTL_MS);
-  return items
-    .filter((item) => item.receivedAt >= earliest)
-    .sort((a, b) => b.receivedAt - a.receivedAt);
-};
 
 const normalizeNewsKey = (item: Pick<NewsItem, 'article_url' | 'title'>) => {
   if (item.article_url) {
@@ -117,39 +76,7 @@ const dedupeNewsItems = (items: NewsItem[]) => {
   });
 };
 
-const notificationTimeLabel = (receivedAt: number, nowDate: Date) => {
-  const diffSeconds = Math.max(0, Math.floor((nowDate.getTime() - receivedAt) / 1000));
-  if (diffSeconds < 60) return 'Just now';
-  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
-  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
-  return new Date(receivedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-};
 
-const normalizeNotification = (raw: unknown): CachedNotification | null => {
-  const payload = raw as any;
-  const notification = payload?.notification || payload;
-  const title = notification?.title || payload?.title;
-  const body = notification?.body || payload?.body;
-
-  if (!title && !body) return null;
-
-  const receivedAt = Date.now();
-  const id =
-    notification?.id ||
-    notification?.tag ||
-    payload?.id ||
-    payload?.notification?.id ||
-    `${receivedAt}-${title || 'notification'}-${body || ''}`;
-
-  return {
-    id: String(id),
-    title: String(title || 'Notification'),
-    body: String(body || ''),
-    receivedAt,
-  };
-};
-
-// Date formatting utilities moved to src/lib/dateUtils.ts
 
 const timeAgo = (iso?: string | null) => {
   if (!iso) return '';
@@ -163,6 +90,7 @@ export const Home = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { notifications } = useAppNotifications();
   const { location, loading: locationLoading } = useGlobalLocation();
   const {
     prayers: apiPrayers,
@@ -175,11 +103,6 @@ export const Home = () => {
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
-  );
-  const [notificationSessionStartedAt, setNotificationSessionStartedAt] = useState(Date.now());
-  const [cachedNotifications, setCachedNotifications] = useState<CachedNotification[]>([]);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -190,79 +113,6 @@ export const Home = () => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const syncNotificationSetting = () => {
-      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
-    };
-
-    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
-    window.addEventListener('storage', syncNotificationSetting);
-
-    return () => {
-      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
-      window.removeEventListener('storage', syncNotificationSetting);
-    };
-  }, []);
-
-  useEffect(() => {
-    const cacheKey = notificationCacheKey(user?.uid);
-    const sessionKey = notificationSessionKey(user?.uid);
-    const storedSessionStart = Number(sessionStorage.getItem(sessionKey));
-    const sessionStart = Number.isFinite(storedSessionStart) && storedSessionStart > 0
-      ? storedSessionStart
-      : Date.now();
-
-    sessionStorage.setItem(sessionKey, String(sessionStart));
-    setNotificationSessionStartedAt(sessionStart);
-
-    const nextItems = cacheWindow(readCachedNotifications(cacheKey), sessionStart);
-    localStorage.setItem(cacheKey, JSON.stringify(nextItems));
-    setCachedNotifications(nextItems);
-  }, [user?.uid]);
-
-  useEffect(() => {
-    const cacheKey = notificationCacheKey(user?.uid);
-
-    const storeNotification = (raw: unknown) => {
-      const item = normalizeNotification(raw);
-      if (!item || item.receivedAt < notificationSessionStartedAt) return;
-
-      setCachedNotifications((current) => {
-        const nextItems = cacheWindow(
-          [item, ...current.filter((existing) => existing.id !== item.id)],
-          notificationSessionStartedAt,
-        );
-        localStorage.setItem(cacheKey, JSON.stringify(nextItems));
-        return nextItems;
-      });
-    };
-    const addNotification = (event: Event) => storeNotification((event as CustomEvent).detail);
-
-    window.addEventListener('pushNotificationReceived', addNotification);
-    window.addEventListener('pushNotificationAction', addNotification);
-
-    let localReceivedHandle: { remove: () => Promise<void> } | undefined;
-    let localActionHandle: { remove: () => Promise<void> } | undefined;
-
-    if (Capacitor.isNativePlatform()) {
-      LocalNotifications.addListener('localNotificationReceived', storeNotification).then((handle) => {
-        localReceivedHandle = handle;
-      });
-      LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-        storeNotification(action?.notification || action);
-      }).then((handle) => {
-        localActionHandle = handle;
-      });
-    }
-
-    return () => {
-      window.removeEventListener('pushNotificationReceived', addNotification);
-      window.removeEventListener('pushNotificationAction', addNotification);
-      localReceivedHandle?.remove();
-      localActionHandle?.remove();
-    };
-  }, [notificationSessionStartedAt, user?.uid]);
 
   useEffect(() => {
     if (!user) return;
@@ -288,7 +138,7 @@ export const Home = () => {
         .select('id, title, source_name, article_url, category, image_url, published_at')
         .order('published_at', { ascending: false, nullsFirst: false })
         .limit(12);
-      if (data) setNews(dedupeNewsItems(data as NewsItem[]).slice(0, 4));
+      if (data) setNews(data as NewsItem[]);
     })();
   }, []);
 
@@ -297,7 +147,6 @@ export const Home = () => {
 
   // Next prayer
   const prayerTimes = apiPrayers.filter((prayer) => prayer.key !== 'sunrise');
-  const notificationPrayers = prayerTimes;
   const cur = now.getHours() * 60 + now.getMinutes();
   const next = getNextPrayer(apiPrayers, now);
   const prayerTime = next ? formatPrayerTime12(next) : '';
@@ -314,21 +163,11 @@ export const Home = () => {
       : location
         ? t('home.unavailable')
         : t('home.set_location');
-  const notificationItems = useMemo(
-    () =>
-      notificationsEnabled && notificationPrayers.length > 0
-        ? createPrayerNotificationPreviews(notificationPrayers, now)
-        : [],
-    [notificationsEnabled, notificationPrayers, now],
-  );
   const displayedNews: Array<Partial<NewsItem>> =
-    news.length ? news : Array.from({ length: 2 }, () => ({}));
+    news.length ? news.slice(0, 4) : Array.from({ length: 2 }, () => ({}));
 
   const openNotifications = () => {
     setIsNotificationsOpen(true);
-    if (!notificationsEnabled || notificationPrayers.length === 0) return;
-
-    schedulePrayerNotifications(notificationPrayers).catch(() => {});
   };
 
   const quickActions = [
@@ -395,7 +234,7 @@ export const Home = () => {
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" strokeWidth={2} />
-            {notificationItems.length > 0 && (
+            {notifications.length > 0 && (
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: '#E89D2F' }} />
             )}
           </button>
@@ -493,10 +332,9 @@ export const Home = () => {
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
-
           <div className="max-h-[330px] overflow-y-auto py-2">
-            {notificationItems.length > 0 ? (
-              notificationItems.map((item) => (
+            {notifications.length > 0 ? (
+              notifications.map((item) => (
                 <div key={item.id} className="px-4 py-3">
                   <div className="flex items-start gap-3">
                     <div
@@ -513,7 +351,7 @@ export const Home = () => {
                         {item.body}
                       </p>
                       <p className="text-[11px] mt-1" style={{ color: '#B0431E' }}>
-                        {item.timeLabel}
+                        {formatNotificationTimeLabel(item.receivedAt, now)}
                       </p>
                     </div>
                   </div>
