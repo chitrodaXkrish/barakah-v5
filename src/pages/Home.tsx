@@ -22,6 +22,7 @@ import barakahArcLogo from '@/assets/barakah-arc-logo.png.asset.json';
 import barakahLogo from '@/assets/barakah-logo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 import {
+  createPrayerNotificationPreviews,
   schedulePrayerNotifications,
 } from '@/lib/prayerNotifications';
 import {
@@ -313,7 +314,13 @@ export const Home = () => {
       : location
         ? t('home.unavailable')
         : t('home.set_location');
-  const notificationItems = notificationsEnabled ? cachedNotifications : [];
+  const notificationItems = useMemo(
+    () =>
+      notificationsEnabled && notificationPrayers.length > 0
+        ? createPrayerNotificationPreviews(notificationPrayers, now)
+        : [],
+    [notificationsEnabled, notificationPrayers, now],
+  );
   const displayedNews: Array<Partial<NewsItem>> =
     news.length ? news : Array.from({ length: 2 }, () => ({}));
 
@@ -506,7 +513,7 @@ export const Home = () => {
                         {item.body}
                       </p>
                       <p className="text-[11px] mt-1" style={{ color: '#B0431E' }}>
-                        {notificationTimeLabel(item.receivedAt, now)}
+                        {item.timeLabel}
                       </p>
                     </div>
                   </div>
