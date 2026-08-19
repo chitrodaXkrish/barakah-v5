@@ -109,6 +109,33 @@ const formatTimeAgo = (dateStr: string): string => {
   return `${Math.floor(diffDays / 7)}w ago`;
 };
 
+const GUFTAGU_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type CachedPosts = {
+  savedAt: number;
+  posts: Post[];
+};
+
+const readCachedPosts = (key: string): Post[] | null => {
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || 'null') as CachedPosts | null;
+    if (!cached || !Array.isArray(cached.posts) || Date.now() - cached.savedAt > GUFTAGU_CACHE_TTL_MS) {
+      return null;
+    }
+    return cached.posts;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedPosts = (key: string, posts: Post[]) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), posts } satisfies CachedPosts));
+  } catch {
+    // Ignore storage quota and private-browsing failures; the network feed remains available.
+  }
+};
+
 // Helper function to render content with @mentions highlighted
 const renderContentWithMentions = (content: string) => {
   const mentionRegex = /@(\w+)/g;
@@ -798,6 +825,7 @@ export const Forum = () => {
   const joinedStorageKey = `guftagu_joined_${user?.uid || 'guest'}`;
   const createdStorageKey = `guftagu_created_${user?.uid || 'guest'}`;
   const bookmarksStorageKey = `guftagu_bookmarks_${user?.uid || 'guest'}`;
+  const postsCacheKey = `guftagu_posts_cache_${user?.uid || 'guest'}`;
 
   useEffect(() => {
     try {
@@ -957,7 +985,7 @@ export const Forum = () => {
         if (!likesByPost[like.post_id]) {
           likesByPost[like.post_id] = [];
         }
-        likesByPost[like.post_id].push(like);
+        likesByPost[like.post_id].push(like as Like);
       });
 
       const postsWithData = (postsData || [])
@@ -966,7 +994,7 @@ export const Forum = () => {
         const postLikes = likesByPost[post.id] || [];
         return {
           ...post,
-          avatar_url: avatarsByUserId[post.user_id] || post.avatar_url || undefined,
+          avatar_url: avatarsByUserId[post.user_id] || undefined,
           replies: repliesByPost[post.id] || [],
           likes: postLikes,
           likeCount: postLikes.length,
@@ -976,6 +1004,7 @@ export const Forum = () => {
       });
 
       setPosts(postsWithData);
+      writeCachedPosts(postsCacheKey, postsWithData);
       hasLoadedPostsRef.current = true;
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -984,7 +1013,7 @@ export const Forum = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user?.uid]);
+  }, [postsCacheKey, user?.uid]);
 
   useEffect(() => {
     const handleProfileUpdate = () => {
@@ -993,6 +1022,12 @@ export const Forum = () => {
     window.addEventListener('barakah-profile-updated', handleProfileUpdate);
     return () => window.removeEventListener('barakah-profile-updated', handleProfileUpdate);
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (hasLoadedPostsRef.current && posts.length > 0) {
+      writeCachedPosts(postsCacheKey, posts);
+    }
+  }, [posts, postsCacheKey]);
 
   // Pull to refresh handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -1039,6 +1074,17 @@ export const Forum = () => {
   }, []);
 
   useEffect(() => {
+    hasLoadedPostsRef.current = false;
+    const cachedPosts = readCachedPosts(postsCacheKey);
+    if (cachedPosts) {
+      setPosts(cachedPosts);
+      setLoading(false);
+      hasLoadedPostsRef.current = true;
+    } else {
+      setPosts([]);
+      setLoading(true);
+    }
+
     fetchPosts();
     fetchUserNames();
 
@@ -1110,7 +1156,7 @@ export const Forum = () => {
       supabase.removeChannel(postsChannel);
       supabase.removeChannel(likesChannel);
     };
-  }, [fetchPosts, fetchUserNames]);
+  }, [fetchPosts, fetchUserNames, postsCacheKey]);
 
   const handleContentChange = (value: string, target: 'post' | 'reply') => {
     if (target === 'post') {
