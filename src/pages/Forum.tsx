@@ -1733,19 +1733,6 @@ export const Forum = () => {
             </p>
           </div>
 
-          {/* Image placeholder for posts with longer content (simulated feature post) */}
-          {post.content.length > 250 && (
-            <div 
-              className="w-full h-40 rounded-xl mb-3 flex items-center justify-center"
-              style={{ background: '#EAD3B0' }}
-              onClick={() => setSelectedPost(post)}
-            >
-              <span className="text-xs uppercase tracking-widest" style={{ color: '#B59A78' }}>
-                IMAGE_PLACEHOLDER
-              </span>
-            </div>
-          )}
-
           {/* Actions Row */}
           <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${SOFT_BORDER}` }}>
             <div className="flex items-center gap-5">
