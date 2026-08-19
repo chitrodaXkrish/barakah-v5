@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
@@ -166,24 +167,36 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const initial = (displayName?.[0] || 'U').toUpperCase();
   const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : t('home.set_location');
   const currentLang = LANGUAGE_OPTIONS.find(l => l.code === language)?.nativeLabel || 'English';
+  const nativeSafeAreaTop = Capacitor.isNativePlatform()
+    ? 'max(var(--safe-area-inset-top), 24px)'
+    : 'var(--safe-area-inset-top)';
+  const nativeSafeAreaBottom = Capacitor.isNativePlatform()
+    ? 'max(var(--safe-area-inset-bottom), 16px)'
+    : 'var(--safe-area-inset-bottom)';
 
   return (
     <>
       <div
         className={cn(
-          'fixed inset-0 z-40 transition-opacity duration-300',
+          'fixed left-0 right-0 z-40 transition-opacity duration-300',
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
-        style={{ backgroundColor: 'rgba(44, 19, 9, 0.35)' }}
+        style={{
+          top: nativeSafeAreaTop,
+          bottom: nativeSafeAreaBottom,
+          backgroundColor: 'rgba(44, 19, 9, 0.35)',
+        }}
         onClick={onClose}
       />
 
       <aside
         className={cn(
-          'fixed top-0 left-0 h-full w-[86vw] max-w-[360px] z-50 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col',
+          'fixed left-0 w-[86vw] max-w-[360px] z-50 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col',
           isOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
         )}
         style={{
+          top: nativeSafeAreaTop,
+          bottom: nativeSafeAreaBottom,
           backgroundColor: CREAM,
           borderTopRightRadius: 32,
           borderBottomRightRadius: 32,
@@ -235,7 +248,7 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
                 {displayName}
               </p>
               <p className="mt-2 text-[16px]" style={{ color: BROWN, opacity: 0.8 }}>
-                {user?.phoneNumber || user?.email || '+00 000 000 000'}
+                {user?.email || '+00 000 000 000'}
               </p>
             </div>
           </div>
