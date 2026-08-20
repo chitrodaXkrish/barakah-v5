@@ -391,6 +391,7 @@ export const Progress = () => {
 };
 
 const MonthGrid = ({ completedMap, weeklyData }: { completedMap: Record<string, boolean>; weeklyData: any[] }) => {
+  const { t } = useLanguage();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
