@@ -16,6 +16,7 @@ const BROWN_BTN = '#6B3520';
 const MUTED = '#8A6A55';
 
 const SERIF = "'Plus Jakarta Sans', sans-serif";
+const SCAN_HALAL_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scan-halal`;
 
 type Ingredient = { name: string; ok: boolean };
 
@@ -32,6 +33,30 @@ type ScanResult = {
   ingredients: Array<{ name: string; ok: boolean; note?: string | null }>;
   source?: string | null;
 };
+
+async function invokeScanHalal(body: Record<string, unknown>) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  const response = await fetch(SCAN_HALAL_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: publishableKey,
+      Authorization: `Bearer ${accessToken || publishableKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `Scan request failed (${response.status})`);
+  }
+
+  return payload;
+}
 
 const PRODUCT = {
   name: 'Golden Saffron Tea Biscuits',
@@ -95,16 +120,13 @@ export const HalalScanner = () => {
     setScanning(false);
 
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('scan-halal', {
-        body: {
-          barcode,
-          ...(location
-            ? { region: [location.area || location.city, location.country].filter(Boolean).join(', ') }
-            : {}),
-        },
+      const data = await invokeScanHalal({
+        barcode,
+        ...(location
+          ? { region: [location.area || location.city, location.country].filter(Boolean).join(', ') }
+          : {}),
       });
 
-      if (invokeError) throw invokeError;
       const result = data?.result;
       if (!result) throw new Error('No scan result returned');
       if (!mountedRef.current) return;
@@ -206,20 +228,18 @@ export const HalalScanner = () => {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       try {
-        const { data, error: invokeError } = await supabase.functions.invoke('scan-halal', {
-          body: {
-            imageBase64: dataUrl,
-            imageMimeType: file.type,
-            region: location
-              ? [location.area || location.city, location.country]
-                  .filter(Boolean)
-                  .join(', ')
-              : undefined,
-            // Include last known barcode if available to aid AI enrichment
-            barcode: lastBarcode ?? undefined,
-          },
+        const data = await invokeScanHalal({
+          imageBase64: dataUrl,
+          imageMimeType: file.type,
+          region: location
+            ? [location.area || location.city, location.country]
+                .filter(Boolean)
+                .join(', ')
+            : undefined,
+          // Include last known barcode if available to aid AI enrichment
+          barcode: lastBarcode ?? undefined,
         });
-        if (invokeError) throw invokeError;
+
         const result = data?.result ?? data?.scan?.result ?? null;
         const ai = (result && typeof result === 'object') ? result : null;
         if (!ai) throw new Error('No AI result returned');
