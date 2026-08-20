@@ -85,7 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
         body: JSON.stringify({
           from: "Barakah <hello@barakah.services>",
           to: [email],
-          subject: "Welcome to Barakah 🌙",
+          subject: "Welcome to Barakah, You're part of something special 🤍",
           html: `
             <!DOCTYPE html>
             <html>
@@ -110,17 +110,9 @@ const handler = async (req: Request): Promise<Response> => {
                   <div style="
                     background-color: #ffffff;
                     border-radius: 16px;
-                    padding: 40px 30px;
-                    text-align: center;
+                    padding: 40px 35px;
+                    text-align: left;
                   ">
-
-                    <h1 style="
-                      margin: 0 0 20px;
-                      font-size: 32px;
-                      color: #111111;
-                    ">
-                      Welcome to Barakah! 🌙
-                    </h1>
 
                     <p style="
                       margin: 0 0 20px;
@@ -137,9 +129,96 @@ const handler = async (req: Request): Promise<Response> => {
                       line-height: 1.7;
                       color: #555555;
                     ">
-                      We're so glad to have you with us.
-                      Welcome to Barakah — your space for faith,
-                      lifestyle, community and meaningful experiences.
+                      Welcome to Barakah. 🤍
+                    </p>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      I just wanted to take a moment to say thank you.
+                    </p>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      You may have simply created an account today, but for me, your decision to be here means much more than that.
+                    </p>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      Barakah started with a simple dream — to build something that helps Muslims bring more faith, goodness and barakah into their everyday lives.
+                    </p>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      And honestly, a dream like this can never be built by one person. It is built by people like you — people who choose to be part of it, support it, use it, share their thoughts, and grow with us.
+                    </p>
+
+                    <div style="
+                      margin: 0 0 24px;
+                      padding: 20px 24px;
+                      background-color: #f7f7f5;
+                      border-radius: 12px;
+                      text-align: center;
+                    ">
+                      <p style="
+                        margin: 0 0 10px;
+                        font-size: 15px;
+                        color: #555555;
+                      ">
+                        Allah says:
+                      </p>
+                      <p style="
+                        margin: 0 0 10px;
+                        font-size: 20px;
+                        line-height: 1.8;
+                        color: #111111;
+                        direction: rtl;
+                      ">
+                        وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ
+                      </p>
+                      <p style="
+                        margin: 0;
+                        font-size: 15px;
+                        line-height: 1.6;
+                        color: #555555;
+                        font-style: italic;
+                      ">
+                        "And cooperate with one another in goodness and righteousness."<br />
+                        — Qur'an 5:2
+                      </p>
+                    </div>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      That is something I hope Barakah always stands for — people coming together for something good.
+                    </p>
+
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 16px;
+                      line-height: 1.7;
+                      color: #555555;
+                    ">
+                      So, welcome to the family.
                     </p>
 
                     <p style="
@@ -148,24 +227,31 @@ const handler = async (req: Request): Promise<Response> => {
                       line-height: 1.7;
                       color: #555555;
                     ">
-                      Your Barakah journey starts now. 🤍
+                      We're still at the very beginning of this journey, and I'm genuinely grateful that you're here with us from the start.
+                      May Allah put barakah in this journey, in what we build together, and most importantly, in your life.
                     </p>
 
-                    <a
-                      href="https://barakah.services"
-                      style="
-                        display: inline-block;
-                        padding: 14px 28px;
-                        background-color: #111111;
-                        color: #ffffff;
-                        text-decoration: none;
-                        border-radius: 8px;
-                        font-size: 16px;
-                        font-weight: bold;
-                      "
-                    >
-                      Explore Barakah
-                    </a>
+                    <p style="
+                      margin: 0 0 4px;
+                      font-size: 16px;
+                      line-height: 1.6;
+                      color: #333333;
+                    ">
+                      With gratitude,<br />
+                      <strong>Mouaz</strong><br />
+                      Founder, Barakah 🤍
+                    </p>
+
+                    <p style="
+                      margin: 24px 0 0;
+                      padding-top: 20px;
+                      border-top: 1px solid #eeeeee;
+                      font-size: 13px;
+                      line-height: 1.6;
+                      color: #888888;
+                    ">
+                      P.S. — If you ever have comments, suggestions, or simply want to say hello, I'd love to hear from you.
+                    </p>
 
                   </div>
 
