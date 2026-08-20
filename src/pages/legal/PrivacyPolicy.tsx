@@ -18,7 +18,7 @@ export const PrivacyPolicy = () => (
       <h3 className="font-semibold mt-3">Account Information</h3>
       <p>When creating an account, we may collect: full name, email address, Google or Apple account information, profile picture, and username.</p>
       <h3 className="font-semibold mt-3">Location Information</h3>
-      <p>With your permission, Barakah collects your location while using the application to provide prayer times, Qibla direction, and nearby mosques and halal restaurants. Barakah does not collect location information in the background. Users may withdraw location permissions at any time through device settings.</p>
+      <p>With your permission, Barakah collects your location while using the application to provide prayer times, Qibla direction, and nearby mosques and halal restaurants. Barakah collects location information in the background. Users may withdraw location permissions at any time through device settings.</p>
       <h3 className="font-semibold mt-3">Community Content</h3>
       <p>When using Guftagu, users may submit posts, comments, images, and videos. Content posted publicly may be visible to other users.</p>
       <h3 className="font-semibold mt-3">Marketplace Information</h3>
