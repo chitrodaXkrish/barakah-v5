@@ -10,17 +10,9 @@ import { User, Briefcase, Plane, ArrowLeft, Star, Chrome } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
+import appleLogo from '@/assets/AppleLogo.png.asset.json';
 import loginFullBg from '@/assets/login-full-bg.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
-
-const AppleLogoMark = () => (
-  <svg viewBox="6 4 16 16" className="w-9 h-9 mr-2" aria-hidden="true">
-    <path
-      fill="currentColor"
-      d="M17.05 11.68c0-2.05 1.66-3.03 1.74-3.08-.95-1.39-2.42-1.59-2.94-1.61-1.25-.13-2.45.74-3.1.74-.65 0-1.63-.72-2.67-.7-1.38.02-2.66.8-3.37 2.04-1.44 2.49-.37 6.18 1.03 8.2.68.98 1.5 2.07 2.57 2.03 1.03-.04 1.42-.66 2.67-.66 1.25 0 1.61.66 2.69.64 1.12-.02 1.83-1.02 2.5-2 .79-1.16 1.11-2.29 1.13-2.35-.02-.01-2.17-.83-3.22-3.1ZM15.5 6.06c.56-.68.94-1.63.84-2.58-.81.03-1.8.54-2.38 1.21-.52.61-1 1.59-.87 2.53.92.07 1.84-.46 2.41-1.16Z"
-    />
-  </svg>
-);
 
 type UserRole = 'normal_user' | 'seller' | 'travel_partner';
 
@@ -287,7 +279,7 @@ export const Register = () => {
               onClick={handleGoogleSignIn}
               disabled={loading}
               variant="outline"
-              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+              className="w-full h-11 rounded-md bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -303,9 +295,9 @@ export const Register = () => {
               onClick={handleAppleSignIn}
               disabled={loading}
               variant="outline"
-              className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium flex items-center justify-center"
+              className="w-full h-11 rounded-md border border-black bg-black text-[17px] font-medium text-white hover:bg-[#1a1a1a] hover:text-white flex items-center justify-center gap-2"
             >
-              <AppleLogoMark />
+              <img src={assetUrl(appleLogo)} alt="" aria-hidden="true" className="h-[18px] w-auto shrink-0" />
               {t('login.apple')}
             </Button>
 
@@ -474,7 +466,7 @@ export const Register = () => {
                     onClick={handleGoogleSignIn}
                     disabled={loading}
                     variant="outline"
-                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
+                    className="w-full h-11 rounded-md bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium"
                   >
                     <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -488,9 +480,9 @@ export const Register = () => {
                     onClick={handleAppleSignIn}
                     disabled={loading}
                     variant="outline"
-                    className="w-full h-14 rounded-full bg-white border border-[#E5D8C3] hover:bg-white text-[#1a1a1a] text-base font-medium flex items-center justify-center"
+                    className="w-full h-11 rounded-md border border-black bg-black text-[17px] font-medium text-white hover:bg-[#1a1a1a] hover:text-white flex items-center justify-center gap-2"
                   >
-                    <AppleLogoMark />
+                    <img src={assetUrl(appleLogo)} alt="" aria-hidden="true" className="h-[18px] w-auto shrink-0" />
                     {t('login.apple')}
                   </Button>
                 </>
