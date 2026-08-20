@@ -9,7 +9,6 @@ const corsHeaders = {
 const MODEL_FALLBACKS = [
   "qwen/qwen-2.5-7b-instruct",
   "openai/gpt-5-nano",
-  "deepseek/deepseek-v4-flash",
 ];
 
 const streamHeaders = {

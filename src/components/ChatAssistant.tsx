@@ -269,12 +269,36 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [showThreads, setShowThreads] = useState(false);
+  const [viewportFrame, setViewportFrame] = useState({ height: 0, offsetTop: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   // Prevents the activeThreadId effect from overwriting optimistically-set messages
   // when a new thread is created inline during send().
   const freshThreadRef = useRef(false);
 
   const userName = user?.displayName?.split(' ')[0] || '';
+
+  useEffect(() => {
+    if (!open) return;
+
+    const updateViewportFrame = () => {
+      const viewport = window.visualViewport;
+      setViewportFrame({
+        height: Math.round(viewport?.height || window.innerHeight),
+        offsetTop: Math.round(viewport?.offsetTop || 0),
+      });
+    };
+
+    updateViewportFrame();
+    window.visualViewport?.addEventListener('resize', updateViewportFrame);
+    window.visualViewport?.addEventListener('scroll', updateViewportFrame);
+    window.addEventListener('resize', updateViewportFrame);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateViewportFrame);
+      window.visualViewport?.removeEventListener('scroll', updateViewportFrame);
+      window.removeEventListener('resize', updateViewportFrame);
+    };
+  }, [open]);
 
   // Load thread list when the assistant opens
   useEffect(() => {
@@ -516,8 +540,18 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
       style={{
         backgroundColor: CREAM_BG,
         color: BROWN,
-        top: 0,
-        height: '100dvh',
+        left: 0,
+        right: 0,
+        bottom: 'auto',
+        top: Capacitor.getPlatform() === 'ios' ? viewportFrame.offsetTop : 0,
+        height: Capacitor.getPlatform() === 'ios' && viewportFrame.height
+          ? `${viewportFrame.height}px`
+          : '100dvh',
+        minHeight: Capacitor.getPlatform() === 'ios' && viewportFrame.height
+          ? `${viewportFrame.height}px`
+          : '100dvh',
+        isolation: 'isolate',
+        transform: 'translateZ(0)',
       }}
     >
       <ChatView
@@ -905,6 +939,8 @@ const ChatView = ({
         style={{
           backgroundColor: '#FFFFFF',
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
+          boxShadow: '0 -1px 0 rgba(0,0,0,0.04)',
+          zIndex: 2,
         }}
       >
         <div
