@@ -13,6 +13,7 @@ import {
   Save,
   X,
   Camera,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -315,6 +316,20 @@ export const Account = () => {
               </div>
             </Card>
           ))}
+
+          <Card
+            className="p-4 rounded-2xl cursor-pointer shadow-sm transition-shadow hover:shadow-md"
+            style={{ backgroundColor: CARD, borderColor: '#F0C8BD' }}
+            onClick={() => navigate('/delete-account')}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Trash2 className="h-5 w-5" style={{ color: DANGER }} />
+                <span className="font-semibold" style={{ color: DANGER }}>{t('account.delete_account')}</span>
+              </div>
+              <ChevronRight className="h-5 w-5" style={{ color: DANGER, opacity: 0.5 }} />
+            </div>
+          </Card>
 
           {/* Logout Button */}
           <Card 
