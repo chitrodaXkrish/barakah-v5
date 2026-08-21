@@ -533,10 +533,15 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
   const handleSuggestion = (s: string) => {
     setInput(s);
   };
+  const isIosKeyboardOpen =
+    Capacitor.getPlatform() === 'ios' &&
+    viewportFrame.height > 0 &&
+    typeof window !== 'undefined' &&
+    window.innerHeight - viewportFrame.height > 80;
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col font-arabic w-full max-w-md mx-auto overflow-hidden"
+      className="fixed inset-0 z-[120] flex flex-col font-arabic w-full max-w-md mx-auto overflow-visible"
       style={{
         backgroundColor: CREAM_BG,
         color: BROWN,
@@ -554,19 +559,32 @@ export const ChatAssistant = ({ open, onClose }: ChatAssistantProps) => {
         transform: 'translateZ(0)',
       }}
     >
-      <ChatView
-        userName={userName}
-        onBack={onClose}
-        messages={messages}
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        send={send}
-        scrollRef={scrollRef}
-        onSuggestion={handleSuggestion}
-        onOpenThreads={() => setShowThreads(true)}
-        onNewChat={startNewChat}
-      />
+      {isIosKeyboardOpen && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 h-56"
+          style={{
+            bottom: '-14rem',
+            backgroundColor: '#FFFFFF',
+            zIndex: 1,
+          }}
+        />
+      )}
+      <div className="relative z-[2] flex min-h-0 flex-1 flex-col">
+        <ChatView
+          userName={userName}
+          onBack={onClose}
+          messages={messages}
+          input={input}
+          setInput={setInput}
+          isLoading={isLoading}
+          send={send}
+          scrollRef={scrollRef}
+          onSuggestion={handleSuggestion}
+          onOpenThreads={() => setShowThreads(true)}
+          onNewChat={startNewChat}
+        />
+      </div>
       {showThreads && (
         <ThreadsPanel
           threads={threads}
