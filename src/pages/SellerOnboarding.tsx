@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
@@ -1137,7 +1137,15 @@ export const SellerOnboarding = () => {
                   className="mt-0.5 h-4 w-4 accent-[#A35233]"
                 />
                 <span className="text-xs font-semibold text-[#1a1a1a]">
-                  I agree to the Barakah Seller Terms & Conditions <span className="text-red-500">*</span>
+                  I agree to the{' '}
+                  <Link
+                    to="/seller-policy"
+                    onClick={(e) => e.stopPropagation()}
+                    className="underline text-[#A35233] cursor-pointer hover:text-[#8a4225]"
+                  >
+                    Barakah Seller Terms & Conditions
+                  </Link>{' '}
+                  <span className="text-red-500">*</span>
                 </span>
               </label>
               {errors.agreed_terms && <p className="text-xs text-red-500 pl-7">{errors.agreed_terms}</p>}
