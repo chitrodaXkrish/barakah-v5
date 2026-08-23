@@ -10,6 +10,7 @@ import { LocationProvider } from "./contexts/LocationContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { PrayerTimesProvider } from "./contexts/PrayerTimesContext";
 import { Capacitor } from '@capacitor/core';
+import { usePageAnalytics } from './hooks/usePageAnalytics';
 import { registerForPush } from './integrations/push';
 import { checkAndStartFlexibleUpdate } from './services/appUpdate';
 
@@ -31,6 +32,12 @@ const AppUpdateInitializer = () => {
     checkAndStartFlexibleUpdate();
   }, []);
 
+  return null;
+};
+
+/** Tracks screen_view events on every route change via Firebase Analytics. */
+const AnalyticsTracker = () => {
+  usePageAnalytics();
   return null;
 };
 
@@ -82,6 +89,7 @@ const Hadith = lazy(() => import("./pages/Hadith").then(m => ({ default: m.Hadit
 const HadithBook = lazy(() => import("./pages/HadithBook").then(m => ({ default: m.HadithBook })));
 const PrivacyPolicy = lazy(() => import("./pages/legal/PrivacyPolicy").then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfService = lazy(() => import("./pages/legal/TermsOfService").then(m => ({ default: m.TermsOfService })));
+const SellerPolicy = lazy(() => import("./pages/legal/SellerPolicy").then(m => ({ default: m.SellerPolicy })));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -132,6 +140,7 @@ const App = () => (
                 <CartProvider>
                   <PushInitializer />
                   <AppUpdateInitializer />
+                  <AnalyticsTracker />
                   <Toaster />
                   <Sonner />
                   <Suspense fallback={<RouteFallback />}>
@@ -184,6 +193,7 @@ const App = () => (
                     <Route path="/hadith/:slug" element={<ProtectedRoute><HadithBook /></ProtectedRoute>} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                     <Route path="/terms-of-service" element={<TermsOfService />} />
+                    <Route path="/seller-policy" element={<SellerPolicy />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
