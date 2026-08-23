@@ -153,7 +153,7 @@ export const Mood = () => {
       style={{ background: CREAM }}
     >
       <div
-        className="flex items-center gap-3 px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3"
+        className="flex items-center gap-3 px-5 pt-4 pb-3"
         style={{ background: CREAM }}
       >
         <button

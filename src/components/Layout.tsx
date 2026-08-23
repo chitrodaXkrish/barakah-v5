@@ -76,10 +76,12 @@ export const Layout = ({ children, showNavigation = true, showHeader = true, hea
       <main
         className={cn(
         "flex-1 relative z-10",
-        showNavigation && "pb-24",
         isTransitioning && "animate-fade-in"
         )}
-        style={{ backgroundColor: pageBackgroundColor }}
+        style={{
+          backgroundColor: pageBackgroundColor,
+          paddingBottom: showNavigation ? 'var(--app-bottom-navigation-height)' : undefined,
+        }}
       >
         {children}
       </main>

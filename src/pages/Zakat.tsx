@@ -181,7 +181,7 @@ export const Zakat = () => {
   return (
     <Layout showHeader={false} showNavigation={false}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM }}>
-        <div className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM }}>
+        <div className="px-5 pt-4 pb-3 flex items-center justify-between" style={{ backgroundColor: CREAM }}>
           <button
             onClick={() => navigate(-1)}
             className="h-9 w-9 flex items-center justify-center"

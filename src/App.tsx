@@ -11,6 +11,7 @@ import { LanguageProvider } from "./contexts/LanguageContext";
 import { PrayerTimesProvider } from "./contexts/PrayerTimesContext";
 import { Capacitor } from '@capacitor/core';
 import { registerForPush } from './integrations/push';
+import { checkAndStartFlexibleUpdate } from './services/appUpdate';
 
 const PushInitializer = () => {
   useEffect(() => {
@@ -18,6 +19,16 @@ const PushInitializer = () => {
     if (pushEnabled && Capacitor.isNativePlatform()) {
       registerForPush();
     }
+  }, []);
+
+  return null;
+};
+
+// Checks Google Play for an available update once on app start (Android only).
+// Uses the native Flexible In-App Update flow — no custom UI.
+const AppUpdateInitializer = () => {
+  useEffect(() => {
+    checkAndStartFlexibleUpdate();
   }, []);
 
   return null;
@@ -120,6 +131,7 @@ const App = () => (
               <PrayerTimesProvider>
                 <CartProvider>
                   <PushInitializer />
+                  <AppUpdateInitializer />
                   <Toaster />
                   <Sonner />
                   <Suspense fallback={<RouteFallback />}>

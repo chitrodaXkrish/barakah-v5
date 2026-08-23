@@ -208,7 +208,10 @@ export const PrayerTimes = () => {
   return (
     <div
       className="min-h-screen max-w-md mx-auto relative overflow-hidden font-arabic"
-      style={{ background: CREAM }}
+      style={{
+        background: CREAM,
+        paddingBottom: 'var(--app-bottom-navigation-height)',
+      }}
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ background: CREAM }}>

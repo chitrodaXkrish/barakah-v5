@@ -180,7 +180,10 @@ export const Home = () => {
   return (
     <div
       className="min-h-screen max-w-md mx-auto relative overflow-hidden"
-      style={{ background: '#FFF5E5' }}
+      style={{
+        background: '#FFF5E5',
+        paddingBottom: 'var(--app-bottom-navigation-height)',
+      }}
     >
       {/* HERO — brown gradient top section */}
       <div
@@ -460,7 +463,7 @@ export const Home = () => {
       <div
         className="fixed left-1/2 -translate-x-1/2 max-w-md w-full pointer-events-none"
         style={{
-          bottom: 0,
+          bottom: 'var(--app-safe-area-inset-bottom)',
           height: 140,
           background:
             'linear-gradient(0deg, #FFF5E5 30%, rgba(255,245,229,0) 100%)',

@@ -154,7 +154,7 @@ export const HadithBook = () => {
 
   return (
     <div className="min-h-screen pb-28" style={{ background: CREAM }}>
-      <div className="px-5 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-8" style={{ background: HERO_GRAD, color: '#FFF5E5' }}>
+      <div className="px-5 pt-5 pb-8" style={{ background: HERO_GRAD, color: '#FFF5E5' }}>
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate('/hadith')}
