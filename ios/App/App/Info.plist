@@ -54,7 +54,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app requires your location to calculate accurate prayer times.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>This app requires camera access to scan barcodes for the Halal Scanner.</string>
+	<string>Barakah uses your camera to scan product barcodes and provide halal information about the product.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app requires photo library access to upload images.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
