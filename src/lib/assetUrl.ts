@@ -14,8 +14,9 @@ function isNativeWebView(): boolean {
   const host = window.location.hostname;
   const proto = window.location.protocol;
   // Capacitor Android default: https://localhost, iOS: capacitor://localhost
+  // Custom hostname configured via capacitor.config.json server.hostname
   if (proto === "capacitor:") return true;
-  if (host === "localhost" && (proto === "https:" || proto === "http:") && !!w.Capacitor) return true;
+  if ((host === "localhost" || host === "barakah") && (proto === "https:" || proto === "http:") && !!w.Capacitor) return true;
   return false;
 }
 
@@ -28,6 +29,7 @@ export function assetUrl(pointer: { url: string } | string): string {
     isNativeWebView() ||
     typeof window !== "undefined" && (
       window.location.hostname === "localhost" ||
+      window.location.hostname === "barakah" ||
       window.location.hostname === "127.0.0.1" ||
       window.location.hostname === "0.0.0.0"
     )
