@@ -76,21 +76,25 @@ const initAmplitude = async () => {
   amplitude.identify(identify);
 };
 
-initAmplitude().catch(err => console.warn('Amplitude init error:', err));
-
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: import.meta.env.MODE,
-    integrations: [Sentry.browserTracingIntegration()],
-    tracesSampleRate: 1.0,
-    enableLogs: true,
-  });
-} else {
-  console.warn('Sentry DSN missing - error monitoring disabled');
-}
-
-// Initialize Capacitor plugins (status bar, safe-area handling, etc.)
-initializeCapacitorPlugins().catch(err => console.warn('Plugin init error:', err));
-
 createRoot(document.getElementById("root")!).render(<App />);
+
+const initializeAppServices = () => {
+  initAmplitude().catch(err => console.warn('Amplitude init error:', err));
+
+  if (sentryDsn) {
+    Sentry.init({
+      dsn: sentryDsn,
+      environment: import.meta.env.MODE,
+      integrations: [Sentry.browserTracingIntegration()],
+      tracesSampleRate: 1.0,
+      enableLogs: true,
+    });
+  } else {
+    console.warn('Sentry DSN missing - error monitoring disabled');
+  }
+
+  // Initialize Capacitor plugins (status bar, safe-area handling, etc.)
+  initializeCapacitorPlugins().catch(err => console.warn('Plugin init error:', err));
+};
+
+requestAnimationFrame(initializeAppServices);
