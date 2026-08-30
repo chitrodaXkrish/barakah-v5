@@ -8,6 +8,8 @@ class ViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginInstance(AppleSignInPlugin())
+        bridge?.registerPluginInstance(NativeSpeechRecognitionPlugin())
         view.backgroundColor = UIColor(red: 0.47, green: 0.21, blue: 0.10, alpha: 1.0)
         webView?.backgroundColor = .clear
         webView?.isOpaque = false
