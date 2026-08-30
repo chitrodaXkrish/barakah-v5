@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Barakah</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -67,9 +67,9 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app requires microphone access to transcribe your speech into text.</string>
+	<string>Barakah needs microphone access to transcribe your speech into text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>This app requires speech recognition to transcribe your speech into text.</string>
+	<string>Barakah needs speech recognition access to transcribe your speech into text.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app requires your location to calculate accurate prayer times.</string>
 	<key>NSCameraUsageDescription</key>

@@ -154,6 +154,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Native deep-link listener: receive the OAuth callback URL and
     // establish the Supabase session from the returned tokens.
     let removeListener: (() => void) | undefined;
+    let removeBrowserFinishedListener: (() => void) | undefined;
     if (isNative()) {
       const handleNativeAuthCallback = async (url?: string | null) => {
         try {
@@ -239,6 +240,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       CapacitorApp.addListener('appUrlOpen', ({ url }) => handleNativeAuthCallback(url))
         .then((handle) => { removeListener = () => handle.remove(); });
+      Browser.addListener('browserFinished', () => {
+        pendingNativeOAuth.current?.({
+          error: { message: 'Sign in was canceled' },
+          role: undefined,
+        });
+        pendingNativeOAuth.current = null;
+      })
+        .then((handle) => { removeBrowserFinishedListener = () => handle.remove(); })
+        .catch(() => undefined);
       CapacitorApp.getLaunchUrl()
         .then(({ url }) => handleNativeAuthCallback(url))
         .catch(() => undefined);
@@ -247,6 +257,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       sub.subscription.unsubscribe();
       removeListener?.();
+      removeBrowserFinishedListener?.();
     };
   }, []);
 
@@ -360,6 +371,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) return { error, role: undefined };
       return { error: null, role: null };
     } catch (error: any) {
+      pendingNativeOAuth.current = null;
       return { error: { message: error.message || 'Google sign in failed' }, role: undefined };
     }
   };

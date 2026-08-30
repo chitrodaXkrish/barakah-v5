@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { useLocation as useRouterLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation, type Position as NativePosition } from '@capacitor/geolocation';
 import { toast } from 'sonner';
@@ -36,7 +37,12 @@ const WATCH_POSITION_OPTIONS: PositionOptions = {
   timeout: 30000,
   maximumAge: 0,
 };
-const isNativeGeolocation = () => Capacitor.isNativePlatform();
+const isNativeGeolocation = () => ['ios', 'android'].includes(Capacitor.getPlatform());
+const shouldAutoFetchForPath = (pathname: string) =>
+  !['/login', '/onboarding', '/loading'].includes(pathname) &&
+  !pathname.startsWith('/privacy-policy') &&
+  !pathname.startsWith('/terms-of-service') &&
+  !pathname.startsWith('/seller-policy');
 
 type ManualLocationLabel = {
   area?: string;
@@ -158,11 +164,13 @@ const resolveReverseGeocodeLocation = (data: any): Partial<LocationData> => {
 };
 
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
+  const routeLocation = useRouterLocation();
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const watchIdRef = useRef<number | string | null>(null);
   const locationRef = useRef<LocationData | null>(null);
+  const hasStartedAutoFetchRef = useRef(false);
 
   useEffect(() => {
     locationRef.current = location;
@@ -384,7 +392,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         const finalPermission =
           permission.location === 'granted'
             ? permission
-            : await Geolocation.requestPermissions();
+            : await Geolocation.requestPermissions({ permissions: ['location'] });
 
         if (finalPermission.location !== 'granted') {
           throw new Error('Location access denied. Please enable location permissions.');
@@ -459,9 +467,22 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   }, [applyPosition, startTracking, stopTracking]);
 
   useEffect(() => {
+    if (!shouldAutoFetchForPath(routeLocation.pathname)) {
+      setLoading(false);
+      return;
+    }
+
+    if (hasStartedAutoFetchRef.current) {
+      return;
+    }
+
+    hasStartedAutoFetchRef.current = true;
     fetchLocation();
+  }, [fetchLocation, routeLocation.pathname]);
+
+  useEffect(() => {
     return stopTracking;
-  }, [fetchLocation, stopTracking]);
+  }, [stopTracking]);
 
   return (
     <LocationContext.Provider value={{

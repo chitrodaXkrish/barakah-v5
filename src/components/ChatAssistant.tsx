@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/integrations/supabase/client';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { toast } from 'sonner';
 import aiAssistantLogo from '@/assets/ai-assistant-logo.png.asset.json';
 import aiSendBtn from '@/assets/ai-send-btn.png.asset.json';
@@ -17,6 +17,7 @@ interface NativeSpeechRecognitionPlugin {
   start(options?: { language?: string }): Promise<{ text: string }>;
   stop(): Promise<{ text?: string } | void>;
   requestPermissions(options?: { permissions?: string[] }): Promise<{ microphone?: string }>;
+  addListener(eventName: 'speechResult', listenerFunc: (result: { text?: string; isFinal?: boolean }) => void): Promise<PluginListenerHandle>;
 }
 
 const NativeSpeechRecognition =
@@ -719,13 +720,37 @@ const ChatView = ({
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
+  const nativeVoiceBaseInputRef = useRef('');
 
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop?.();
       recognitionRef.current = null;
+      if (Capacitor.isNativePlatform()) {
+        NativeSpeechRecognition.stop().catch(() => undefined);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let listener: PluginListenerHandle | undefined;
+    NativeSpeechRecognition.addListener('speechResult', ({ text }) => {
+      const clean = text?.trim();
+      if (!clean) return;
+      const base = nativeVoiceBaseInputRef.current.trim();
+      setInput(base ? `${base} ${clean}` : clean);
+    })
+      .then((handle) => {
+        listener = handle;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      listener?.remove();
+    };
+  }, [setInput]);
 
   const appendTranscript = useCallback((transcript: string) => {
     const clean = transcript.trim();
@@ -777,27 +802,36 @@ const ChatView = ({
       recognitionRef.current?.stop?.();
       if (Capacitor.isNativePlatform()) {
         const result = await NativeSpeechRecognition.stop().catch(() => undefined);
-        if (result && 'text' in result && result.text) {
-          appendTranscript(result.text);
+        const clean = result && 'text' in result ? result.text?.trim() : '';
+        if (clean) {
+          const base = nativeVoiceBaseInputRef.current.trim();
+          setInput(base ? `${base} ${clean}` : clean);
         }
+        nativeVoiceBaseInputRef.current = '';
       }
       setIsListening(false);
       return;
     }
 
     if (Capacitor.isNativePlatform()) {
+      nativeVoiceBaseInputRef.current = input.trim();
       setIsListening(true);
       try {
         const { text } = await NativeSpeechRecognition.start({ language: navigator.language || 'en-US' });
-        appendTranscript(text);
+        const clean = text?.trim();
+        if (clean) {
+          const base = nativeVoiceBaseInputRef.current.trim();
+          setInput(base ? `${base} ${clean}` : clean);
+        }
       } catch (error) {
         const message = error instanceof Error && error.message
           ? error.message
           : 'Could not transcribe audio. Please try again.';
-        if (message !== 'Voice input stopped.') {
+        if (message !== 'Voice input stopped.' && !message.toLowerCase().includes('cancel')) {
           toast.error(message);
         }
       } finally {
+        nativeVoiceBaseInputRef.current = '';
         setIsListening(false);
       }
       return;

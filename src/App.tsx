@@ -13,6 +13,7 @@ import { Capacitor } from '@capacitor/core';
 import { usePageAnalytics } from './hooks/usePageAnalytics';
 import { registerForPush } from './integrations/push';
 import { checkAndStartFlexibleUpdate } from './services/appUpdate';
+import { hasCompletedOnboarding } from './lib/onboarding';
 
 const PushInitializer = () => {
   useEffect(() => {
@@ -49,7 +50,7 @@ const FirstLaunchGate = () => {
   useEffect(() => {
     if (
       location.pathname !== '/onboarding' &&
-      localStorage.getItem('barakah_onboarding_completed') !== 'true'
+      !hasCompletedOnboarding()
     ) {
       navigate('/onboarding', { replace: true });
     }

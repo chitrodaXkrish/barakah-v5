@@ -5,8 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import onboarding1Full from '@/assets/onboarding-1-full.png';
 import onboarding2Full from '@/assets/onboarding-2-full.png';
 import onboarding3Full from '@/assets/onboarding-3-full.png';
-
-const ONBOARDING_KEY = 'barakah_onboarding_completed';
+import { markOnboardingCompleted } from '@/lib/onboarding';
 
 type Slide = {
   image?: string;
@@ -48,7 +47,7 @@ export const Onboarding = () => {
   }, []);
 
   const finish = () => {
-    localStorage.setItem(ONBOARDING_KEY, 'true');
+    markOnboardingCompleted();
     navigate('/login', { replace: true });
   };
 

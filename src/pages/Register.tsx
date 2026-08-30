@@ -32,6 +32,9 @@ export const Register = () => {
   const { signUp, signIn, signInWithGoogle, signInWithApple, completeAccountSetup } = useAuth();
   const { t } = useLanguage();
 
+  const isCanceledAuth = (error: any) =>
+    String(error?.message || '').toLowerCase().includes('cancel');
+
   const resolveCurrentAccountRole = async () => {
     const { data: authData } = await supabase.auth.getUser();
     const userId = authData.user?.id;
@@ -79,50 +82,52 @@ export const Register = () => {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    const { error, role } = await signInWithGoogle();
-    if (error) {
-      toast.error(error.message);
+    try {
+      const { error, role } = await signInWithGoogle();
+      if (error) {
+        if (!isCanceledAuth(error)) toast.error(error.message);
+        return;
+      }
+      const resolvedRole = role ?? await resolveCurrentAccountRole();
+      if (resolvedRole === null) {
+        toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
+        setNeedsSetup(true);
+        setIsSignIn(false);
+        setView('profile');
+        setSelectedRole(null);
+        setFullName('');
+        return;
+      }
+      toast.success('Welcome back! You already have an account — signing you in.');
+      await routeByRole(resolvedRole);
+    } finally {
       setLoading(false);
-      return;
     }
-    const resolvedRole = role ?? await resolveCurrentAccountRole();
-    if (resolvedRole === null) {
-      toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
-      setNeedsSetup(true);
-      setIsSignIn(false);
-      setView('profile');
-      setSelectedRole(null);
-      setFullName('');
-      setLoading(false);
-      return;
-    }
-    toast.success('Welcome back! You already have an account — signing you in.');
-    await routeByRole(resolvedRole);
-    setLoading(false);
   };
 
   const handleAppleSignIn = async () => {
     setLoading(true);
-    const { error, role } = await signInWithApple();
-    if (error) {
-      toast.error(error.message);
+    try {
+      const { error, role } = await signInWithApple();
+      if (error) {
+        if (!isCanceledAuth(error)) toast.error(error.message);
+        return;
+      }
+      const resolvedRole = role ?? await resolveCurrentAccountRole();
+      if (resolvedRole === null) {
+        toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
+        setNeedsSetup(true);
+        setIsSignIn(false);
+        setView('profile');
+        setSelectedRole(null);
+        setFullName('');
+        return;
+      }
+      toast.success('Welcome back! You already have an account — signing you in.');
+      await routeByRole(resolvedRole);
+    } finally {
       setLoading(false);
-      return;
     }
-    const resolvedRole = role ?? await resolveCurrentAccountRole();
-    if (resolvedRole === null) {
-      toast.message('Finish setup', { description: 'Please choose your account type to continue.' });
-      setNeedsSetup(true);
-      setIsSignIn(false);
-      setView('profile');
-      setSelectedRole(null);
-      setFullName('');
-      setLoading(false);
-      return;
-    }
-    toast.success('Welcome back! You already have an account — signing you in.');
-    await routeByRole(resolvedRole);
-    setLoading(false);
   };
 
   const profileOptions = [
