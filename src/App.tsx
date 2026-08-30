@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect } from "react";
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { CartProvider } from "./contexts/CartContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LocationProvider } from "./contexts/LocationContext";
@@ -38,6 +39,23 @@ const AppUpdateInitializer = () => {
 /** Tracks screen_view events on every route change via Firebase Analytics. */
 const AnalyticsTracker = () => {
   usePageAnalytics();
+  return null;
+};
+
+/** Redirects first-time users to /onboarding if they haven't completed it yet. */
+const FirstLaunchGate = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (
+      location.pathname !== '/onboarding' &&
+      localStorage.getItem('barakah_onboarding_completed') !== 'true'
+    ) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   return null;
 };
 
@@ -141,6 +159,7 @@ const App = () => (
                   <PushInitializer />
                   <AppUpdateInitializer />
                   <AnalyticsTracker />
+                  <FirstLaunchGate />
                   <Toaster />
                   <Sonner />
                   <Suspense fallback={<RouteFallback />}>
