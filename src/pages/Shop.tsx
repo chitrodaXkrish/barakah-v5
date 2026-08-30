@@ -1,10 +1,12 @@
 import { Layout } from '@/components/Layout';
-import { ShoppingCart, Menu, Store, ArrowRight, PackagePlus } from 'lucide-react';
+import { ShoppingCart, Menu, Store, Bell, CheckCircle2, Sparkles, ShoppingBag, Truck } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { SideMenu } from '@/components/SideMenu';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CREAM = '#FFF5E5';
 const BROWN = '#A35233';
@@ -17,15 +19,54 @@ export const Shop = () => {
   const { getTotalItems } = useCart();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
   const handleCartClick = () => {
     navigate('/cart');
   };
 
-  const openSellerStart = () => {
-    navigate('/seller-onboarding');
+  const handleNotifyMe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError(t('shop.coming_soon_invalid_email'));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error: dbError } = await (supabase as any)
+        .from('marketplace_waitlist')
+        .insert({ email: trimmed, user_id: user?.id ?? null });
+
+      if (dbError) {
+        // Unique constraint violation — user already signed up
+        if (dbError.code === '23505') {
+          setSubmitted(true);
+          return;
+        }
+        throw dbError;
+      }
+      setSubmitted(true);
+    } catch {
+      setError(t('shop.coming_soon_error'));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const features = [
+    { icon: ShoppingBag, labelKey: 'shop.coming_soon_feature_1' },
+    { icon: Store, labelKey: 'shop.coming_soon_feature_2' },
+    { icon: Truck, labelKey: 'shop.coming_soon_feature_3' },
+  ];
 
   return (
     <Layout showHeader={false} pageBackgroundColor={CREAM}>
@@ -56,13 +97,13 @@ export const Shop = () => {
           </button>
         </div>
 
-        <div className="px-4 pt-10 pb-32">
-          <button
-            type="button"
-            onClick={openSellerStart}
-            className="w-full rounded-3xl p-6 text-left border transition-transform active:scale-[0.99]"
+        <div className="px-4 pt-8 pb-32">
+          {/* Coming Soon Card */}
+          <div
+            className="w-full rounded-3xl p-6 border"
             style={{ backgroundColor: CARD, borderColor: BORDER, color: BROWN_DARK }}
           >
+            {/* Icon + Badge */}
             <div className="flex items-start justify-between gap-4">
               <div
                 className="h-14 w-14 rounded-full flex items-center justify-center shrink-0"
@@ -71,28 +112,89 @@ export const Shop = () => {
                 <Store className="h-7 w-7" />
               </div>
               <span
-                className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: ACCENT_BROWN, color: '#FFFFFF' }}
+                className="text-base font-bold"
+                style={{ color: ACCENT_BROWN }}
               >
-                <ArrowRight className="h-5 w-5" />
+                {t('shop.coming_soon_badge')}
               </span>
             </div>
 
-            <h2 className="text-3xl font-bold leading-tight mt-6">
-              {t('shop.start_selling_title')}
+            {/* Title & Description */}
+            <h2 className="text-2xl font-bold leading-tight mt-6">
+              {t('shop.coming_soon_title')}
             </h2>
             <p className="text-sm mt-3 leading-relaxed" style={{ color: BROWN_DARK, opacity: 0.75 }}>
-              {t('shop.start_selling_desc')}
+              {t('shop.coming_soon_desc')}
             </p>
 
-            <div
-              className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white"
-              style={{ backgroundColor: ACCENT_BROWN }}
-            >
-              <PackagePlus className="h-4 w-4" />
-              {t('shop.start_selling_btn')}
+            {/* Feature Pills */}
+            <div className="flex flex-wrap gap-2 mt-5">
+              {features.map(({ icon: Icon, labelKey }) => (
+                <span
+                  key={labelKey}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold"
+                  style={{ backgroundColor: '#F1E0BC', color: BROWN_DARK }}
+                >
+                  <Icon className="h-3.5 w-3.5" style={{ color: BROWN }} />
+                  {t(labelKey)}
+                </span>
+              ))}
             </div>
-          </button>
+
+            {/* Divider */}
+            <div className="my-6" style={{ borderTop: `1px solid ${BORDER}` }} />
+
+            {/* Email Form / Success */}
+            {submitted ? (
+              <div
+                className="flex items-center gap-3 rounded-2xl p-4"
+                style={{ backgroundColor: '#E8F5E9' }}
+              >
+                <CheckCircle2 className="h-6 w-6 shrink-0" style={{ color: '#2E7D32' }} />
+                <div>
+                  <p className="text-sm font-bold" style={{ color: '#1B5E20' }}>
+                    {t('shop.coming_soon_success_title')}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#2E7D32' }}>
+                    {t('shop.coming_soon_success_desc')}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-semibold mb-3" style={{ color: BROWN_DARK }}>
+                  {t('shop.coming_soon_notify_label')}
+                </p>
+                <form onSubmit={handleNotifyMe} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder={t('shop.coming_soon_email_placeholder')}
+                    className="flex-1 rounded-xl px-4 py-3 text-sm border outline-none transition-colors"
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderColor: error ? '#E53935' : BORDER,
+                      color: BROWN_DARK,
+                    }}
+                    disabled={submitting}
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="rounded-xl px-4 py-3 text-sm font-bold text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-60"
+                    style={{ backgroundColor: ACCENT_BROWN }}
+                  >
+                    <Bell className="h-4 w-4" />
+                    {t('shop.coming_soon_notify_btn')}
+                  </button>
+                </form>
+                {error && (
+                  <p className="text-xs mt-2" style={{ color: '#E53935' }}>{error}</p>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <SideMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
       </div>

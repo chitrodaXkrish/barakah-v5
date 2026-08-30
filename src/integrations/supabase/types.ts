@@ -406,6 +406,27 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_waitlist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string
