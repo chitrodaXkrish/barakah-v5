@@ -1,5 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
-
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -61,7 +60,7 @@ const FirstLaunchGate = () => {
 
 // Eager — needed for first paint / auth flow
 import { Home } from "./pages/Home";
-import { LoadingScreen } from "./pages/LoadingScreen";
+import { LoadingScreen, SPLASH_PLAY_DURATION_MS } from "./pages/LoadingScreen";
 import { Register } from "./pages/Register";
 import { Onboarding } from "./pages/Onboarding";
 
@@ -147,6 +146,24 @@ const RouteFallback = () => (
   />
 );
 
+const StartupSplashGate = ({ children }: { children: React.ReactNode }) => {
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.sessionStorage.getItem("barakah-startup-splash-complete") !== "true";
+  });
+
+  useEffect(() => {
+    if (!showSplash) return;
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.setItem("barakah-startup-splash-complete", "true");
+      setShowSplash(false);
+    }, SPLASH_PLAY_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [showSplash]);
+
+  return showSplash ? <LoadingScreen /> : <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -162,6 +179,7 @@ const App = () => (
                   <FirstLaunchGate />
                   <Toaster />
                   <Sonner />
+                  <StartupSplashGate>
                   <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/loading" element={<LoadingScreen />} />
@@ -217,6 +235,7 @@ const App = () => (
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   </Suspense>
+                  </StartupSplashGate>
                 </CartProvider>
               </PrayerTimesProvider>
             </LocationProvider>

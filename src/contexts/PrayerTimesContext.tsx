@@ -1,10 +1,14 @@
-import { createContext, ReactNode, useContext } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import {
   type AppPrayerTime,
   fetchIslamicPrayerTimes,
 } from '@/lib/islamicPrayerTimes';
+import {
+  cancelPrayerNotifications,
+  schedulePrayerNotifications,
+} from '@/lib/prayerNotifications';
 
 interface PrayerTimesContextType {
   prayers: AppPrayerTime[];
@@ -21,6 +25,9 @@ export const PrayerTimesProvider = ({ children }: { children: ReactNode }) => {
   const latitude = location?.latitude;
   const longitude = location?.longitude;
   const todayKey = new Date().toLocaleDateString('en-CA');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
+  );
 
   const query = useQuery({
     queryKey: ['islamic-api-prayer-times', latitude, longitude, todayKey],
@@ -36,11 +43,41 @@ export const PrayerTimesProvider = ({ children }: { children: ReactNode }) => {
       : query.error
         ? 'Unable to fetch prayer times'
         : null;
+  const prayers = query.data ?? [];
+  const notificationPrayers = useMemo(
+    () => prayers.filter((prayer) => prayer.key !== 'sunrise'),
+    [prayers],
+  );
+
+  useEffect(() => {
+    const syncNotificationSetting = () => {
+      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
+    };
+
+    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+    window.addEventListener('storage', syncNotificationSetting);
+
+    return () => {
+      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+      window.removeEventListener('storage', syncNotificationSetting);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsEnabled) {
+      cancelPrayerNotifications().catch(() => {});
+      return;
+    }
+
+    if (notificationPrayers.length === 0) return;
+
+    schedulePrayerNotifications(notificationPrayers).catch(() => {});
+  }, [notificationsEnabled, notificationPrayers]);
 
   return (
     <PrayerTimesContext.Provider
       value={{
-        prayers: query.data ?? [],
+        prayers,
         loading: query.isLoading || query.isFetching,
         error,
       }}

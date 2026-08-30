@@ -19,10 +19,6 @@ import duaIcon from '@/assets/dua-icon.png.asset.json';
 import qiblaIcon from '@/assets/qibla-icon.png.asset.json';
 import prayerMarkIcon from '@/assets/prayer-mark-icon.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
-import {
-  cancelPrayerNotifications,
-  schedulePrayerNotifications,
-} from '@/lib/prayerNotifications';
 import { useAppNotifications, formatNotificationTimeLabel } from '@/hooks/useAppNotifications';
 import {
   formatPrayerTime12,
@@ -119,9 +115,6 @@ export const PrayerTimes = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
-  );
   const [quranStats, setQuranStats] = useState<QuranReadingStats>(() => loadQuranReadingStats());
   const [now, setNow] = useState(new Date());
 
@@ -129,20 +122,6 @@ export const PrayerTimes = () => {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const syncNotificationSetting = () => {
-      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
-    };
-
-    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
-    window.addEventListener('storage', syncNotificationSetting);
-
-    return () => {
-      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
-      window.removeEventListener('storage', syncNotificationSetting);
-    };
   }, []);
 
   useEffect(() => {
@@ -174,17 +153,6 @@ export const PrayerTimes = () => {
   const next = getNextPrayer(prayers, now);
   const cityLabel = location ? location.area || location.city : (locationLoading ? 'Locating...' : 'Set location');
   const { notifications } = useAppNotifications();
-
-  useEffect(() => {
-    if (!notificationsEnabled) {
-      cancelPrayerNotifications().catch(() => {});
-      return;
-    }
-
-    if (orderedDay.length === 0) return;
-
-    schedulePrayerNotifications(orderedDay).catch(() => {});
-  }, [notificationsEnabled, orderedDay]);
 
   const openNotifications = () => {
     setIsNotificationsOpen(true);

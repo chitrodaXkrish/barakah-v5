@@ -18,6 +18,11 @@ const config: CapacitorConfig = {
     // Safe-area insets are automatically respected by Capacitor WebView
     // on Android, ensuring content doesn't overlap with system UI
   },
+  plugins: {
+    LocalNotifications: {
+      presentationOptions: ['badge', 'sound', 'banner', 'list'],
+    },
+  },
 };
 
 export default config;

@@ -29,6 +29,37 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+function normalizeMessages(payload: any): ChatMessage[] | null {
+  const rawMessages = Array.isArray(payload?.messages)
+    ? payload.messages
+    : typeof payload?.message === "string"
+      ? [{ role: "user", content: payload.message }]
+      : typeof payload?.prompt === "string"
+        ? [{ role: "user", content: payload.prompt }]
+        : typeof payload?.content === "string"
+          ? [{ role: "user", content: payload.content }]
+          : null;
+
+  if (!rawMessages) return null;
+
+  const messages = rawMessages
+    .map((message: any) => ({
+      role: typeof message?.role === "string" ? message.role.toLowerCase() : "user",
+      content: typeof message?.content === "string" ? message.content.trim() : "",
+    }))
+    .filter((message: ChatMessage) =>
+      ["system", "user", "assistant"].includes(message.role) &&
+      message.content.length > 0
+    );
+
+  return messages.length > 0 ? messages.slice(-20) : null;
+}
+
 serve(async (req) => {
   // Handle browser CORS preflight BEFORE trying to read JSON.
   if (req.method === "OPTIONS") {
@@ -39,7 +70,12 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const payload = await req.json().catch(() => null);
+    const messages = normalizeMessages(payload);
+
+    if (!messages) {
+      return jsonResponse({ error: "Chat request must include a non-empty messages array." }, 400);
+    }
 
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
 

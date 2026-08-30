@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation, type Position as NativePosition } from '@capacitor/geolocation';
 
 interface LocationData {
   latitude: number;
@@ -20,6 +22,12 @@ interface UseLocationReturn {
 const LOCATION_CACHE_KEY = 'barakah_cached_location';
 const LOCATION_CACHE_VERSION = 2;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const POSITION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 30000,
+  maximumAge: 0,
+};
+const isNativeGeolocation = () => Capacitor.isNativePlatform();
 
 const normalizePlaceName = (value?: string | null) =>
   value
@@ -97,6 +105,49 @@ export const useLocation = (): UseLocationReturn => {
     }
   };
 
+  const buildLocationFromPosition = async (position: GeolocationPosition | NativePosition) => {
+    const { latitude, longitude, accuracy } = position.coords;
+
+    try {
+      // Use BigDataCloud for reverse geocoding (free, no API key needed)
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch location details');
+      }
+
+      const data = await response.json();
+      const geoData = resolveReverseGeocodeLocation(data);
+
+      return {
+        latitude,
+        longitude,
+        ...geoData,
+        accuracy,
+      };
+    } catch (err) {
+      console.error('Reverse geocoding failed:', err);
+      return {
+        latitude,
+        longitude,
+        city: 'Unknown',
+        country: 'Unknown',
+        fullAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        accuracy,
+      };
+    }
+  };
+
+  const applyPosition = async (position: GeolocationPosition | NativePosition) => {
+    const locationData = await buildLocationFromPosition(position);
+    setLocation(locationData);
+    cacheLocation(locationData);
+    setError(null);
+    setLoading(false);
+  };
+
   const fetchLocation = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -109,60 +160,48 @@ export const useLocation = (): UseLocationReturn => {
       return;
     }
 
+    if (isNativeGeolocation()) {
+      try {
+        const permission = await Geolocation.checkPermissions();
+        const finalPermission =
+          permission.location === 'granted'
+            ? permission
+            : await Geolocation.requestPermissions();
+
+        if (finalPermission.location !== 'granted') {
+          throw new Error('Location access denied. Please enable location permissions.');
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: POSITION_OPTIONS.timeout,
+          maximumAge: POSITION_OPTIONS.maximumAge,
+        });
+        await applyPosition(position);
+      } catch (err) {
+        const errorMessage = err instanceof Error && err.message
+          ? err.message
+          : 'Unable to get your location';
+        setError(errorMessage);
+        setLoading(false);
+
+        const cached = getCachedLocation();
+        if (cached) {
+          setLocation(cached);
+        }
+      }
+      return;
+    }
+
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
       setLoading(false);
       return;
     }
 
-    // Use high accuracy for better location
-    const options: PositionOptions = {
-      enableHighAccuracy: true,
-      timeout: 30000,
-      maximumAge: 0
-    };
-
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-
-        try {
-          // Use BigDataCloud for reverse geocoding (free, no API key needed)
-          const response = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-          );
-
-          if (!response.ok) {
-            throw new Error('Failed to fetch location details');
-          }
-
-          const data = await response.json();
-          const geoData = resolveReverseGeocodeLocation(data);
-          
-          const locationData: LocationData = {
-            latitude,
-            longitude,
-            ...geoData,
-            accuracy,
-          };
-
-          setLocation(locationData);
-          cacheLocation(locationData);
-          setError(null);
-        } catch (err) {
-          // Even if reverse geocoding fails, we have coordinates
-          const fallbackData: LocationData = {
-            latitude,
-            longitude,
-            city: 'Unknown',
-            country: 'Unknown',
-            fullAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
-          };
-          setLocation(fallbackData);
-          console.error('Reverse geocoding failed:', err);
-        }
-
-        setLoading(false);
+      (position) => {
+        applyPosition(position);
       },
       (err) => {
         let errorMessage = 'Unable to get your location';
@@ -188,7 +227,7 @@ export const useLocation = (): UseLocationReturn => {
           setLocation(cached);
         }
       },
-      options
+      POSITION_OPTIONS
     );
   }, []);
 

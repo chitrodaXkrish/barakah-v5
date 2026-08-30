@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as amplitude from '@amplitude/unified';
 import { useNavigate } from 'react-router-dom';
-import { Capacitor } from '@capacitor/core';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { Menu, Bell, MapPin, ChevronDown, Newspaper, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalLocation } from '@/contexts/LocationContext';
@@ -22,7 +20,6 @@ import qaHajjAsset from '@/assets/qa-hajj-new.png.asset.json';
 import barakahArcLogo from '@/assets/barakah-arc-logo.png.asset.json';
 import barakahLogo from '@/assets/barakah-logo.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
-import { schedulePrayerNotifications } from '@/lib/prayerNotifications';
 import {
   type AppPrayerTime,
   formatPrayerTime12,

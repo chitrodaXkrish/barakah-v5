@@ -4,12 +4,15 @@ import desertBottom from '@/assets/desert-bottom.png.asset.json';
 import { assetUrl } from '@/lib/assetUrl';
 
 const splashGif = 'https://ik.imagekit.io/i9qun1svg/30%20fps%20.gif';
+const SPLASH_PLAY_DURATION_MS = 3200;
+
+export { SPLASH_PLAY_DURATION_MS };
 
 export const LoadingScreen: React.FC = () => {
   const [frozen, setFrozen] = useState(false);
 
   useEffect(() => {
-    const freezeTimer = window.setTimeout(() => setFrozen(true), 1850);
+    const freezeTimer = window.setTimeout(() => setFrozen(true), SPLASH_PLAY_DURATION_MS);
     return () => window.clearTimeout(freezeTimer);
   }, []);
 

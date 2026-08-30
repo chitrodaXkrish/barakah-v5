@@ -39,6 +39,8 @@ const ACCENT_ORANGE = '#B54A22';
 const MUTED = '#9A8270';
 const SERIF = "'Plus Jakarta Sans', sans-serif";
 const ITALIC = "'Cormorant Garamond', 'Plus Jakarta Sans', sans-serif";
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barakah.services';
+const APP_STORE_URL = 'https://apps.apple.com/app/barakah-islamic-lifestyle-app/id6792232643';
 
 export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const navigate = useNavigate();
@@ -171,16 +173,19 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   };
 
   const handleShare = async () => {
+    const platform = Capacitor.getPlatform();
+    const primaryUrl = platform === 'ios' ? APP_STORE_URL : PLAY_STORE_URL;
+    const shareText = `${t('menu.share_text')}\n\nPlay Store: ${PLAY_STORE_URL}\nApp Store: ${APP_STORE_URL}`;
     const shareData = {
       title: t('app.name'),
-      text: t('menu.share_text'),
-      url: window.location.origin,
+      text: shareText,
+      url: primaryUrl,
     };
     try {
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        await navigator.clipboard.writeText(shareData.url);
+        await navigator.clipboard.writeText(shareText);
         toast.success(t('menu.link_copied'));
       }
     } catch {

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation, type Position as NativePosition } from '@capacitor/geolocation';
 import { toast } from 'sonner';
 
 interface LocationData {
@@ -34,6 +36,7 @@ const WATCH_POSITION_OPTIONS: PositionOptions = {
   timeout: 30000,
   maximumAge: 0,
 };
+const isNativeGeolocation = () => Capacitor.isNativePlatform();
 
 type ManualLocationLabel = {
   area?: string;
@@ -158,7 +161,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const watchIdRef = useRef<number | null>(null);
+  const watchIdRef = useRef<number | string | null>(null);
   const locationRef = useRef<LocationData | null>(null);
 
   useEffect(() => {
@@ -166,9 +169,18 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   }, [location]);
 
   const stopTracking = useCallback(() => {
-    if (watchIdRef.current !== null && navigator.geolocation) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
+    const watchId = watchIdRef.current;
+    if (watchId === null) return;
+
+    watchIdRef.current = null;
+
+    if (isNativeGeolocation() && typeof watchId === 'string') {
+      Geolocation.clearWatch({ id: watchId }).catch(() => undefined);
+      return;
+    }
+
+    if (!isNativeGeolocation() && typeof watchId === 'number' && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchId);
     }
   }, []);
 
@@ -251,7 +263,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     return movedKm >= LOCATION_CHANGE_THRESHOLD_KM || nextAccuracy + 10 < currentAccuracy;
   };
 
-  const applyPosition = useCallback(async (position: GeolocationPosition, source: 'initial' | 'watch') => {
+  const applyPosition = useCallback(async (position: GeolocationPosition | NativePosition, source: 'initial' | 'watch') => {
     const { latitude, longitude, accuracy } = position.coords;
     const locationData = await buildLocationData(latitude, longitude, accuracy, false);
 
@@ -265,7 +277,32 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   }, [buildLocationData]);
 
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation || watchIdRef.current !== null) return;
+    if (watchIdRef.current !== null) return;
+
+    if (isNativeGeolocation()) {
+      Geolocation.watchPosition(
+        {
+          enableHighAccuracy: true,
+          timeout: WATCH_POSITION_OPTIONS.timeout,
+          maximumAge: WATCH_POSITION_OPTIONS.maximumAge,
+        },
+        (position) => {
+          if (!position) return;
+          applyPosition(position, 'watch').catch(() => {
+            // Keep the last known location if a background refresh fails.
+          });
+        },
+      )
+        .then((id) => {
+          watchIdRef.current = id;
+        })
+        .catch(() => {
+          // watchPosition can fail intermittently; the visible error is handled by refresh.
+        });
+      return;
+    }
+
+    if (!navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
@@ -338,6 +375,42 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       setLocation(cached);
       setLoading(false);
       startTracking();
+      return;
+    }
+
+    if (isNativeGeolocation()) {
+      try {
+        const permission = await Geolocation.checkPermissions();
+        const finalPermission =
+          permission.location === 'granted'
+            ? permission
+            : await Geolocation.requestPermissions();
+
+        if (finalPermission.location !== 'granted') {
+          throw new Error('Location access denied. Please enable location permissions.');
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: WATCH_POSITION_OPTIONS.timeout,
+          maximumAge: WATCH_POSITION_OPTIONS.maximumAge,
+        });
+
+        await applyPosition(position, 'initial');
+        startTracking();
+      } catch (err) {
+        const message = err instanceof Error && err.message
+          ? err.message
+          : 'Unable to get your location';
+        setError(message);
+        setLoading(false);
+
+        const cached = getCachedLocation();
+        if (cached) {
+          setLocation(cached);
+          startTracking();
+        }
+      }
       return;
     }
 

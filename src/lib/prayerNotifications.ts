@@ -23,7 +23,7 @@ const CHANNEL_ID = 'prayer-times';
 const NOTIFICATION_GROUP = 'barakah-prayer-times';
 const MAX_PRAYER_NOTIFICATION_SLOTS = 6;
 const PRE_PRAYER_MINUTES = 5;
-const AFTER_PRAYER_MINUTES = 20;
+const AFTER_PRAYER_MINUTES = 30;
 const TAHAJJUD_BEFORE_FAJR_MINUTES = 90;
 
 type NotificationKind = 'pre' | 'time' | 'after';
@@ -227,14 +227,16 @@ export const schedulePrayerNotifications = async (
 
   if (permission.display !== 'granted') return false;
 
-  await LocalNotifications.createChannel({
-    id: CHANNEL_ID,
-    name: 'Prayer Times',
-    description: 'Prayer time reminders and alerts',
-    importance: 4,
-    visibility: 1,
-    vibration: true,
-  });
+  if (Capacitor.getPlatform() === 'android') {
+    await LocalNotifications.createChannel({
+      id: CHANNEL_ID,
+      name: 'Prayer Times',
+      description: 'Prayer time reminders and alerts',
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+    });
+  }
 
   await LocalNotifications.cancel({
     notifications: notificationIdsForSlots(
