@@ -72,6 +72,10 @@
 	<string>Barakah needs speech recognition access to transcribe your speech into text.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app requires your location to calculate accurate prayer times.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app requires your location to calculate accurate prayer times.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app requires your location to calculate accurate prayer times.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Barakah uses your camera to scan product barcodes and provide halal information about the product.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
