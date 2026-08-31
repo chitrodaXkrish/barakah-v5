@@ -30,9 +30,9 @@ export const PrayerTimesProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const query = useQuery({
-    queryKey: ['islamic-api-prayer-times', latitude, longitude, todayKey],
+    queryKey: ['islamic-api-prayer-times', latitude, longitude, location?.country, todayKey],
     enabled: typeof latitude === 'number' && typeof longitude === 'number',
-    queryFn: () => fetchIslamicPrayerTimes(latitude!, longitude!),
+    queryFn: () => fetchIslamicPrayerTimes(latitude!, longitude!, new Date(), location?.country),
     staleTime: 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
   });

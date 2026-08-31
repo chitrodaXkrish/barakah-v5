@@ -33,15 +33,70 @@ const PRAYER_LABELS: Record<PrayerKey, string> = {
   isha: 'ISHA',
 };
 
-const PRAYER_CACHE_VERSION = 1;
+const PRAYER_CACHE_VERSION = 3;
 const PRAYER_CACHE_DURATION_MS = 24 * 60 * 60 * 1000;
 
-const prayerCacheKey = (latitude: number, longitude: number, dateParam: string) =>
-  `barakah_prayer_times_v${PRAYER_CACHE_VERSION}_${latitude.toFixed(3)}_${longitude.toFixed(3)}_${dateParam}`;
+interface PrayerSettings {
+  method: string;
+  school: string;
+}
 
-const readPrayerCache = (latitude: number, longitude: number, dateParam: string) => {
+export const getPrayerSettings = (country?: string): PrayerSettings => {
+  if (!country) {
+    return { method: '3', school: '0' }; // Default to Muslim World League and Shafi'i/Standard
+  }
+
+  const normalized = country.toLowerCase().trim();
+
+  // Hanafi countries (Asr school = 1)
+  // Note: India is intentionally excluded — AlAdhan website defaults to
+  // Standard/Shafi'i for India, so we match that behaviour here.
+  const isHanafi = [
+    'pakistan',
+    'bangladesh',
+    'turkey',
+    'afghanistan',
+  ].some((c) => normalized.includes(c));
+
+  const school = isHanafi ? '1' : '0';
+
+  // Method mapping
+  let method = '3'; // Default MWL
+  if (normalized.includes('india') || normalized.includes('pakistan') || normalized.includes('bangladesh') || normalized.includes('afghanistan')) {
+    method = '1'; // University of Islamic Sciences, Karachi
+  } else if (normalized.includes('united states') || normalized.includes('usa') || normalized.includes('canada') || normalized.includes('america')) {
+    method = '2'; // ISNA
+  } else if (normalized.includes('saudi arabia') || normalized.includes('makkah') || normalized.includes('medina')) {
+    method = '4'; // Umm Al-Qura
+  } else if (normalized.includes('egypt')) {
+    method = '5'; // Egyptian General Authority
+  } else if (normalized.includes('singapore')) {
+    method = '11'; // MUIS
+  } else if (normalized.includes('turkey')) {
+    method = '13'; // Turkey Diyanet
+  } else if (normalized.includes('russia')) {
+    method = '14'; // Russia
+  } else if (normalized.includes('indonesia')) {
+    method = '16'; // Indonesia
+  } else if (normalized.includes('malaysia')) {
+    method = '17'; // Malaysia
+  } else if (normalized.includes('brunei')) {
+    method = '18'; // Brunei
+  } else if (
+    ['united arab emirates', 'uae', 'kuwait', 'qatar', 'oman', 'bahrain'].some((c) => normalized.includes(c))
+  ) {
+    method = '8'; // Gulf Region
+  }
+
+  return { method, school };
+};
+
+const prayerCacheKey = (latitude: number, longitude: number, dateParam: string, method: string, school: string) =>
+  `barakah_prayer_times_v${PRAYER_CACHE_VERSION}_${latitude.toFixed(3)}_${longitude.toFixed(3)}_${dateParam}_m${method}_s${school}`;
+
+const readPrayerCache = (latitude: number, longitude: number, dateParam: string, method: string, school: string) => {
   try {
-    const raw = localStorage.getItem(prayerCacheKey(latitude, longitude, dateParam));
+    const raw = localStorage.getItem(prayerCacheKey(latitude, longitude, dateParam, method, school));
     if (!raw) return null;
     const entry = JSON.parse(raw) as { version: number; savedAt: number; prayers: AppPrayerTime[] };
     if (
@@ -49,7 +104,7 @@ const readPrayerCache = (latitude: number, longitude: number, dateParam: string)
       !Array.isArray(entry.prayers) ||
       Date.now() - entry.savedAt > PRAYER_CACHE_DURATION_MS
     ) {
-      localStorage.removeItem(prayerCacheKey(latitude, longitude, dateParam));
+      localStorage.removeItem(prayerCacheKey(latitude, longitude, dateParam, method, school));
       return null;
     }
     return entry.prayers;
@@ -63,10 +118,12 @@ const writePrayerCache = (
   longitude: number,
   dateParam: string,
   prayers: AppPrayerTime[],
+  method: string,
+  school: string,
 ) => {
   try {
     localStorage.setItem(
-      prayerCacheKey(latitude, longitude, dateParam),
+      prayerCacheKey(latitude, longitude, dateParam, method, school),
       JSON.stringify({ version: PRAYER_CACHE_VERSION, savedAt: Date.now(), prayers }),
     );
   } catch {
@@ -95,35 +152,29 @@ export const fetchIslamicPrayerTimes = async (
   latitude: number,
   longitude: number,
   date = new Date(),
+  country?: string,
 ) => {
-  const apiKey = import.meta.env.VITE_ISLAMIC_API_KEY?.trim();
+  const { method, school } = getPrayerSettings(country);
+  
   const dateParam = [
     date.getFullYear(),
     (date.getMonth() + 1).toString().padStart(2, '0'),
     date.getDate().toString().padStart(2, '0'),
   ].join('-');
 
-  const cached = readPrayerCache(latitude, longitude, dateParam);
+  const cached = readPrayerCache(latitude, longitude, dateParam, method, school);
   if (cached) return cached;
 
-  if (apiKey) {
-    try {
-      const prayers = await fetchIslamicApiPrayerTimes(latitude, longitude, dateParam, apiKey);
-      writePrayerCache(latitude, longitude, dateParam, prayers);
-      return prayers;
-    } catch (error) {
-      console.warn('Islamic API prayer times failed, using fallback:', error);
-    }
-  }
+  console.log(`[PrayerTimes] Fetching from AlAdhan for lat: ${latitude}, lon: ${longitude}, country: ${country || 'unknown'} (method: ${method}, school: ${school})`);
 
   try {
-    const prayers = await fetchAlAdhanPrayerTimes(latitude, longitude, date);
-    writePrayerCache(latitude, longitude, dateParam, prayers);
+    const prayers = await fetchAlAdhanPrayerTimes(latitude, longitude, date, method, school);
+    writePrayerCache(latitude, longitude, dateParam, prayers, method, school);
     return prayers;
   } catch (error) {
     console.warn('AlAdhan prayer times failed, using local calculation:', error);
-    const prayers = calculateLocalPrayerTimes(latitude, longitude, date);
-    writePrayerCache(latitude, longitude, dateParam, prayers);
+    const prayers = calculateLocalPrayerTimes(latitude, longitude, date, school);
+    writePrayerCache(latitude, longitude, dateParam, prayers, method, school);
     return prayers;
   }
 };
@@ -218,19 +269,20 @@ const toPrayer = (key: PrayerKey, hour: number): AppPrayerTime => {
   };
 };
 
-const calculateLocalPrayerTimes = (latitude: number, longitude: number, date: Date) => {
+const calculateLocalPrayerTimes = (latitude: number, longitude: number, date: Date, school = '0') => {
   const { equationOfTime, declination } = sunPosition(date);
   const timezone = -date.getTimezoneOffset() / 60;
   const dhuhr = fixHour(12 + timezone - longitude / 15 - equationOfTime / 60);
   const sunriseAngle = hourAngle(latitude, declination, 90.833);
   const fajrAngle = hourAngle(latitude, declination, 108);
   const ishaAngle = hourAngle(latitude, declination, 107);
+  const shadowFactor = school === '1' ? 2 : 1; // Hanafi uses 2, Shafi/Standard uses 1
 
   return [
     toPrayer('fajr', dhuhr - fajrAngle),
     toPrayer('sunrise', dhuhr - sunriseAngle),
     toPrayer('dhuhr', dhuhr),
-    toPrayer('asr', dhuhr + asrHourAngle(latitude, declination, 2)),
+    toPrayer('asr', dhuhr + asrHourAngle(latitude, declination, shadowFactor)),
     toPrayer('maghrib', dhuhr + sunriseAngle),
     toPrayer('isha', dhuhr + ishaAngle),
   ];
@@ -273,6 +325,8 @@ const fetchAlAdhanPrayerTimes = async (
   latitude: number,
   longitude: number,
   date: Date,
+  method: string,
+  school: string,
 ) => {
   const dateParam = [
     date.getDate().toString().padStart(2, '0'),
@@ -282,8 +336,8 @@ const fetchAlAdhanPrayerTimes = async (
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
-    method: '3',
-    school: '1',
+    method,
+    school,
   });
 
   const response = await fetch(
