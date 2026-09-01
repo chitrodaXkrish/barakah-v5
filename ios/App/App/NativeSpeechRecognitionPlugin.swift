@@ -18,6 +18,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     private let audioEngine = AVAudioEngine()
     private var activeCall: CAPPluginCall?
     private var isAudioTapInstalled = false
+    private var stopRequested = false
     private var latestTranscript = ""
     private var silenceFinishWorkItem: DispatchWorkItem?
     private var noSpeechWorkItem: DispatchWorkItem?
@@ -29,6 +30,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
         }
 
         cleanupRecognition()
+        stopRequested = false
         let language = call.getString("language") ?? "en-US"
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
         speechRecognizer?.delegate = self
@@ -47,6 +49,12 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
 
                 SFSpeechRecognizer.requestAuthorization { authStatus in
                     DispatchQueue.main.async {
+                        if self.stopRequested {
+                            self.stopRequested = false
+                            call.resolve(["text": ""])
+                            return
+                        }
+
                         switch authStatus {
                         case .authorized:
                             self.startRecording(call)
@@ -66,6 +74,12 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     }
     
     private func startRecording(_ call: CAPPluginCall) {
+        if stopRequested {
+            stopRequested = false
+            call.resolve(["text": ""])
+            return
+        }
+
         activeCall = call
         latestTranscript = ""
         
@@ -137,6 +151,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
     }
     
     @objc func stop(_ call: CAPPluginCall) {
+        stopRequested = true
         let transcript = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if activeCall != nil {
@@ -145,6 +160,7 @@ public class NativeSpeechRecognitionPlugin: CAPPlugin, CAPBridgedPlugin, SFSpeec
         }
 
         cleanupRecognition()
+        stopRequested = false
         call.resolve(["text": transcript])
     }
 
