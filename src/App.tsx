@@ -166,11 +166,12 @@ const StartupSplashGate = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <LanguageProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <AuthProvider>
+  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <StartupSplashGate>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <LanguageProvider>
+            <AuthProvider>
             <LocationProvider>
               <PrayerTimesProvider>
                 <CartProvider>
@@ -180,7 +181,6 @@ const App = () => (
                   <FirstLaunchGate />
                   <Toaster />
                   <Sonner />
-                  <StartupSplashGate>
                   <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/loading" element={<LoadingScreen />} />
@@ -236,15 +236,15 @@ const App = () => (
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   </Suspense>
-                  </StartupSplashGate>
                 </CartProvider>
               </PrayerTimesProvider>
             </LocationProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </LanguageProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </TooltipProvider>
+    </QueryClientProvider>
+  </StartupSplashGate>
+</BrowserRouter>
 );
 
 export default App;
