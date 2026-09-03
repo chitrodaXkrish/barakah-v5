@@ -126,7 +126,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const pendingNativeOAuth = useRef<((result: { error: any; role?: UserRole }) => void) | null>(null);
+  const nativeOAuthCancelTimer = useRef<number | null>(null);
+  const nativeOAuthTimeoutTimer = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  const clearNativeOAuthTimers = () => {
+    if (nativeOAuthCancelTimer.current !== null) {
+      window.clearTimeout(nativeOAuthCancelTimer.current);
+      nativeOAuthCancelTimer.current = null;
+    }
+    if (nativeOAuthTimeoutTimer.current !== null) {
+      window.clearTimeout(nativeOAuthTimeoutTimer.current);
+      nativeOAuthTimeoutTimer.current = null;
+    }
+  };
+
+  const resolvePendingNativeOAuth = (result: { error: any; role?: UserRole }) => {
+    clearNativeOAuthTimers();
+    const resolve = pendingNativeOAuth.current;
+    pendingNativeOAuth.current = null;
+    resolve?.(result);
+  };
 
   useEffect(() => {
     // Set up auth listener FIRST, then check for existing session.
@@ -160,6 +180,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
           console.log('[DEBUG] 1. Full Callback URL:', url);
           if (!url) return;
+          if (!isNativeAuthCallback(url)) return;
+
+          clearNativeOAuthTimers();
 
           const u = new URL(url);
 
@@ -187,12 +210,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.log('[DEBUG] 6. code exists:', Boolean(code));
           console.log('[DEBUG] 7. error / error_description:', error || 'none');
 
-          if (!isNativeAuthCallback(url)) return;
-
           if (error) {
             const decodedError = decodeOAuthMessage(error);
             console.error('OAuth callback error:', decodedError);
-            pendingNativeOAuth.current?.({
+            resolvePendingNativeOAuth({
               error: {
                 message: decodedError.includes('Unable to exchange external code')
                   ? googleProviderSetupError
@@ -200,39 +221,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               },
               role: undefined,
             });
-            pendingNativeOAuth.current = null;
           } else if (access_token && refresh_token) {
             const { data, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
             if (sessionError) {
-              pendingNativeOAuth.current?.({ error: sessionError, role: undefined });
-              pendingNativeOAuth.current = null;
+              resolvePendingNativeOAuth({ error: sessionError, role: undefined });
             } else {
               const role = data.user ? await getUserRoleFromDatabase(data.user.id) : null;
-              pendingNativeOAuth.current?.({ error: null, role });
-              pendingNativeOAuth.current = null;
+              resolvePendingNativeOAuth({ error: null, role });
             }
           } else if (isExternalGoogleCode(code)) {
             console.error('Received a raw Google OAuth code in the native app callback.');
-            pendingNativeOAuth.current?.({ error: { message: googleProviderSetupError }, role: undefined });
-            pendingNativeOAuth.current = null;
+            resolvePendingNativeOAuth({ error: { message: googleProviderSetupError }, role: undefined });
           } else if (code) {
             const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
             if (exchangeError) {
-              pendingNativeOAuth.current?.({ error: exchangeError, role: undefined });
-              pendingNativeOAuth.current = null;
+              resolvePendingNativeOAuth({ error: exchangeError, role: undefined });
             } else {
               const role = data.user ? await getUserRoleFromDatabase(data.user.id) : null;
-              pendingNativeOAuth.current?.({ error: null, role });
-              pendingNativeOAuth.current = null;
+              resolvePendingNativeOAuth({ error: null, role });
             }
           }
         } catch (e) {
           console.error('appUrlOpen handler failed:', e);
-          pendingNativeOAuth.current?.({
+          resolvePendingNativeOAuth({
             error: { message: e instanceof Error ? e.message : 'Google sign in failed' },
             role: undefined,
           });
-          pendingNativeOAuth.current = null;
         } finally {
           try { await Browser.close(); } catch { }
         }
@@ -241,11 +255,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       CapacitorApp.addListener('appUrlOpen', ({ url }) => handleNativeAuthCallback(url))
         .then((handle) => { removeListener = () => handle.remove(); });
       Browser.addListener('browserFinished', () => {
-        pendingNativeOAuth.current?.({
-          error: { message: 'Sign in was canceled' },
-          role: undefined,
-        });
-        pendingNativeOAuth.current = null;
+        if (!pendingNativeOAuth.current) return;
+        if (nativeOAuthCancelTimer.current !== null) {
+          window.clearTimeout(nativeOAuthCancelTimer.current);
+        }
+        // Android Custom Tabs and iOS SFSafariViewController can report the
+        // browser as finished before the OAuth deep-link callback reaches JS.
+        // Give the native appUrlOpen event enough time to win before treating
+        // the flow as a user-canceled sign in.
+        nativeOAuthCancelTimer.current = window.setTimeout(() => {
+          resolvePendingNativeOAuth({
+            error: { message: 'Sign in was canceled' },
+            role: undefined,
+          });
+        }, 8000);
       })
         .then((handle) => { removeBrowserFinishedListener = () => handle.remove(); })
         .catch(() => undefined);
@@ -256,6 +279,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       sub.subscription.unsubscribe();
+      clearNativeOAuthTimers();
       removeListener?.();
       removeBrowserFinishedListener?.();
     };
@@ -349,15 +373,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (error) return { error, role: undefined };
         if (data?.url) {
           const callbackResult = new Promise<{ error: any; role?: UserRole }>((resolve) => {
+            clearNativeOAuthTimers();
             pendingNativeOAuth.current = resolve;
-            window.setTimeout(() => {
+            nativeOAuthTimeoutTimer.current = window.setTimeout(() => {
               if (pendingNativeOAuth.current === resolve) {
-                pendingNativeOAuth.current = null;
-                resolve({ error: { message: 'Google sign in timed out. Please try again.' }, role: undefined });
+                resolvePendingNativeOAuth({ error: { message: 'Google sign in timed out. Please try again.' }, role: undefined });
               }
             }, 120000);
           });
-          await Browser.open({ url: data.url, presentationStyle: 'popover' });
+          await Browser.open({ url: data.url, presentationStyle: 'fullscreen' });
           return await callbackResult;
         }
         return { error: null, role: null };
@@ -371,7 +395,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) return { error, role: undefined };
       return { error: null, role: null };
     } catch (error: any) {
-      pendingNativeOAuth.current = null;
+      resolvePendingNativeOAuth({ error: { message: error.message || 'Google sign in failed' }, role: undefined });
       return { error: { message: error.message || 'Google sign in failed' }, role: undefined };
     }
   };

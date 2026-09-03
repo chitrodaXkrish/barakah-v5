@@ -11,6 +11,7 @@ export interface AppNotificationItem {
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const STRICT_EARLY_TOLERANCE_MS = 30 * 1000;
 
 export const formatNotificationTimeLabel = (receivedAt: number, nowDate: Date = new Date()) => {
   const diffSeconds = Math.max(0, Math.floor((nowDate.getTime() - receivedAt) / 1000));
@@ -69,6 +70,33 @@ export const useAppNotifications = () => {
 
   const [notifications, setNotifications] = useState<AppNotificationItem[]>(loadNotifications);
 
+  const isExpiredStrictNotification = useCallback((rawNotif: any) => {
+    const notification = rawNotif?.notification || rawNotif;
+    const extra = notification?.extra || notification?.data || rawNotif?.extra || rawNotif?.data;
+
+    if (extra?.source !== 'barakah-prayer-times') return false;
+
+    const scheduledMinuteOfDay = Number(extra.scheduledMinuteOfDay);
+    const strictWindowMs = Number(extra.strictWindowMs);
+    if (!Number.isFinite(scheduledMinuteOfDay) || !Number.isFinite(strictWindowMs)) return false;
+
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+
+    const scheduledTimes = [-1, 0, 1].map((dayOffset) => (
+      todayStart.getTime() +
+      dayOffset * TWENTY_FOUR_HOURS_MS +
+      scheduledMinuteOfDay * 60 * 1000
+    ));
+    const nowMs = now.getTime();
+
+    return !scheduledTimes.some((scheduledAt) => (
+      nowMs >= scheduledAt - STRICT_EARLY_TOLERANCE_MS &&
+      nowMs <= scheduledAt + strictWindowMs
+    ));
+  }, []);
+
   // Reload when user changes or session starts
   useEffect(() => {
     setNotifications(loadNotifications());
@@ -78,6 +106,8 @@ export const useAppNotifications = () => {
   const addNotification = useCallback(
     (rawNotif: any) => {
       if (!rawNotif) return;
+      if (isExpiredStrictNotification(rawNotif)) return;
+
       const notification = rawNotif.notification || rawNotif;
       const title = notification.title || rawNotif.title;
       const body = notification.body || rawNotif.body;
@@ -109,7 +139,7 @@ export const useAppNotifications = () => {
         return updated;
       });
     },
-    [getLoginTime, notificationsKey],
+    [getLoginTime, isExpiredStrictNotification, notificationsKey],
   );
 
   // Listen to window & native notification events

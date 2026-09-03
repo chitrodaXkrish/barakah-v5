@@ -73,6 +73,11 @@ const dedupeNewsItems = (items: NewsItem[]) => {
   });
 };
 
+const cleanLocationLabelPart = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized && normalized.toLowerCase() !== 'unknown' ? normalized : '';
+};
+
 
 
 const timeAgo = (iso?: string | null) => {
@@ -148,8 +153,10 @@ export const Home = () => {
   const next = getNextPrayer(apiPrayers, now);
   const prayerTime = next ? formatPrayerTime12(next) : '';
 
-  const cityLabel = location
-    ? `${location.area || location.city || t('home.your_area')}${location.country ? ', ' + location.country : ''}`
+  const locationPrimary = cleanLocationLabelPart(location?.area) || cleanLocationLabelPart(location?.city);
+  const locationCountry = cleanLocationLabelPart(location?.country);
+  const cityLabel = locationPrimary
+    ? [locationPrimary, locationCountry].filter(Boolean).join(', ')
     : locationLoading
       ? t('home.locating')
       : t('home.set_location');
