@@ -1,0 +1,282 @@
+src/App.tsx:14:import { registerForPush } from './integrations/push';
+src/App.tsx:18:const PushInitializer = () => {
+src/App.tsx:20:    const pushEnabled = import.meta.env.VITE_ENABLE_PUSH_NOTIFICATIONS === 'true';
+src/App.tsx:21:    if (pushEnabled && Capacitor.isNativePlatform()) {
+src/App.tsx:22:      registerForPush();
+src/App.tsx:178:                  <PushInitializer />
+src/contexts/PrayerTimesContext.tsx:9:  cancelPrayerNotifications,
+src/contexts/PrayerTimesContext.tsx:10:  schedulePrayerNotifications,
+src/contexts/PrayerTimesContext.tsx:11:} from '@/lib/prayerNotifications';
+src/contexts/PrayerTimesContext.tsx:28:  const [notificationsEnabled, setNotificationsEnabled] = useState(
+src/contexts/PrayerTimesContext.tsx:29:    () => localStorage.getItem('barakah_notifications_enabled') !== 'false',
+src/contexts/PrayerTimesContext.tsx:47:  const notificationPrayers = useMemo(
+src/contexts/PrayerTimesContext.tsx:53:    const syncNotificationSetting = () => {
+src/contexts/PrayerTimesContext.tsx:54:      setNotificationsEnabled(localStorage.getItem('barakah_notifications_enabled') !== 'false');
+src/contexts/PrayerTimesContext.tsx:57:    window.addEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+src/contexts/PrayerTimesContext.tsx:58:    window.addEventListener('storage', syncNotificationSetting);
+src/contexts/PrayerTimesContext.tsx:61:      window.removeEventListener('barakah-notification-setting-changed', syncNotificationSetting);
+src/contexts/PrayerTimesContext.tsx:62:      window.removeEventListener('storage', syncNotificationSetting);
+src/contexts/PrayerTimesContext.tsx:67:    if (!notificationsEnabled) {
+src/contexts/PrayerTimesContext.tsx:68:      cancelPrayerNotifications().catch(() => {});
+src/contexts/PrayerTimesContext.tsx:72:    if (notificationPrayers.length === 0) return;
+src/contexts/PrayerTimesContext.tsx:74:    schedulePrayerNotifications(notificationPrayers).catch(() => {});
+src/contexts/PrayerTimesContext.tsx:75:  }, [notificationsEnabled, notificationPrayers]);
+src/contexts/AuthContext.tsx:264:  // Listen for native push token events and attach token to user metadata
+src/contexts/AuthContext.tsx:273:        // Update user metadata with push token; server should read this and send notifications
+src/contexts/AuthContext.tsx:274:        await supabase.auth.updateUser({ data: { push_token: token } });
+src/contexts/AuthContext.tsx:276:        console.warn('Failed to save push token to user metadata', err);
+src/contexts/AuthContext.tsx:280:    window.addEventListener('pushToken', handler as EventListener);
+src/contexts/AuthContext.tsx:281:    return () => { window.removeEventListener('pushToken', handler as EventListener); };
+src/locales/tr.json:69:  "prayer.no_notifications": "Yeni bildirim yok",
+src/locales/tr.json:105:  "menu.notifications": "Bildirimler",
+src/locales/tr.json:106:  "menu.toggle_notifications": "Bildirimleri aç/kapat",
+src/locales/tr.json:659:  "feedback.notifications_timing": "Bildirimler doğru zamanda mı geliyor?",
+src/locales/bn.json:69:  "prayer.no_notifications": "কোন নতুন বিজ্ঞপ্তি নেই",
+src/locales/bn.json:105:  "menu.notifications": "বিজ্ঞপ্তি",
+src/locales/bn.json:106:  "menu.toggle_notifications": "বিজ্ঞপ্তি টগল করুন",
+src/locales/bn.json:659:  "feedback.notifications_timing": "বিজ্ঞপ্তি কি সঠিক সময়ে আসছে?",
+src/locales/ms.json:69:  "prayer.no_notifications": "Tiada pemberitahuan baharu",
+src/locales/ms.json:105:  "menu.notifications": "Pemberitahuan",
+src/locales/ms.json:106:  "menu.toggle_notifications": "Togol pemberitahuan",
+src/locales/ms.json:659:  "feedback.notifications_timing": "Adakah pemberitahuan tiba pada masa yang betul?",
+src/locales/ta.json:69:  "prayer.no_notifications": "புதிய அறிவிப்புகள் இல்லை",
+src/locales/ta.json:105:  "menu.notifications": "அறிவிப்புகள்",
+src/locales/ta.json:106:  "menu.toggle_notifications": "அறிவிப்புகளை நிலைமாற்று",
+src/locales/ta.json:659:  "feedback.notifications_timing": "அறிவிப்புகள் சரியான நேரத்தில் வருகிறதா?",
+src/locales/ur.json:69:  "prayer.no_notifications": "کوئی نئی اطلاعات نہیں",
+src/locales/ur.json:105:  "menu.notifications": "اطلاعات",
+src/locales/ur.json:106:  "menu.toggle_notifications": "اطلاعات کو فعال یا غیر فعال کریں",
+src/locales/ur.json:672:  "feedback.notifications_timing": "کیا اطلاعات صحیح وقت پر پہنچ رہی ہیں؟",
+src/locales/en.json:69:  "prayer.notifications_title": "Notifications",
+src/locales/en.json:70:  "prayer.no_notifications": "No new notifications",
+src/locales/en.json:106:  "menu.notifications": "Notifications",
+src/locales/en.json:107:  "menu.toggle_notifications": "Toggle notifications",
+src/locales/en.json:680:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/ur (1).json:61:  "prayer.no_notifications": "کوئی نئی اطلاعات نہیں",
+src/locales/ur (1).json:100:  "menu.notifications": "اطلاعات",
+src/locales/ur (1).json:101:  "menu.toggle_notifications": "اطلاعات کو فعال یا غیر فعال کریں",
+src/locales/tr.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/ar.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/ms.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/ur.json.bak:69:  "prayer.no_notifications": "کوئی نئی اطلاعات نہیں",
+src/locales/ur.json.bak:105:  "menu.notifications": "اطلاعات",
+src/locales/ur.json.bak:106:  "menu.toggle_notifications": "اطلاعات کو فعال یا غیر فعال کریں",
+src/locales/ur.json.bak:551:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/id.json:69:  "prayer.no_notifications": "Tidak ada notifikasi baru",
+src/locales/id.json:105:  "menu.notifications": "Pemberitahuan",
+src/locales/id.json:106:  "menu.toggle_notifications": "Alihkan notifikasi",
+src/locales/id.json:672:  "feedback.notifications_timing": "Apakah notifikasi tiba pada waktu yang tepat?",
+src/locales/ta.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/bn.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/locales/ar.json:69:  "prayer.no_notifications": "لا توجد إشعارات جديدة",
+src/locales/ar.json:105:  "menu.notifications": "إشعارات",
+src/locales/ar.json:106:  "menu.toggle_notifications": "تبديل الإخطارات",
+src/locales/ar.json:672:  "feedback.notifications_timing": "هل تصل الإشعارات في الوقت الصحيح؟",
+src/locales/id.json.bak:277:  "feedback.notifications_timing": "Are notifications arriving at the correct time?",
+src/integrations/push.ts:3:const PushNotifications = registerPlugin('PushNotifications') as any;
+src/integrations/push.ts:5:export async function registerForPush() {
+src/integrations/push.ts:7:    console.log('[Barakah Push] Not a native platform');
+src/integrations/push.ts:12:    // Register listeners BEFORE requesting/registering with APNs.
+src/integrations/push.ts:13:    await PushNotifications.addListener('registration', (token: any) => {
+src/integrations/push.ts:14:      console.log('[Barakah Push] Registration success:', token);
+src/integrations/push.ts:20:          new CustomEvent('pushToken', {
+src/integrations/push.ts:27:    await PushNotifications.addListener('registrationError', (error: any) => {
+src/integrations/push.ts:28:      console.error('[Barakah Push] Registration error:', error);
+src/integrations/push.ts:31:        new CustomEvent('pushRegistrationError', {
+src/integrations/push.ts:37:    await PushNotifications.addListener(
+src/integrations/push.ts:38:      'pushNotificationReceived',
+src/integrations/push.ts:39:      (notification: any) => {
+src/integrations/push.ts:40:        console.log('[Barakah Push] Notification received:', notification);
+src/integrations/push.ts:43:          new CustomEvent('pushNotificationReceived', {
+src/integrations/push.ts:44:            detail: notification,
+src/integrations/push.ts:50:    await PushNotifications.addListener(
+src/integrations/push.ts:51:      'pushNotificationActionPerformed',
+src/integrations/push.ts:53:        console.log('[Barakah Push] Notification action performed:', action);
+src/integrations/push.ts:56:          new CustomEvent('pushNotificationAction', {
+src/integrations/push.ts:63:    // Request notification permission.
+src/integrations/push.ts:64:    const permission = await PushNotifications.requestPermissions();
+src/integrations/push.ts:66:    console.log('[Barakah Push] Permission result:', permission);
+src/integrations/push.ts:72:      console.log('[Barakah Push] Registering with APNs...');
+src/integrations/push.ts:73:      await PushNotifications.register();
+src/integrations/push.ts:76:        '[Barakah Push] Notification permission was not granted:',
+src/integrations/push.ts:81:    console.error('[Barakah Push] Initialization failed:', error);
+src/integrations/supabase/types.ts:49:          notifications_timing: string | null
+src/integrations/supabase/types.ts:67:          notifications_timing?: string | null
+src/integrations/supabase/types.ts:85:          notifications_timing?: string | null
+src/components/SideMenu.tsx:27:import { cancelPrayerNotifications } from '@/lib/prayerNotifications';
+src/components/SideMenu.tsx:51:  const [notifications, setNotifications] = useState<boolean>(() => {
+src/components/SideMenu.tsx:52:    return localStorage.getItem('barakah_notifications_enabled') !== 'false';
+src/components/SideMenu.tsx:54:  const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
+src/components/SideMenu.tsx:55:  const [notificationHistory, setNotificationHistory] = useState<Array<{ id: string; title: string; body: string; receivedAt: number }>>([]);
+src/components/SideMenu.tsx:61:    localStorage.setItem('barakah_notifications_enabled', notifications ? 'true' : 'false');
+src/components/SideMenu.tsx:63:      new CustomEvent('barakah-notification-setting-changed', {
+src/components/SideMenu.tsx:64:        detail: { enabled: notifications },
+src/components/SideMenu.tsx:68:    if (!notifications) {
+src/components/SideMenu.tsx:69:      cancelPrayerNotifications().catch(() => undefined);
+src/components/SideMenu.tsx:71:  }, [notifications]);
+src/components/SideMenu.tsx:74:    const cacheKey = `barakah_home_notifications_${user?.uid || 'guest'}`;
+src/components/SideMenu.tsx:78:        setNotificationHistory(
+src/components/SideMenu.tsx:85:      setNotificationHistory([]);
+src/components/SideMenu.tsx:304:              label={t('menu.notifications')}
+src/components/SideMenu.tsx:305:              onClick={() => setShowNotificationsPanel((prev) => !prev)}
+src/components/SideMenu.tsx:309:          {showNotificationsPanel && (
+src/components/SideMenu.tsx:313:                  <p className="text-[14px] font-bold" style={{ color: BROWN }}>Past notifications</p>
+src/components/SideMenu.tsx:316:                    onClick={() => setShowNotificationsPanel(false)}
+src/components/SideMenu.tsx:324:                  {notificationHistory.length > 0 ? (
+src/components/SideMenu.tsx:325:                    notificationHistory.map((item) => (
+src/components/SideMenu.tsx:335:                    <p className="text-[12px]" style={{ color: MUTED }}>No past notifications yet.</p>
+src/components/FeedbackForm.tsx:28:    notifications_timing: '',
+src/components/FeedbackForm.tsx:108:          <Field label={t('feedback.notifications_timing')}>
+src/components/FeedbackForm.tsx:110:              value={form.notifications_timing}
+src/components/FeedbackForm.tsx:111:              onChange={(v) => set('notifications_timing', v)}
+src/hooks/use-toast.ts:175:    listeners.push(setState)
+src/hooks/useSalahTracker.ts:400:      days.push({ date: dateStr, dayName, completed, total: DAILY_MARKER_TOTAL });
+src/hooks/useAppNotifications.ts:4:import { LocalNotifications } from '@capacitor/local-notifications';
+src/hooks/useAppNotifications.ts:6:export interface AppNotificationItem {
+src/hooks/useAppNotifications.ts:15:export const formatNotificationTimeLabel = (receivedAt: number, nowDate: Date = new Date()) => {
+src/hooks/useAppNotifications.ts:23:export const useAppNotifications = () => {
+src/hooks/useAppNotifications.ts:28:  const notificationsKey = `barakah_user_notifications_${userId}`;
+src/hooks/useAppNotifications.ts:42:  // Load notifications received AFTER user login time and within the 24-hour window
+src/hooks/useAppNotifications.ts:43:  const loadNotifications = useCallback((): AppNotificationItem[] => {
+src/hooks/useAppNotifications.ts:48:      const raw = localStorage.getItem(notificationsKey);
+src/hooks/useAppNotifications.ts:54:        (item): item is AppNotificationItem =>
+src/hooks/useAppNotifications.ts:63:      localStorage.setItem(notificationsKey, JSON.stringify(valid));
+src/hooks/useAppNotifications.ts:68:  }, [getLoginTime, notificationsKey]);
+src/hooks/useAppNotifications.ts:70:  const [notifications, setNotifications] = useState<AppNotificationItem[]>(loadNotifications);
+src/hooks/useAppNotifications.ts:74:    setNotifications(loadNotifications());
+src/hooks/useAppNotifications.ts:75:  }, [loadNotifications, userId]);
+src/hooks/useAppNotifications.ts:77:  // Add a newly received notification
+src/hooks/useAppNotifications.ts:78:  const addNotification = useCallback(
+src/hooks/useAppNotifications.ts:81:      const notification = rawNotif.notification || rawNotif;
+src/hooks/useAppNotifications.ts:82:      const title = notification.title || rawNotif.title;
+src/hooks/useAppNotifications.ts:83:      const body = notification.body || rawNotif.body;
+src/hooks/useAppNotifications.ts:90:      // Ignore notifications received before login
+src/hooks/useAppNotifications.ts:94:        notification.id || notification.tag || rawNotif.id || `${now}-${Math.random().toString(36).substring(2, 7)}`,
+src/hooks/useAppNotifications.ts:97:      const newItem: AppNotificationItem = {
+src/hooks/useAppNotifications.ts:99:        title: String(title || 'Notification'),
+src/hooks/useAppNotifications.ts:104:      setNotifications((current) => {
+src/hooks/useAppNotifications.ts:108:        localStorage.setItem(notificationsKey, JSON.stringify(updated));
+src/hooks/useAppNotifications.ts:112:    [getLoginTime, notificationsKey],
+src/hooks/useAppNotifications.ts:115:  // Listen to window & native notification events
+src/hooks/useAppNotifications.ts:119:      if (detail) addNotification(detail);
+src/hooks/useAppNotifications.ts:122:    window.addEventListener('pushNotificationReceived', handleEvent);
+src/hooks/useAppNotifications.ts:123:    window.addEventListener('pushNotificationAction', handleEvent);
+src/hooks/useAppNotifications.ts:124:    window.addEventListener('barakahNotificationReceived', handleEvent);
+src/hooks/useAppNotifications.ts:130:      LocalNotifications.addListener('localNotificationReceived', (notification) => {
+src/hooks/useAppNotifications.ts:131:        addNotification(notification);
+src/hooks/useAppNotifications.ts:136:      LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+src/hooks/useAppNotifications.ts:137:        addNotification(action.notification || action);
+src/hooks/useAppNotifications.ts:144:      window.removeEventListener('pushNotificationReceived', handleEvent);
+src/hooks/useAppNotifications.ts:145:      window.removeEventListener('pushNotificationAction', handleEvent);
+src/hooks/useAppNotifications.ts:146:      window.removeEventListener('barakahNotificationReceived', handleEvent);
+src/hooks/useAppNotifications.ts:150:  }, [addNotification]);
+src/hooks/useAppNotifications.ts:152:  const clearNotifications = useCallback(() => {
+src/hooks/useAppNotifications.ts:153:    setNotifications([]);
+src/hooks/useAppNotifications.ts:154:    localStorage.removeItem(notificationsKey);
+src/hooks/useAppNotifications.ts:155:  }, [notificationsKey]);
+src/hooks/useAppNotifications.ts:158:    notifications,
+src/hooks/useAppNotifications.ts:159:    addNotification,
+src/hooks/useAppNotifications.ts:160:    clearNotifications,
+src/lib/addresses.ts:32:  else list.push(addr);
+src/lib/prayerNotifications.ts:3:  LocalNotifications,
+src/lib/prayerNotifications.ts:4:  type LocalNotificationSchema,
+src/lib/prayerNotifications.ts:5:} from '@capacitor/local-notifications';
+src/lib/prayerNotifications.ts:7:export interface PrayerNotificationTime {
+src/lib/prayerNotifications.ts:14:export interface PrayerNotificationPreview {
+src/lib/prayerNotifications.ts:23:const NOTIFICATION_GROUP = 'barakah-prayer-times';
+src/lib/prayerNotifications.ts:24:const MAX_PRAYER_NOTIFICATION_SLOTS = 6;
+src/lib/prayerNotifications.ts:29:type NotificationKind = 'pre' | 'time' | 'after';
+src/lib/prayerNotifications.ts:31:const notificationId = (index: number, kind: NotificationKind) =>
+src/lib/prayerNotifications.ts:34:const tahajjudNotificationId = 7999;
+src/lib/prayerNotifications.ts:36:const notificationIdsForSlots = (slotCount: number) => [
+src/lib/prayerNotifications.ts:38:    { id: notificationId(index, 'pre') },
+src/lib/prayerNotifications.ts:39:    { id: notificationId(index, 'time') },
+src/lib/prayerNotifications.ts:40:    { id: notificationId(index, 'after') },
+src/lib/prayerNotifications.ts:42:  { id: tahajjudNotificationId },
+src/lib/prayerNotifications.ts:149:const notificationCopyFor = (
+src/lib/prayerNotifications.ts:150:  prayer: PrayerNotificationTime,
+src/lib/prayerNotifications.ts:151:  kind: NotificationKind,
+src/lib/prayerNotifications.ts:163:export const createPrayerNotificationPreviews = (
+src/lib/prayerNotifications.ts:164:  prayers: PrayerNotificationTime[],
+src/lib/prayerNotifications.ts:174:      const preCopy = notificationCopyFor(prayer, 'pre');
+src/lib/prayerNotifications.ts:175:      const timeCopy = notificationCopyFor(prayer, 'time');
+src/lib/prayerNotifications.ts:217:export const schedulePrayerNotifications = async (
+src/lib/prayerNotifications.ts:218:  prayers: PrayerNotificationTime[],
+src/lib/prayerNotifications.ts:222:  const displayPermission = await LocalNotifications.checkPermissions();
+src/lib/prayerNotifications.ts:226:      : await LocalNotifications.requestPermissions();
+src/lib/prayerNotifications.ts:231:    await LocalNotifications.createChannel({
+src/lib/prayerNotifications.ts:241:  await LocalNotifications.cancel({
+src/lib/prayerNotifications.ts:242:    notifications: notificationIdsForSlots(
+src/lib/prayerNotifications.ts:243:      Math.max(prayers.length, MAX_PRAYER_NOTIFICATION_SLOTS),
+src/lib/prayerNotifications.ts:248:  const notifications: LocalNotificationSchema[] = prayers.flatMap(
+src/lib/prayerNotifications.ts:254:      const preCopy = notificationCopyFor(prayer, 'pre');
+src/lib/prayerNotifications.ts:255:      const timeCopy = notificationCopyFor(prayer, 'time');
+src/lib/prayerNotifications.ts:259:          id: notificationId(index, 'pre'),
+src/lib/prayerNotifications.ts:263:          group: NOTIFICATION_GROUP,
+src/lib/prayerNotifications.ts:268:          id: notificationId(index, 'time'),
+src/lib/prayerNotifications.ts:272:          group: NOTIFICATION_GROUP,
+src/lib/prayerNotifications.ts:277:          id: notificationId(index, 'after'),
+src/lib/prayerNotifications.ts:281:          group: NOTIFICATION_GROUP,
+src/lib/prayerNotifications.ts:293:    notifications.push({
+src/lib/prayerNotifications.ts:294:      id: tahajjudNotificationId,
+src/lib/prayerNotifications.ts:298:      group: NOTIFICATION_GROUP,
+src/lib/prayerNotifications.ts:304:  await LocalNotifications.schedule({ notifications });
+src/lib/prayerNotifications.ts:308:export const cancelPrayerNotifications = async () => {
+src/lib/prayerNotifications.ts:311:  await LocalNotifications.cancel({
+src/lib/prayerNotifications.ts:312:    notifications: notificationIdsForSlots(MAX_PRAYER_NOTIFICATION_SLOTS),
+src/lib/countries.ts:252:    countries.push(country.name);
+Binary file src/assets/onboarding-3-full.png matches
+Binary file src/assets/tasbeeh-startup.png matches
+Binary file src/assets/chat-avatar.png matches
+Binary file src/assets/onboarding-1-full.png matches
+src/pages/PrayerTimes.tsx:22:import { useAppNotifications, formatNotificationTimeLabel } from '@/hooks/useAppNotifications';
+src/pages/PrayerTimes.tsx:117:  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+src/pages/PrayerTimes.tsx:155:  const { notifications } = useAppNotifications();
+src/pages/PrayerTimes.tsx:157:  const openNotifications = () => {
+src/pages/PrayerTimes.tsx:158:    setIsNotificationsOpen(true);
+src/pages/PrayerTimes.tsx:187:            onClick={openNotifications}
+src/pages/PrayerTimes.tsx:190:            aria-label="Notifications"
+src/pages/PrayerTimes.tsx:193:            {notifications.length > 0 && (
+src/pages/PrayerTimes.tsx:198:          {isNotificationsOpen && (
+src/pages/PrayerTimes.tsx:206:                    Notifications
+src/pages/PrayerTimes.tsx:213:                  onClick={() => setIsNotificationsOpen(false)}
+src/pages/PrayerTimes.tsx:216:                  aria-label="Close notifications"
+src/pages/PrayerTimes.tsx:223:                {notifications.length > 0 ? (
+src/pages/PrayerTimes.tsx:224:                  notifications.map((item) => (
+src/pages/PrayerTimes.tsx:241:                            {formatNotificationTimeLabel(item.receivedAt, now)}
+src/pages/PrayerTimes.tsx:250:                      No new notifications
+src/pages/PrayerTimes.tsx:253:                      Notifications received will be saved here for 24 hours.
+src/pages/MonthlyStreak.tsx:88:  for (let i = 0; i < firstDow; i++) cells.push({ day: null });
+src/pages/MonthlyStreak.tsx:89:  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, ds: fmt(new Date(year, month, d)) });
+src/pages/MonthlyStreak.tsx:90:  while (cells.length % 7 !== 0) cells.push({ day: null });
+src/pages/Progress.tsx:402:  for (let i = 0; i < startOffset; i++) cells.push({ day: null });
+src/pages/Progress.tsx:405:    cells.push({ day: d, ds, isToday: d === now.getDate() });
+src/pages/Forum.tsx:980:        repliesByPost[reply.post_id].push(reply);
+src/pages/Forum.tsx:988:        likesByPost[like.post_id].push(like as Like);
+src/pages/Home.tsx:15:import { useAppNotifications, formatNotificationTimeLabel } from '@/hooks/useAppNotifications';
+src/pages/Home.tsx:90:  const { notifications } = useAppNotifications();
+src/pages/Home.tsx:102:  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+src/pages/Home.tsx:166:  const openNotifications = () => {
+src/pages/Home.tsx:167:    setIsNotificationsOpen(true);
+src/pages/Home.tsx:231:            onClick={openNotifications}
+src/pages/Home.tsx:234:            aria-label="Notifications"
+src/pages/Home.tsx:237:            {notifications.length > 0 && (
+src/pages/Home.tsx:312:      {isNotificationsOpen && (
+src/pages/Home.tsx:320:                {t('prayer.notifications_title')}
+src/pages/Home.tsx:327:              onClick={() => setIsNotificationsOpen(false)}
+src/pages/Home.tsx:330:              aria-label="Close notifications"
+src/pages/Home.tsx:336:            {notifications.length > 0 ? (
+src/pages/Home.tsx:337:              notifications.map((item) => (
+src/pages/Home.tsx:354:                        {formatNotificationTimeLabel(item.receivedAt, now)}
+src/pages/Home.tsx:363:                  {t('prayer.no_notifications')}
+src/pages/Register.tsx:271:      {/* Spacer to push card below the mosque graphic area */}
+src/pages/Mood.tsx:76:    current.push(dua);
+src/pages/NewsDetail.tsx:85:      if (!last || last.length > 420) acc.push(sentence);
+src/pages/legal/PrivacyPolicy.tsx:351:          <li>Notifications</li>
+ios/App/App/capacitor.config.json:15:		"LocalNotifications": {
+ios/App/App/capacitor.config.json:28:		"LocalNotificationsPlugin",
+ios/App/App/capacitor.config.json:29:		"PushNotificationsPlugin",
+ios/App/App/AppDelegate.swift:56:    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+ios/App/App/AppDelegate.swift:57:        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+ios/App/App/AppDelegate.swift:60:    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+ios/App/App/AppDelegate.swift:61:        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)

@@ -1,55 +1,83 @@
-import { Capacitor } from '@capacitor/core';
-import { registerPlugin } from '@capacitor/core';
-import { supabase } from './supabase/client';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
-// Use the official Capacitor Push plugin if available
 const PushNotifications = registerPlugin('PushNotifications') as any;
 
 export async function registerForPush() {
-  if (!Capacitor.isNativePlatform()) return;
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[Barakah Push] Not a native platform');
+    return;
+  }
 
   try {
-    // Request permission and register
-    const perm = await PushNotifications.requestPermissions();
+    // Register listeners BEFORE requesting/registering with APNs.
+    await PushNotifications.addListener('registration', (token: any) => {
+      console.log('[Barakah Push] Registration success:', token);
 
-    if (perm.receive === 'granted' || perm === 'granted') {
-      await PushNotifications.register();
-    } else {
-      console.log('Push permission not granted', perm);
-      return;
-    }
+      const tokenValue = token?.value || token;
 
-    // Listen for registration
-    PushNotifications.addListener('registration', (token: any) => {
-      console.log('Push registration success, token:', token);
-      // Emit global event so app can react
-      window.dispatchEvent(new CustomEvent('pushToken', { detail: token.value || token }));
-
-      // Optionally send token to your backend / supabase user metadata
-      try {
-        const user = supabase.auth.getUser ? (supabase.auth.getUser() as any) : null;
-        // If using supabase-js v2, get user from auth.getUser()
-        // We don't assume a particular API shape here; dispatch event is reliable.
-      } catch (e) {
-        // swallow
+      if (tokenValue) {
+        window.dispatchEvent(
+          new CustomEvent('pushToken', {
+            detail: tokenValue,
+          })
+        );
       }
     });
 
-    PushNotifications.addListener('registrationError', (err: any) => {
-      console.warn('Push registration error', err);
-      window.dispatchEvent(new CustomEvent('pushRegistrationError', { detail: err }));
+    await PushNotifications.addListener('registrationError', (error: any) => {
+      console.error('[Barakah Push] Registration error:', error);
+
+      window.dispatchEvent(
+        new CustomEvent('pushRegistrationError', {
+          detail: error,
+        })
+      );
     });
 
-    PushNotifications.addListener('pushNotificationReceived', (notification: any) => {
-      console.log('Push received', notification);
-      window.dispatchEvent(new CustomEvent('pushNotificationReceived', { detail: notification }));
-    });
+    await PushNotifications.addListener(
+      'pushNotificationReceived',
+      (notification: any) => {
+        console.log('[Barakah Push] Notification received:', notification);
 
-    PushNotifications.addListener('pushNotificationActionPerformed', (action: any) => {
-      console.log('Push action performed', action);
-      window.dispatchEvent(new CustomEvent('pushNotificationAction', { detail: action }));
-    });
-  } catch (e) {
-    console.warn('Failed to register for push', e);
+        window.dispatchEvent(
+          new CustomEvent('pushNotificationReceived', {
+            detail: notification,
+          })
+        );
+      }
+    );
+
+    await PushNotifications.addListener(
+      'pushNotificationActionPerformed',
+      (action: any) => {
+        console.log('[Barakah Push] Notification action performed:', action);
+
+        window.dispatchEvent(
+          new CustomEvent('pushNotificationAction', {
+            detail: action,
+          })
+        );
+      }
+    );
+
+    // Request notification permission.
+    const permission = await PushNotifications.requestPermissions();
+
+    console.log('[Barakah Push] Permission result:', permission);
+
+    if (
+      permission?.receive === 'granted' ||
+      permission === 'granted'
+    ) {
+      console.log('[Barakah Push] Registering with APNs...');
+      await PushNotifications.register();
+    } else {
+      console.warn(
+        '[Barakah Push] Notification permission was not granted:',
+        permission
+      );
+    }
+  } catch (error) {
+    console.error('[Barakah Push] Initialization failed:', error);
   }
 }

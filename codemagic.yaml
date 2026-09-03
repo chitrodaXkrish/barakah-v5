@@ -4,12 +4,15 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
+      groups:
+        - Supabase
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.barakah.services
       vars:
         XCODE_PROJECT: ios/App/App.xcodeproj
         XCODE_SCHEME: App
+        VITE_ENABLE_PUSH_NOTIFICATIONS: "true"
       node: 22
       xcode: latest
     scripts:
