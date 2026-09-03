@@ -38,6 +38,7 @@ const WATCH_POSITION_OPTIONS: PositionOptions = {
   maximumAge: 0,
 };
 const isNativeGeolocation = () => ['ios', 'android'].includes(Capacitor.getPlatform());
+const UNKNOWN_LOCATION_VALUES = new Set(['unknown', 'undefined', 'null', '']);
 const shouldAutoFetchForPath = (pathname: string) =>
   !['/login', '/onboarding', '/loading'].includes(pathname) &&
   !pathname.startsWith('/privacy-policy') &&
@@ -50,6 +51,21 @@ type ManualLocationLabel = {
   country?: string;
   fullAddress?: string;
 };
+
+const normalizePlaceName = (value?: string | null) =>
+  value
+    ?.replace(/\s+(district|county|province|state|division|region)$/i, '')
+    .trim();
+
+const cleanPlaceName = (value?: string | null) => {
+  const normalized = normalizePlaceName(value);
+  return normalized && !UNKNOWN_LOCATION_VALUES.has(normalized.toLowerCase())
+    ? normalized
+    : undefined;
+};
+
+const hasUsableLocationLabel = (location: Partial<LocationData>) =>
+  Boolean(cleanPlaceName(location.area) || cleanPlaceName(location.city) || cleanPlaceName(location.country));
 
 const normalizeLocation = (value: unknown): LocationData | null => {
   if (!value || typeof value !== 'object') return null;
@@ -67,9 +83,9 @@ const normalizeLocation = (value: unknown): LocationData | null => {
   return {
     latitude,
     longitude,
-    area: raw.area,
-    city: raw.city || 'Unknown',
-    country: raw.country || 'Unknown',
+    area: cleanPlaceName(raw.area),
+    city: cleanPlaceName(raw.city) || '',
+    country: cleanPlaceName(raw.country) || '',
     fullAddress: raw.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
     accuracy: typeof raw.accuracy === 'number' ? raw.accuracy : undefined,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : undefined,
@@ -80,7 +96,12 @@ const normalizeLocation = (value: unknown): LocationData | null => {
 const parseStoredLocation = (key: string): LocationData | null => {
   try {
     const stored = localStorage.getItem(key);
-    return stored ? normalizeLocation(JSON.parse(stored)) : null;
+    const parsed = stored ? normalizeLocation(JSON.parse(stored)) : null;
+    if (parsed && !hasUsableLocationLabel(parsed)) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
   } catch {
     localStorage.removeItem(key);
     return null;
@@ -99,20 +120,15 @@ const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 };
 
-const normalizePlaceName = (value?: string | null) =>
-  value
-    ?.replace(/\s+(district|county|province|state|division|region)$/i, '')
-    .trim();
-
 const mergeManualLabel = (
   geoData: Partial<LocationData>,
   manualLabel?: ManualLocationLabel
 ): Partial<LocationData> => {
   if (!manualLabel) return geoData;
 
-  const area = normalizePlaceName(manualLabel.area) || geoData.area;
-  const city = normalizePlaceName(manualLabel.city) || geoData.city;
-  const country = manualLabel.country || geoData.country;
+  const area = cleanPlaceName(manualLabel.area) || cleanPlaceName(geoData.area);
+  const city = cleanPlaceName(manualLabel.city) || cleanPlaceName(geoData.city);
+  const country = cleanPlaceName(manualLabel.country) || cleanPlaceName(geoData.country);
 
   return {
     ...geoData,
@@ -139,17 +155,51 @@ const getAdministrativeName = (data: any, preferredDescriptions: string[]) => {
 };
 
 const resolveReverseGeocodeLocation = (data: any): Partial<LocationData> => {
-  const area = normalizePlaceName(
+  const area = cleanPlaceName(
     data.locality ||
     getAdministrativeName(data, ['neighbourhood', 'suburb', 'quarter'])
   );
-  const city = normalizePlaceName(
+  const city = cleanPlaceName(
     data.city ||
     getAdministrativeName(data, ['city', 'town', 'municipality']) ||
     data.locality
-  ) || 'Unknown';
-  const country = data.countryName || 'Unknown';
+  );
+  const country = cleanPlaceName(data.countryName);
   const fullAddress = [
+    area && area !== city ? area : null,
+    city,
+    country,
+  ].filter(Boolean).join(', ');
+
+  return {
+    area,
+    city,
+    country,
+    fullAddress,
+  };
+};
+
+const resolveNominatimLocation = (data: any): Partial<LocationData> => {
+  const address = data?.address || {};
+  const area = cleanPlaceName(
+    address.suburb ||
+    address.neighbourhood ||
+    address.quarter ||
+    address.borough ||
+    address.city_district ||
+    address.hamlet
+  );
+  const city = cleanPlaceName(
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality ||
+    address.county ||
+    address.state_district ||
+    address.state
+  );
+  const country = cleanPlaceName(address.country);
+  const fullAddress = cleanPlaceName(data?.display_name) || [
     area && area !== city ? area : null,
     city,
     country,
@@ -206,6 +256,10 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
           return null;
         }
         const parsed = normalizeLocation(data);
+        if (parsed && !hasUsableLocationLabel(parsed)) {
+          localStorage.removeItem(LOCATION_CACHE_KEY);
+          return null;
+        }
         if (parsed && Date.now() - timestamp < CACHE_DURATION) {
           return parsed;
         }
@@ -219,6 +273,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
   const cacheLocation = (data: LocationData) => {
     try {
+      if (!hasUsableLocationLabel(data)) return;
+
       if (data.isManual) {
         localStorage.setItem(MANUAL_LOCATION_KEY, JSON.stringify(data));
       } else {
@@ -247,8 +303,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       latitude,
       longitude,
       area: geoData.area,
-      city: geoData.city || 'Unknown',
-      country: geoData.country || 'Unknown',
+      city: cleanPlaceName(geoData.city) || '',
+      country: cleanPlaceName(geoData.country) || '',
       fullAddress: geoData.fullAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
       accuracy,
       updatedAt: Date.now(),
@@ -326,6 +382,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   }, [applyPosition]);
 
   const reverseGeocode = async (latitude: number, longitude: number): Promise<Partial<LocationData>> => {
+    const coordinateLabel = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+
     try {
       const response = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
@@ -336,15 +394,36 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const data = await response.json();
-      
-      return resolveReverseGeocodeLocation(data);
+      const resolved = resolveReverseGeocodeLocation(data);
+      if (hasUsableLocationLabel(resolved)) {
+        return resolved;
+      }
     } catch {
-      return {
-        city: 'Unknown',
-        country: 'Unknown',
-        fullAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
-      };
+      // Try the secondary reverse-geocoder below.
     }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${latitude}&lon=${longitude}`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch fallback location details');
+      }
+
+      const data = await response.json();
+      const resolved = resolveNominatimLocation(data);
+      if (hasUsableLocationLabel(resolved)) {
+        return resolved;
+      }
+    } catch {
+      // Fall back to coordinates only so the UI does not show fake Unknown text.
+    }
+
+    return {
+      fullAddress: coordinateLabel,
+    };
   };
 
   const setManualLocation = async (lat: number, lon: number, label?: ManualLocationLabel) => {

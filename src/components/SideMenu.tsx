@@ -42,6 +42,11 @@ const ITALIC = "'Cormorant Garamond', 'Plus Jakarta Sans', sans-serif";
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barakah.services';
 const APP_STORE_URL = 'https://apps.apple.com/app/barakah-islamic-lifestyle-app/id6792232643';
 
+const cleanLocationLabelPart = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized && normalized.toLowerCase() !== 'unknown' ? normalized : '';
+};
+
 export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
   const navigate = useNavigate();
   const { user, userRole, signOut } = useAuth();
@@ -199,7 +204,11 @@ export const SideMenu = ({ isOpen, onClose }: SideMenuProps) => {
     user?.email?.split('@')[0] ||
     t('menu.guest_user');
   const initial = (displayName?.[0] || 'U').toUpperCase();
-  const locationLabel = location ? `${location.area || location.city}${location.country ? ', ' + location.country : ''}` : t('home.set_location');
+  const locationPrimary = cleanLocationLabelPart(location?.area) || cleanLocationLabelPart(location?.city);
+  const locationCountry = cleanLocationLabelPart(location?.country);
+  const locationLabel = locationPrimary
+    ? [locationPrimary, locationCountry].filter(Boolean).join(', ')
+    : t('home.set_location');
   const currentLang = LANGUAGE_OPTIONS.find(l => l.code === language)?.nativeLabel || 'English';
   const accountLabel = user?.email?.toLowerCase().endsWith('@privaterelay.appleid.com')
     ? 'Apple ID'
