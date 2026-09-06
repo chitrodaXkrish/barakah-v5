@@ -5,9 +5,13 @@ import Capacitor
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    private let updateChecker = AppUpdateChecker()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        DispatchQueue.main.async { [weak self] in
+            self?.updateChecker.checkForUpdate()
+        }
         return true
     }
 
@@ -33,6 +37,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        updateChecker.checkForUpdate()
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
     }
 
@@ -59,5 +64,160 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+}
+
+private final class AppUpdateChecker {
+    private let bundleIdentifier = "com.barakah.services"
+    private let appStoreID = 6792232643
+    private let appStoreURL = URL(string: "itms-apps://itunes.apple.com/app/id6792232643")!
+    private var hasShownUpdatePrompt = false
+    private var isChecking = false
+    private var isPromptPending = false
+    private var presentationRetryWorkItem: DispatchWorkItem?
+    private var presentationRetryCount = 0
+    private let maximumPresentationRetries = 20
+    private let presentationRetryDelay: TimeInterval = 0.5
+
+    func checkForUpdate() {
+        guard !hasShownUpdatePrompt else { return }
+        if isPromptPending {
+            presentationRetryWorkItem?.cancel()
+            presentationRetryWorkItem = nil
+            presentationRetryCount = 0
+            presentUpdateAlert()
+            return
+        }
+        guard !isChecking else { return }
+        guard let installedVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              let installed = Version(installedVersion) else { return }
+
+        isChecking = true
+        let lookupURL = URL(string: "https://itunes.apple.com/lookup?id=\(appStoreID)")!
+        var request = URLRequest(url: lookupURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard let self else { return }
+
+            let shouldPresent = Self.hasNewerVersion(
+                in: data,
+                than: installed,
+                appStoreID: self.appStoreID,
+                bundleIdentifier: self.bundleIdentifier
+            )
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isChecking = false
+                guard shouldPresent else { return }
+                self.isPromptPending = true
+                self.presentUpdateAlert()
+            }
+        }.resume()
+    }
+
+    private static func hasNewerVersion(in data: Data?, than installed: Version, appStoreID: Int, bundleIdentifier: String) -> Bool {
+        guard let data,
+              let response = try? JSONDecoder().decode(AppStoreLookupResponse.self, from: data),
+              let result = response.results.first(where: { $0.trackId == appStoreID && $0.bundleId == bundleIdentifier }),
+              let storeVersion = Version(result.version) else { return false }
+
+        return storeVersion > installed
+    }
+
+    private func presentUpdateAlert() {
+        guard !hasShownUpdatePrompt, isPromptPending else { return }
+        guard UIApplication.shared.applicationState == .active,
+              let viewController = Self.topViewController(),
+              viewController.viewIfLoaded?.window != nil else {
+            schedulePresentationRetry()
+            return
+        }
+
+        hasShownUpdatePrompt = true
+        isPromptPending = false
+        presentationRetryWorkItem?.cancel()
+        presentationRetryWorkItem = nil
+        presentationRetryCount = 0
+        let alert = UIAlertController(
+            title: "Update Available",
+            message: "A new version of Barakah is available. Update now for the latest features and improvements.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Later", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Update", style: .default) { [appStoreURL] _ in
+            UIApplication.shared.open(appStoreURL)
+        })
+        viewController.present(alert, animated: true)
+    }
+
+    private func schedulePresentationRetry() {
+        guard !hasShownUpdatePrompt,
+              isPromptPending,
+              presentationRetryWorkItem == nil,
+              presentationRetryCount < maximumPresentationRetries else { return }
+
+        presentationRetryCount += 1
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.presentationRetryWorkItem = nil
+            self.presentUpdateAlert()
+        }
+        presentationRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + presentationRetryDelay, execute: workItem)
+    }
+
+    private static func topViewController(from viewController: UIViewController? = nil) -> UIViewController? {
+        let rootViewController = viewController ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: { $0.isKeyWindow })?.rootViewController
+
+        guard let rootViewController else { return nil }
+        guard rootViewController.presentedViewController == nil else { return nil }
+        if let navigationController = rootViewController as? UINavigationController {
+            return topViewController(from: navigationController.visibleViewController)
+        }
+        if let tabBarController = rootViewController as? UITabBarController {
+            return topViewController(from: tabBarController.selectedViewController)
+        }
+        return rootViewController
+    }
+}
+
+private struct AppStoreLookupResponse: Decodable {
+    let results: [AppStoreResult]
+}
+
+private struct AppStoreResult: Decodable {
+    let version: String
+}
+
+private struct Version: Comparable {
+    private let components: [Int]
+
+    init?(_ value: String) {
+        let parts = value.split(separator: ".")
+        guard !parts.isEmpty else { return nil }
+
+        var parsed: [Int] = []
+        for part in parts {
+            let numericPart = part.split(whereSeparator: { $0 == "-" || $0 == "(" }).first.map(String.init) ?? ""
+            guard let number = Int(numericPart) else { return nil }
+            parsed.append(number)
+        }
+        components = parsed
+    }
+
+    static func < (lhs: Version, rhs: Version) -> Bool {
+        let count = max(lhs.components.count, rhs.components.count)
+        for index in 0..<count {
+            let left = index < lhs.components.count ? lhs.components[index] : 0
+            let right = index < rhs.components.count ? rhs.components[index] : 0
+            if left != right { return left < right }
+        }
+        return false
     }
 }
