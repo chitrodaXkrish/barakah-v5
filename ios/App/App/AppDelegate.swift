@@ -121,7 +121,8 @@ private final class AppUpdateChecker {
     private static func hasNewerVersion(in data: Data?, than installed: Version, appStoreID: Int, bundleIdentifier: String) -> Bool {
         guard let data,
               let response = try? JSONDecoder().decode(AppStoreLookupResponse.self, from: data),
-              let result = response.results.first(where: { $0.trackId == appStoreID && $0.bundleId == bundleIdentifier }),
+              let results = response.results,
+              let result = results.first(where: { $0.trackId == appStoreID && $0.bundleId == bundleIdentifier }),
               let storeVersion = Version(result.version) else { return false }
 
         return storeVersion > installed
@@ -188,11 +189,19 @@ private final class AppUpdateChecker {
 }
 
 private struct AppStoreLookupResponse: Decodable {
-    let results: [AppStoreResult]
+    let results: [AppStoreResult]?
 }
 
 private struct AppStoreResult: Decodable {
+    let trackId: Int?
+    let bundleId: String?
     let version: String
+
+    enum CodingKeys: String, CodingKey {
+        case trackId
+        case bundleId
+        case version
+    }
 }
 
 private struct Version: Comparable {
