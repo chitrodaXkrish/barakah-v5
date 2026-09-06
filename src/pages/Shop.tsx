@@ -165,13 +165,13 @@ export const Shop = () => {
                 <p className="text-sm font-semibold mb-3" style={{ color: BROWN_DARK }}>
                   {t('shop.coming_soon_notify_label')}
                 </p>
-                <form onSubmit={handleNotifyMe} className="flex gap-2">
+                <form onSubmit={handleNotifyMe} className="flex flex-col gap-2 sm:flex-row">
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder={t('shop.coming_soon_email_placeholder')}
-                    className="flex-1 rounded-xl px-4 py-3 text-sm border outline-none transition-colors"
+                    className="min-w-0 flex-1 rounded-xl px-4 py-3 text-sm border outline-none transition-colors"
                     style={{
                       backgroundColor: '#FFFFFF',
                       borderColor: error ? '#E53935' : BORDER,
@@ -182,7 +182,7 @@ export const Shop = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-xl px-4 py-3 text-sm font-bold text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-60"
+                    className="w-full justify-center rounded-xl px-4 py-3 text-sm font-bold text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-60 sm:w-auto"
                     style={{ backgroundColor: ACCENT_BROWN }}
                   >
                     <Bell className="h-4 w-4" />
