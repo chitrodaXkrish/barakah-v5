@@ -92,6 +92,87 @@ export type Database = {
         }
         Relationships: []
       }
+      halal_product_review_requests: {
+        Row: {
+          admin_notes: string | null
+          barcode: string | null
+          brand: string | null
+          category: string | null
+          contributed_product_name: string | null
+          created_at: string
+          id: string
+          ingredients_text: string | null
+          notes: string | null
+          region: string | null
+          request_type: string
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          scanned_confidence: number | null
+          scanned_ingredients: Json
+          scanned_product_name: string | null
+          scanned_status: string
+          scanned_verdict: string | null
+          scanner_source: string | null
+          updated_at: string
+          user_email: string
+          user_id: string | null
+          user_name: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          barcode?: string | null
+          brand?: string | null
+          category?: string | null
+          contributed_product_name?: string | null
+          created_at?: string
+          id?: string
+          ingredients_text?: string | null
+          notes?: string | null
+          region?: string | null
+          request_type?: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scanned_confidence?: number | null
+          scanned_ingredients?: Json
+          scanned_product_name?: string | null
+          scanned_status?: string
+          scanned_verdict?: string | null
+          scanner_source?: string | null
+          updated_at?: string
+          user_email: string
+          user_id?: string | null
+          user_name: string
+        }
+        Update: {
+          admin_notes?: string | null
+          barcode?: string | null
+          brand?: string | null
+          category?: string | null
+          contributed_product_name?: string | null
+          created_at?: string
+          id?: string
+          ingredients_text?: string | null
+          notes?: string | null
+          region?: string | null
+          request_type?: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scanned_confidence?: number | null
+          scanned_ingredients?: Json
+          scanned_product_name?: string | null
+          scanned_status?: string
+          scanned_verdict?: string | null
+          scanner_source?: string | null
+          updated_at?: string
+          user_email?: string
+          user_id?: string | null
+          user_name?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string

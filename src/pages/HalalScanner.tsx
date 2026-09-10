@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { ArrowLeft, ScanBarcode, Check, Shield, Sparkles, X, Keyboard, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ArrowLeft, ScanBarcode, Check, Shield, Sparkles, X, Keyboard, AlertTriangle, HelpCircle, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGlobalLocation } from '@/contexts/LocationContext';
 import scannerProduct from '@/assets/scanner-product.jpg';
 import { supabase } from '@/integrations/supabase/client';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const CREAM_BG = '#FFF5E5';
 const CARD_CREAM = '#FBE6C8';
@@ -32,6 +34,18 @@ type ScanResult = {
   region: string | null;
   ingredients: Array<{ name: string; ok: boolean; note?: string | null }>;
   source?: string | null;
+};
+
+type ProductReviewMode = 'contribution' | 'review_request';
+
+type ProductReviewForm = {
+  userName: string;
+  userEmail: string;
+  barcode: string;
+  productName: string;
+  brand: string;
+  ingredients: string;
+  notes: string;
 };
 
 async function invokeScanHalal(body: Record<string, unknown>) {
@@ -78,6 +92,7 @@ const PRODUCT = {
 export const HalalScanner = () => {
   const navigate = useNavigate();
   const { location } = useGlobalLocation();
+  const { user } = useAuth();
   const [view, setView] = useState<'scan' | 'result'>('scan');
   const [scanning, setScanning] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -86,6 +101,18 @@ export const HalalScanner = () => {
   const [lastBarcode, setLastBarcode] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewMode, setReviewMode] = useState<ProductReviewMode>('contribution');
+  const [reviewForm, setReviewForm] = useState<ProductReviewForm>({
+    userName: '',
+    userEmail: '',
+    barcode: '',
+    productName: '',
+    brand: '',
+    ingredients: '',
+    notes: '',
+  });
+  const [submittingReview, setSubmittingReview] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerDivRef = useRef<HTMLDivElement>(null);
@@ -197,6 +224,15 @@ export const HalalScanner = () => {
     };
   }, [cleanupScanner]);
 
+  useEffect(() => {
+    if (!user) return;
+    setReviewForm((prev) => ({
+      ...prev,
+      userName: prev.userName || user.displayName || user.email?.split('@')[0] || '',
+      userEmail: prev.userEmail || user.email || '',
+    }));
+  }, [user]);
+
   const handleScanAnother = () => {
     setScanResult(null);
     setLastBarcode(null);
@@ -213,6 +249,100 @@ export const HalalScanner = () => {
     setManualOpen(false);
     setManualBarcode('');
     analyzeBarcode(barcode);
+  };
+
+  const openProductReview = (mode: ProductReviewMode) => {
+    setReviewMode(mode);
+    setReviewForm((prev) => ({
+      ...prev,
+      userName: prev.userName || user?.displayName || user?.email?.split('@')[0] || '',
+      userEmail: prev.userEmail || user?.email || '',
+      barcode: prev.barcode || lastBarcode || '',
+      productName:
+        prev.productName ||
+        (scanResult?.product_name && scanResult.product_name !== 'Unknown Product'
+          ? scanResult.product_name
+          : ''),
+      brand: prev.brand || scanResult?.brand || '',
+    }));
+    setReviewOpen(true);
+  };
+
+  const submitProductReview = async () => {
+    if (!user) {
+      toast.error('Please sign in to submit a product review request.');
+      return;
+    }
+
+    const userName = reviewForm.userName.trim() || user.displayName || user.email?.split('@')[0] || 'Barakah user';
+    const userEmail = reviewForm.userEmail.trim() || user.email || '';
+    const barcode = reviewForm.barcode.replace(/\D/g, '').trim() || lastBarcode || '';
+    const productName = reviewForm.productName.trim();
+    const brand = reviewForm.brand.trim();
+    const ingredientsText = reviewForm.ingredients.trim();
+    const notes = reviewForm.notes.trim();
+
+    if (!userEmail) {
+      toast.error('Please add your email before submitting.');
+      return;
+    }
+
+    if (reviewMode === 'review_request' && !barcode) {
+      toast.error('Please add the barcode before requesting a review.');
+      return;
+    }
+
+    if (reviewMode === 'contribution' && !productName && !ingredientsText && !notes) {
+      toast.error('Please add at least one product detail before contributing.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const { error: insertError } = await supabase
+        .from('halal_product_review_requests')
+        .insert({
+          request_type: reviewMode,
+          review_status: 'pending',
+          user_id: user.uid,
+          user_email: userEmail,
+          user_name: userName,
+          barcode: barcode || null,
+          scanned_product_name: reviewMode === 'contribution' ? scanResult?.product_name ?? null : null,
+          contributed_product_name: reviewMode === 'contribution' ? productName || null : null,
+          brand: reviewMode === 'contribution' ? brand || scanResult?.brand || null : null,
+          category: reviewMode === 'contribution' ? scanResult?.category ?? null : null,
+          region: reviewMode === 'contribution' ? scanResult?.region ?? null : null,
+          ingredients_text: reviewMode === 'contribution' ? ingredientsText || null : null,
+          notes: reviewMode === 'contribution' ? notes || null : null,
+          scanned_status: scanResult?.status ?? 'unknown',
+          scanned_confidence: scanResult?.confidence ?? null,
+          scanned_verdict: scanResult?.verdict ?? null,
+          scanned_ingredients: JSON.parse(JSON.stringify(scanResult?.ingredients ?? [])),
+          scanner_source: scanResult?.source ?? null,
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success(
+        reviewMode === 'contribution'
+          ? 'Thanks. Your product contribution was sent for review.'
+          : 'Review request submitted. Our team will check this product.'
+      );
+      setReviewOpen(false);
+      setReviewForm((prev) => ({
+        ...prev,
+        barcode: lastBarcode || '',
+        productName: '',
+        brand: '',
+        ingredients: '',
+        notes: '',
+      }));
+    } catch (reviewError: any) {
+      toast.error(reviewError?.message || 'Could not submit this product review request.');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   // Image-based ingredient label analysis start
@@ -299,9 +429,22 @@ export const HalalScanner = () => {
         <ResultView
           onBack={() => navigate('/')}
           onScanAnother={handleScanAnother}
+          onOpenProductReview={openProductReview}
           result={scanResult}
           barcode={lastBarcode}
           t={t}
+        />
+      )}
+
+      {reviewOpen && (
+        <ProductReviewModal
+          mode={reviewMode}
+          form={reviewForm}
+          submitting={submittingReview}
+          onModeChange={setReviewMode}
+          onChange={(patch) => setReviewForm((prev) => ({ ...prev, ...patch }))}
+          onClose={() => setReviewOpen(false)}
+          onSubmit={submitProductReview}
         />
       )}
 
@@ -597,12 +740,14 @@ const StatusIcon = ({ status }: { status: HalalStatus }) => {
 const ResultView = ({
   onBack,
   onScanAnother,
+  onOpenProductReview,
   result,
   barcode,
   t,
 }: {
   onBack: () => void;
   onScanAnother: () => void;
+  onOpenProductReview: (mode: ProductReviewMode) => void;
   result: ScanResult | null;
   barcode: string | null;
   t: (key: string) => string;
@@ -700,6 +845,38 @@ const ResultView = ({
         </p>
       )}
 
+      {status === 'unknown' && (
+        <div className="px-5 mt-5">
+          <div className="rounded-2xl p-4 border" style={{ backgroundColor: '#FFF8EC', borderColor: '#E2C39A' }}>
+            <h3 className="text-[15px] font-semibold" style={{ color: BROWN }}>
+              Help us verify this product
+            </h3>
+            <p className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>
+              Add product details if you know them, or request a manual review from the Barakah team.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenProductReview('contribution')}
+                className="min-h-11 rounded-full px-4 text-[13px] font-semibold text-white flex items-center justify-center gap-2"
+                style={{ backgroundColor: BROWN_BTN }}
+              >
+                <Send className="h-4 w-4" strokeWidth={2} />
+                Contribute to this product
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenProductReview('review_request')}
+                className="min-h-11 rounded-full px-4 text-[13px] font-semibold border"
+                style={{ color: BROWN_BTN, backgroundColor: '#FFFDF7', borderColor: '#D8B991' }}
+              >
+                Request review on this product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Detailed ingredients header */}
       <div className="px-5 mt-7 flex items-end justify-between">
         <h3 className="italic text-[22px] leading-tight" style={{ fontFamily: SERIF, color: BROWN }}>
@@ -758,6 +935,164 @@ const ResultView = ({
     </div>
   );
 };
+
+const ProductReviewModal = ({
+  mode,
+  form,
+  submitting,
+  onModeChange,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  mode: ProductReviewMode;
+  form: ProductReviewForm;
+  submitting: boolean;
+  onModeChange: (mode: ProductReviewMode) => void;
+  onChange: (patch: Partial<ProductReviewForm>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) => (
+  <div
+    className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-4"
+    onClick={onClose}
+  >
+    <div
+      className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-[28px] px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-xl"
+      style={{ backgroundColor: '#FFF5E5', border: '1px solid #E4C49B' }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="mx-auto mb-4 h-1 w-12 rounded-full" style={{ backgroundColor: '#D8B991' }} />
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-[18px] font-semibold" style={{ color: BROWN }}>
+            {mode === 'contribution' ? 'Contribute product details' : 'Request product review'}
+          </h2>
+          <p className="text-[12px] mt-1 leading-relaxed" style={{ color: MUTED }}>
+            {mode === 'contribution'
+              ? 'This will be saved as pending for the Barakah review team.'
+              : 'Submit the barcode so the Barakah team can manually review it.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+          style={{ color: BROWN_BTN, backgroundColor: '#F6E4CC' }}
+          aria-label="Close product contribution"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-4 rounded-full p-1" style={{ backgroundColor: '#F6E4CC' }}>
+        <button
+          type="button"
+          onClick={() => onModeChange('contribution')}
+          className="min-h-10 rounded-full px-3 text-[12px] font-semibold"
+          style={{ backgroundColor: mode === 'contribution' ? '#FFFFFF' : 'transparent', color: BROWN }}
+        >
+          Contribute
+        </button>
+        <button
+          type="button"
+          onClick={() => onModeChange('review_request')}
+          className="min-h-10 rounded-full px-3 text-[12px] font-semibold"
+          style={{ backgroundColor: mode === 'review_request' ? '#FFFFFF' : 'transparent', color: BROWN }}
+        >
+          Request Review
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <Field label="Your name">
+          <Input
+            value={form.userName}
+            onChange={(event) => onChange({ userName: event.target.value })}
+            placeholder="Your name"
+            className="h-12 rounded-xl border-[#D8B991] bg-[#FFFDF7] text-[#2C1309] focus-visible:ring-[#A35233]"
+          />
+        </Field>
+        <Field label="Your email">
+          <Input
+            value={form.userEmail}
+            onChange={(event) => onChange({ userEmail: event.target.value })}
+            placeholder="you@example.com"
+            inputMode="email"
+            className="h-12 rounded-xl border-[#D8B991] bg-[#FFFDF7] text-[#2C1309] focus-visible:ring-[#A35233]"
+          />
+        </Field>
+        <Field label="Barcode">
+          <Input
+            value={form.barcode}
+            onChange={(event) => onChange({ barcode: event.target.value.replace(/\D/g, '') })}
+            placeholder="8901234567890"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="h-12 rounded-xl border-[#D8B991] bg-[#FFFDF7] text-[#2C1309] focus-visible:ring-[#A35233]"
+          />
+        </Field>
+        {mode === 'contribution' && (
+          <>
+            <Field label="Product name">
+              <Input
+                value={form.productName}
+                onChange={(event) => onChange({ productName: event.target.value })}
+                placeholder="Exact product name, if known"
+                className="h-12 rounded-xl border-[#D8B991] bg-[#FFFDF7] text-[#2C1309] focus-visible:ring-[#A35233]"
+              />
+            </Field>
+            <Field label="Brand">
+              <Input
+                value={form.brand}
+                onChange={(event) => onChange({ brand: event.target.value })}
+                placeholder="Brand name, if known"
+                className="h-12 rounded-xl border-[#D8B991] bg-[#FFFDF7] text-[#2C1309] focus-visible:ring-[#A35233]"
+              />
+            </Field>
+            <Field label="Ingredients / label details">
+              <textarea
+                value={form.ingredients}
+                onChange={(event) => onChange({ ingredients: event.target.value })}
+                placeholder="Paste ingredients, certification text, or label details here"
+                rows={4}
+                className="w-full rounded-xl border border-[#D8B991] bg-[#FFFDF7] px-3 py-3 text-sm text-[#2C1309] outline-none focus:ring-2 focus:ring-[#A35233]"
+              />
+            </Field>
+            <Field label="Notes for review team">
+              <textarea
+                value={form.notes}
+                onChange={(event) => onChange({ notes: event.target.value })}
+                placeholder="Anything else the team should know?"
+                rows={3}
+                className="w-full rounded-xl border border-[#D8B991] bg-[#FFFDF7] px-3 py-3 text-sm text-[#2C1309] outline-none focus:ring-2 focus:ring-[#A35233]"
+              />
+            </Field>
+          </>
+        )}
+      </div>
+
+      <Button
+        type="button"
+        onClick={onSubmit}
+        disabled={submitting}
+        className="mt-5 h-14 w-full rounded-full text-white font-semibold disabled:opacity-60"
+        style={{ backgroundColor: BROWN_BTN }}
+      >
+        {submitting ? 'Submitting...' : mode === 'contribution' ? 'Submit Contribution' : 'Submit Review Request'}
+      </Button>
+    </div>
+  </div>
+);
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <label className="block">
+    <span className="block px-1 pb-1.5 text-[12px] font-semibold" style={{ color: BROWN }}>
+      {label}
+    </span>
+    {children}
+  </label>
+);
 
 // scanline keyframes
 const styleTag = document.getElementById('halal-scanner-keyframes');

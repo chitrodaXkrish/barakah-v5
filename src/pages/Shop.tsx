@@ -165,13 +165,13 @@ export const Shop = () => {
                 <p className="text-sm font-semibold mb-3" style={{ color: BROWN_DARK }}>
                   {t('shop.coming_soon_notify_label')}
                 </p>
-                <form onSubmit={handleNotifyMe} className="flex flex-col gap-2 sm:flex-row">
+                <form onSubmit={handleNotifyMe} className="flex flex-wrap gap-2">
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder={t('shop.coming_soon_email_placeholder')}
-                    className="min-w-0 flex-1 rounded-xl px-4 py-3 text-sm border outline-none transition-colors"
+                    className="min-w-[12rem] flex-[999_1_12rem] rounded-xl px-4 py-3 text-sm border outline-none transition-colors"
                     style={{
                       backgroundColor: '#FFFFFF',
                       borderColor: error ? '#E53935' : BORDER,
@@ -182,11 +182,11 @@ export const Shop = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full justify-center rounded-xl px-4 py-3 text-sm font-bold text-white flex items-center gap-2 shrink-0 transition-opacity disabled:opacity-60 sm:w-auto"
+                    className="min-w-[9.5rem] max-w-full flex-[1_1_9.5rem] justify-center rounded-xl px-4 py-3 text-sm font-bold text-white flex items-center gap-2 transition-opacity disabled:opacity-60"
                     style={{ backgroundColor: ACCENT_BROWN }}
                   >
                     <Bell className="h-4 w-4" />
-                    {t('shop.coming_soon_notify_btn')}
+                    <span className="truncate">{t('shop.coming_soon_notify_btn')}</span>
                   </button>
                 </form>
                 {error && (
