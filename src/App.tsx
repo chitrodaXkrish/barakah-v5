@@ -14,6 +14,7 @@ import { usePageAnalytics } from './hooks/usePageAnalytics';
 import { registerForPush } from './integrations/push';
 import { checkAndStartFlexibleUpdate } from './services/appUpdate';
 import { hasCompletedOnboarding } from './lib/onboarding';
+import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
 
 const PushInitializer = () => {
   useEffect(() => {
@@ -31,6 +32,19 @@ const PushInitializer = () => {
 const AppUpdateInitializer = () => {
   useEffect(() => {
     checkAndStartFlexibleUpdate();
+  }, []);
+
+  return null;
+};
+
+// Initializes the Google Sign-In plugin with the Web Client ID
+const GoogleAuthInitializer = () => {
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      GoogleSignIn.initialize({
+        clientId: '717372187000-nu5vnfaoqbu0morgqfdsipeljj8kejh2.apps.googleusercontent.com',
+      }).catch(console.error);
+    }
   }, []);
 
   return null;
@@ -177,6 +191,7 @@ const App = () => (
                 <CartProvider>
                   <PushInitializer />
                   <AppUpdateInitializer />
+                  <GoogleAuthInitializer />
                   <AnalyticsTracker />
                   <FirstLaunchGate />
                   <Toaster />

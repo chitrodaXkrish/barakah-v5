@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
 
 interface AppleSignInResult {
   identityToken: string;
@@ -363,28 +364,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const handleGoogleSignIn = async () => {
     try {
       if (isNative()) {
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: NATIVE_REDIRECT_URL,
-            skipBrowserRedirect: true,
-          },
-        });
-        if (error) return { error, role: undefined };
-        if (data?.url) {
-          const callbackResult = new Promise<{ error: any; role?: UserRole }>((resolve) => {
-            clearNativeOAuthTimers();
-            pendingNativeOAuth.current = resolve;
-            nativeOAuthTimeoutTimer.current = window.setTimeout(() => {
-              if (pendingNativeOAuth.current === resolve) {
-                resolvePendingNativeOAuth({ error: { message: 'Google sign in timed out. Please try again.' }, role: undefined });
-              }
-            }, 120000);
-          });
-          await Browser.open({ url: data.url, presentationStyle: 'fullscreen' });
-          return await callbackResult;
+        const result = await GoogleSignIn.signIn();
+        if (!result.idToken) {
+          return { error: { message: 'No ID token returned from Google Sign In' }, role: undefined };
         }
-        return { error: null, role: null };
+        
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: result.idToken,
+        });
+        
+        if (error) return { error, role: undefined };
+        if (!data.user) return { error: null, role: null };
+        
+        const role = await getUserRoleFromDatabase(data.user.id);
+        setUserRole(role);
+        return { error: null, role };
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

@@ -8,6 +8,8 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
         <string>Barakah</string>
+	<key>GIDClientID</key>
+	<string>717372187000-lpo99sbd2qisardfe13oal6cuqusbkk7.apps.googleusercontent.com</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -90,6 +92,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.barakah.services</string>
+				<string>com.googleusercontent.apps.717372187000-lpo99sbd2qisardfe13oal6cuqusbkk7</string>
 			</array>
 		</dict>
 	</array>
