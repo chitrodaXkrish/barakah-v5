@@ -15,6 +15,7 @@ import { registerForPush } from './integrations/push';
 import { checkAndStartFlexibleUpdate } from './services/appUpdate';
 import { hasCompletedOnboarding } from './lib/onboarding';
 import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
+import { NetworkAlert } from './components/NetworkAlert';
 
 const PushInitializer = () => {
   useEffect(() => {
@@ -196,6 +197,7 @@ const App = () => (
                   <FirstLaunchGate />
                   <Toaster />
                   <Sonner />
+                  <NetworkAlert />
                   <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/loading" element={<LoadingScreen />} />
